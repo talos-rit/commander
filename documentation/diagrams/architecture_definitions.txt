@@ -1,0 +1,29 @@
+Manual Interface: 
+	Some kind of user control panel to directly move the Arms. 
+		(web-app, text-based executable)
+	A Pub/Sub publisher
+
+Director: 
+	Takes Tracking Algo bounding boxes and translates it into commands to publish. 
+	An Pub/Sub publisher
+
+Tracking Algo: 
+	AI takes in the control stream video and outputs bounding boxes to the Director. 
+	
+Config: 
+	Defines the behavior of the director. ex:
+		Framing of subject
+	
+
+API (Pub/Sub): 
+	Where publishers publish their instructions to topics. 	
+	The publishable topic that operators listen to to get their orders. 
+
+Operator:
+	Different implementation for each type of Arm
+	A Pub/Sub subscriber
+Arm: 
+	An autonomous robotic arm
+	Holder of camera
+
+	
