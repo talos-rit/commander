@@ -11,7 +11,6 @@ class MyListener(stomp.ConnectionListener):
 conn = stomp.Connection()
 conn.set_listener(name='My listener', listener=MyListener())
 conn.connect('admin', 'admin', wait=True)
-print('Connected')
 conn.subscribe(destination='/queue/test', id=1)
 
 time.sleep(10)
