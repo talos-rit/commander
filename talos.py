@@ -11,10 +11,10 @@ def main():
     director = BasicDirector(tracker)
 
     while True:
-        frame = tracker.capture_frame()
+        frame, frameHeight, frameWidth = tracker.capture_frame()
         if frame is None:
             break
-        director.process_frame(frame)
+        director.process_frame(frame, frameHeight, frameWidth)
 
 if __name__ == "__main__":
     main()

@@ -7,7 +7,7 @@ class BasicTracker(Tracker):
     def __init__(self, source : str):
         self.source = source
 
-        self.faceCascade = cv2.CascadeClassifier("tracking\haarcascade_frontalface_default.xml")
+        self.faceCascade = cv2.CascadeClassifier("tracking/haarcascade_frontalface_default.xml")
 
         # Open the video source
         if self.source:
@@ -43,15 +43,15 @@ class BasicTracker(Tracker):
                 int(y2 * scaleHeight),
             ]
             bboxes.append(cvRect)
-        return bboxes
+        return bboxes, frameHeight, frameWidth
     
     # Capture a frame from the source and detect faces in the frame
     def capture_frame(self):
 
         hasFrame, frame = self.cap.read()
         if not hasFrame:
-            return None
+            return None, None, None
 
-        bboxes = self.detectFace(self.faceCascade, frame)
+        bboxes, frameHeight, frameWidth = self.detectFace(self.faceCascade, frame)
         
-        return bboxes
+        return bboxes, frameHeight, frameWidth
