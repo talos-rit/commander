@@ -1,5 +1,6 @@
 import stomp
 import time
+from publisher import INSTRUCTIONS_DESTINATION
 
 class MyListener(stomp.ConnectionListener):
     def on_error(self, frame):
@@ -11,6 +12,6 @@ class MyListener(stomp.ConnectionListener):
 conn = stomp.Connection()
 conn.set_listener(name='My listener', listener=MyListener())
 conn.connect('admin', 'admin', wait=True)
-conn.subscribe(destination='/queue/test', id=1)
+conn.subscribe(destination=INSTRUCTIONS_DESTINATION, id=1)
 time.sleep(10)
 conn.disconnect()
