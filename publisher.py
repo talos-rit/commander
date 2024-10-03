@@ -1,7 +1,7 @@
 import stomp
 
 
-INSTRUCTIONS_DESTINATION = 'queue/instructions'
+INSTRUCTIONS_DESTINATION = '/queue/instructions'
 
 
 class Connection:
