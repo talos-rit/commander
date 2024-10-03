@@ -15,6 +15,14 @@ class Connection:
         self.connection.connect('admin', 'admin', wait=True)
 
     def publish(self, body, destination):
+        """
+        Recipient: UINT16
+        Sender: UINT16
+        Command: UINT16
+        Length: UINT16
+        Payload: UINT8[]
+        CRC: UINT16
+        """
         self.connection.send(body=body, destination=destination)
 
 
