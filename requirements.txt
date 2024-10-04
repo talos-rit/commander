@@ -4,4 +4,3 @@ websocket-client==1.8.0
 abcmeta==2.2.0
 opencv-python==4.10.0.84
 mediapipe==0.10.15
-
