@@ -8,7 +8,9 @@ class BasicDirector:
     # This method is called to process each frame
     def process_frame(self, frame : list, frameHeight: int, frameWidth: int):
     # Do something with the frame
-        #print(frame)
+        print(frame)
+        #Code underneath is unnecessary until we figure out which algorithm to  use
+        """
         if len(frame) > 0:
 
             #Use the frame height and width to calculate an acceptable box
@@ -49,3 +51,4 @@ class BasicDirector:
                     print("Move camera up: " + "Bbox center y= " + str(bbox_center_y) + " acceptable top: " + str(acceptable_box_top))
                 elif bbox_center_y > acceptable_box_bottom:
                     print("Move camera down: " + "Bbox center y= " + str(bbox_center_y) + " acceptable bottom: " + str(acceptable_box_bottom))
+        """
