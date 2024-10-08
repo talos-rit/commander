@@ -4,3 +4,4 @@ websocket-client==1.8.0
 argparse
 abcmeta
 opencv-python
+mediapipe
