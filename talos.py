@@ -1,5 +1,5 @@
-from tracking.basic_tracker import *
-from tracking.media_pipe_tracker import *
+from tracking.haar_cascade.basic_tracker import *
+from tracking.media_pipe.media_pipe_tracker import *
 from director.basic_director import *
 import argparse
 import cv2
