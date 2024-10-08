@@ -9,7 +9,6 @@ def main():
     parser.add_argument("--source", type=str, default="", help="Path to video file or URL of stream")
     args = parser.parse_args()
 
-    #tracker = BasicTracker(args.source)
     tracker = MediaPipeTracker(args.source)
     director = BasicDirector(tracker)
 
