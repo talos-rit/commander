@@ -11,7 +11,8 @@ class MediaPipeTracker(Tracker):
     def __init__(self, source : str):
         self.source = source
 
-        base_options = python.BaseOptions(model_asset_path="tracking/ssd_mobilenet_v2.tflite")
+        #base_options = python.BaseOptions(model_asset_path="tracking/ssd_mobilenet_v2.tflite")
+        base_options = python.BaseOptions(model_asset_path="tracking/efficientdet_lite0.tflite")
         options = vision.ObjectDetectorOptions(base_options=base_options, score_threshold=0.5, category_allowlist=["person"])
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
@@ -61,19 +62,19 @@ class MediaPipeTracker(Tracker):
                     int(y2 * scaleHeight)
                 ]
                 bboxes.append(cvRect)
-        return bboxes, frameHeight, frameWidth
+        return bboxes
     
     # Capture a frame from the source and detect faces in the frame
     def capture_frame(self):
 
         hasFrame, frame = self.cap.read()
         if not hasFrame:
-            return None, None, None
+            return None
 
-        bboxes, frameHeight, frameWidth = self.detectPerson(self.object_detector, frame)
+        bboxes = self.detectPerson(self.object_detector, frame)
 
         #Drawing boxes on screen this can be removed later
-        """
+        
         for bbox in bboxes:
             x1, y1, x2, y2 = bbox
             # Draw the rectangle on the frame (color = green, thickness = 2)
@@ -81,6 +82,6 @@ class MediaPipeTracker(Tracker):
 
         # Display the frame with bounding boxes in a window
         cv2.imshow('Object Detection', frame)
-        """
+        
 
-        return bboxes, frameHeight, frameWidth
+        return bboxes

@@ -43,15 +43,15 @@ class BasicTracker(Tracker):
                 int(y2 * scaleHeight),
             ]
             bboxes.append(cvRect)
-        return bboxes, frameHeight, frameWidth
+        return bboxes
     
     # Capture a frame from the source and detect faces in the frame
     def capture_frame(self):
 
         hasFrame, frame = self.cap.read()
         if not hasFrame:
-            return None, None, None
+            return None
 
-        bboxes, frameHeight, frameWidth = self.detectFace(self.faceCascade, frame)
+        bboxes = self.detectFace(self.faceCascade, frame)
         
-        return bboxes, frameHeight, frameWidth
+        return bboxes

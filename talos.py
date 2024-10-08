@@ -14,15 +14,15 @@ def main():
     director = BasicDirector(tracker)
 
     while True:
-        frame, frameHeight, frameWidth = tracker.capture_frame()
+        frame = tracker.capture_frame()
 
         #Helpful for bounding boxes on screen, this can be removed later
-        #if cv2.waitKey(1) & 0xFF == ord('q'):
-            #break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
         if frame is None:
             break
-        director.process_frame(frame, frameHeight, frameWidth)
+        director.process_frame(frame)
 
 
         
