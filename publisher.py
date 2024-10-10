@@ -1,7 +1,7 @@
 import stomp
 
 
-INSTRUCTIONS_DESTINATION = '/queue/instructions'
+INSTRUCTIONS_DESTINATION = '/queue/TEST.FOO'
 
 
 class Connection:
@@ -23,7 +23,9 @@ class Connection:
         Payload: UINT8[]
         CRC: UINT16
         """
-        self.connection.send(body=body, destination=destination)
+        my_byte_array = bytearray([1, 2, 3, 4])
+        my_bytes = b"" + my_byte_array
+        self.connection.send(body=my_bytes, destination=destination, content_type="text")
 
 
 class Publisher:
