@@ -1,7 +1,9 @@
 import stomp
+from icd_config import Command 
 
 
-INSTRUCTIONS_DESTINATION = '/queue/TEST.FOO'
+HANDSHAKE_DESTINATION = '/queue/handshake'
+INSTRUCTIONS_DESTINATION = '/queue/instructions'
 
 
 class Connection:
@@ -14,18 +16,34 @@ class Connection:
         self.connection = stomp.Connection()
         self.connection.connect('admin', 'admin', wait=True)
 
-    def publish(self, body, destination):
+    def publish(self, destination, command: int, payload: bytes):
         """
-        Recipient: UINT16
-        Sender: UINT16
-        Command: UINT16
-        Length: UINT16
-        Payload: UINT8[]
-        CRC: UINT16
+        Command ID	    UINT32	Unique ID for individual commands
+        RESERVED     	UINT16	RESERVED
+        Command Value	UINT16	Command for device to carry out
+        Length	        UINT16	Length of Payload
+        Payload	        UINT8[]	Command Info
+        CRC	            UINT16	Checksum
         """
-        my_byte_array = bytearray([1, 2, 3, 4])
-        my_bytes = b"" + my_byte_array
-        self.connection.send(body=my_bytes, destination=destination, content_type="text")
+        # TODO: Implement incrementing command IDs
+        command_id = 0
+
+        payload_length = len(payload)
+        # TODO: Add reserved slot
+        header = bytearray([command_id, command, payload_length])
+        # TODO: Implement checksum. May get removed
+        crc = b""
+
+        """
+        TODO: How can we ensure that the bytes are the correct size? For example,
+        if we pass in a 0 for an expected UINT16, how can we ensure that it is 2 bytes
+        and not 1? Additionally, how can we reserve the "RESERVED" slot?
+        """
+
+        # Cast bytearrays to bytes
+        body = b"" + header + payload + crc
+
+        self.connection.send(body=body, destination=destination)
 
 
 class Publisher:
@@ -35,12 +53,25 @@ class Publisher:
     connection = Connection()
 
     @staticmethod
-    def move(x, y, z):
-        # Placeholder message
-        Publisher.connection.publish(f'Move to {x}, {y}, {z}', destination=INSTRUCTIONS_DESTINATION)
+    def handshake():
+        # Placeholder
+        payload = b""
+
+        Publisher.connection.publish(
+                destination=HANDSHAKE_DESTINATION,
+                command=int(Command.HANDSHAKE),
+                payload=payload
+        )
 
     @staticmethod
-    def rotate(deg):
-        # Placeholder message
-        Publisher.connection.publish(f'Rotate {deg}', destination=INSTRUCTIONS_DESTINATION)
+    def polar_pan():
+        # TODO: Add parameters and put them in the payload
+        # Placeholder
+        payload = b""
+
+        Publisher.connection.publish(
+                destination=INSTRUCTIONS_DESTINATION,
+                command=int(Command.POLAR_PAN),
+                payload=payload
+        )
 
