@@ -1,5 +1,6 @@
 import stomp
 from icd_config import Command 
+from ctypes import c_uint32, c_uint16, c_uint8
 
 
 HANDSHAKE_DESTINATION = '/queue/handshake'
@@ -25,20 +26,24 @@ class Connection:
         Payload	        UINT8[]	Command Info
         CRC	            UINT16	Checksum
         """
-        # TODO: Implement incrementing command IDs
-        command_id = 0
+        command_id = Publisher.get_command_count(command)
+        Publisher.increment_command_count(command)
 
         payload_length = len(payload)
-        # TODO: Add reserved slot
-        header = bytearray([command_id, command, payload_length])
+
+        # Convert to C types accourding to ICD to ensure the correct number of bits.
+        # Then convert to bytes.
+        command_id = bytes(c_uint32(command_id))
+        reserved = bytes(c_uint16(0))
+        command = bytes(c_uint16(command))
+        payload_length = bytes(c_uint16(payload_length))
+
+        # Put everything together
+        header = b"" + command_id + reserved + command + payload_length
+        print(header)
+
         # TODO: Implement checksum. May get removed
         crc = b""
-
-        """
-        TODO: How can we ensure that the bytes are the correct size? For example,
-        if we pass in a 0 for an expected UINT16, how can we ensure that it is 2 bytes
-        and not 1? Additionally, how can we reserve the "RESERVED" slot?
-        """
 
         # Cast bytearrays to bytes
         body = b"" + header + payload + crc
@@ -51,6 +56,22 @@ class Publisher:
     A static class that is used to publish instructions to the operator.
     """
     connection = Connection()
+    command_counts = {}
+
+
+    def get_command_count(command: int) -> int:
+        """
+        Simple getter for the number of times a command has been used.
+        """
+        if command not in Publisher.command_counts:
+            return 0
+        else:
+            return Publisher.command_counts[command]
+
+
+    def increment_command_count(command: int):
+        Publisher.command_counts[command] = Publisher.get_command_count(command) + 1
+
 
     @staticmethod
     def handshake():
@@ -62,6 +83,7 @@ class Publisher:
                 command=int(Command.HANDSHAKE),
                 payload=payload
         )
+
 
     @staticmethod
     def polar_pan():
