@@ -1,6 +1,6 @@
 import stomp
 from icd_config import Command 
-from ctypes import c_uint32, c_uint16, c_uint8
+from ctypes import c_uint32, c_uint16
 
 
 HANDSHAKE_DESTINATION = '/queue/handshake'
@@ -26,10 +26,13 @@ class Connection:
         Payload	        UINT8[]	Command Info
         CRC	            UINT16	Checksum
         """
+        # Get a unique, incrementing command id
         command_id = Publisher.get_command_count(command)
         Publisher.increment_command_count(command)
 
         payload_length = len(payload)
+        # TODO: Implement checksum. May get removed
+        crc = bytes(c_uint16(0))
 
         # Convert to C types accourding to ICD to ensure the correct number of bits.
         # Then convert to bytes.
@@ -38,15 +41,11 @@ class Connection:
         command = bytes(c_uint16(command))
         payload_length = bytes(c_uint16(payload_length))
 
-        # Put everything together
-        header = b"" + command_id + reserved + command + payload_length
-        print(header)
+        # Put header together
+        header = command_id + reserved + command + payload_length
 
-        # TODO: Implement checksum. May get removed
-        crc = b""
-
-        # Cast bytearrays to bytes
-        body = b"" + header + payload + crc
+        # Put everything together 
+        body = header + payload + crc
 
         self.connection.send(body=body, destination=destination)
 
@@ -75,7 +74,7 @@ class Publisher:
 
     @staticmethod
     def handshake():
-        # Placeholder
+        # Handshake sends an empty payload 
         payload = b""
 
         Publisher.connection.publish(
@@ -86,10 +85,22 @@ class Publisher:
 
 
     @staticmethod
-    def polar_pan():
-        # TODO: Add parameters and put them in the payload
-        # Placeholder
-        payload = b""
+    def polar_pan(delta_azimuth: int, delta_altitude: int, delay: int, duration: int):
+        """
+        Delta Azimuth	INT32	Requested change in azimuth
+        Delta Altitude	INT32	Requested change in altitude
+        Delay (ms)  	INT32	How long to wait until executing pan
+        Duration (ms)	INT32	How long the pan should take to execute
+        """
+        # Convert to C types accourding to ICD to ensure the correct number of bits.
+        # Then convert to bytes.
+        delta_azimuth = bytes(c_uint32(delta_azimuth))
+        delta_altitude = bytes(c_uint32(delta_altitude))
+        delay = bytes(c_uint32(delay))
+        duration = bytes(c_uint32(duration))
+
+        # Put everything together
+        payload = delta_azimuth + delta_altitude + delay + duration
 
         Publisher.connection.publish(
                 destination=INSTRUCTIONS_DESTINATION,
