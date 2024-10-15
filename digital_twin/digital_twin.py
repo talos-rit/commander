@@ -25,23 +25,22 @@ def main():
     num_joints = p.getNumJoints(robot_id)
     for i in range(num_joints):
         joint_info = p.getJointInfo(robot_id, i)
-        print(f"Joint {i}: {joint_info[1].decode('utf-8')}")
-    
+        print(f"Joint {i}: {joint_info[1].decode('utf-8')}") 
 
     # Set gravity and enable real-time simulation
     p.setGravity(0, 0, -9.81)
     p.setRealTimeSimulation(1)
 
-    #For this I am just making the base rotate 90 degrees in the simulation
-    p.setJointMotorControl2(
-        bodyIndex=robot_id,
-        jointIndex=0,               #Index of the base joing
-        controlMode=p.POSITION_CONTROL,
-        targetPosition=1.57,        # 90 degrees in radians
-        force=10
-    )
 
-    # Run the simulation
+    BSEPRhome = [0.00000, -2.09925, 1.65843, 1.54994, 0.00000]
+
+    # Set each joint to the home position
+    for joint_index, angle in enumerate(BSEPRhome):
+        p.resetJointState(robot_id, joint_index, angle)
+
+
+    # Run the simulation. This is where we would listen and get updates from activeMQ and 
+    # then update the simulation with stepSimulation for each movement
     try:
         while True:
             p.stepSimulation()
