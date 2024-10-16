@@ -1,6 +1,5 @@
 import stomp
-from icd_config import Command 
-from ctypes import c_uint32, c_uint16
+from icd_config import Command, int_to_bytes
 
 
 HANDSHAKE_DESTINATION = '/queue/handshake'
@@ -19,7 +18,7 @@ class Connection:
 
     def publish(self, destination, command: int, payload: bytes):
         """
-        Command ID	    UINT32	Unique ID for individual commands
+        Command ID      UINT32	Unique ID for individual commands
         RESERVED     	UINT16	RESERVED
         Command Value	UINT16	Command for device to carry out
         Length	        UINT16	Length of Payload
@@ -32,14 +31,12 @@ class Connection:
 
         payload_length = len(payload)
         # TODO: Implement checksum. May get removed
-        crc = bytes(c_uint16(0))
+        crc = int_to_bytes(0, num_bits=16)
 
-        # Convert to C types accourding to ICD to ensure the correct number of bits.
-        # Then convert to bytes.
-        command_id = bytes(c_uint32(command_id))
-        reserved = bytes(c_uint16(0))
-        command = bytes(c_uint16(command))
-        payload_length = bytes(c_uint16(payload_length))
+        command_id = int_to_bytes(command_id, num_bits=32)
+        reserved = int_to_bytes(0, num_bits=16)
+        command = int_to_bytes(command, num_bits=16)
+        payload_length = int_to_bytes(payload_length, num_bits=16)
 
         # Put header together
         header = command_id + reserved + command + payload_length
@@ -92,12 +89,10 @@ class Publisher:
         Delay (ms)  	INT32	How long to wait until executing pan
         Duration (ms)	INT32	How long the pan should take to execute
         """
-        # Convert to C types accourding to ICD to ensure the correct number of bits.
-        # Then convert to bytes.
-        delta_azimuth = bytes(c_uint32(delta_azimuth))
-        delta_altitude = bytes(c_uint32(delta_altitude))
-        delay = bytes(c_uint32(delay))
-        duration = bytes(c_uint32(duration))
+        delta_azimuth = int_to_bytes(delta_azimuth, num_bits=32)
+        delta_altitude = int_to_bytes(delta_altitude, num_bits=32)
+        delay = int_to_bytes(delay, num_bits=32)
+        duration = int_to_bytes(duration, num_bits=32)
 
         # Put everything together
         payload = delta_azimuth + delta_altitude + delay + duration
