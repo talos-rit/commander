@@ -26,8 +26,8 @@ class Connection:
         CRC	            UINT16	Checksum
         """
         # Get a unique, incrementing command id
-        command_id = Publisher.get_command_count(command)
-        Publisher.increment_command_count(command)
+        command_id = Publisher.command_count
+        Publisher.command_count += 1
 
         payload_length = len(payload)
         # TODO: Implement checksum. May get removed
@@ -52,21 +52,7 @@ class Publisher:
     A static class that is used to publish instructions to the operator.
     """
     connection = Connection()
-    command_counts = {}
-
-
-    def get_command_count(command: int) -> int:
-        """
-        Simple getter for the number of times a command has been used.
-        """
-        if command not in Publisher.command_counts:
-            return 0
-        else:
-            return Publisher.command_counts[command]
-
-
-    def increment_command_count(command: int):
-        Publisher.command_counts[command] = Publisher.get_command_count(command) + 1
+    command_count = 0
 
 
     @staticmethod
