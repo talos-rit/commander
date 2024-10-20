@@ -26,6 +26,7 @@ class MediaPipeTracker(Tracker):
         frameOpenCV = frame.copy()
         frameHeight = frameOpenCV.shape[0]
         frameWidth = frameOpenCV.shape[1]
+
         if not inWidth:
             inWidth = int((frameWidth / frameHeight) * inHeight)
 

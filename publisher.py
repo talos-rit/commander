@@ -34,3 +34,13 @@ class Publisher:
         # Placeholder message
         Publisher.connection.publish(f'Rotate {deg}', destination=INSTRUCTIONS_DESTINATION)
 
+    @staticmethod
+    def rotate_azimuth(deg):
+        # Placeholder message
+        Publisher.connection.publish(f'Rotate azimuth {deg}', destination=INSTRUCTIONS_DESTINATION)
+    
+    @staticmethod
+    def rotate_altitude(deg):
+        # Placeholder message
+        Publisher.connection.publish(f'Rotate altitude {deg}', destination=INSTRUCTIONS_DESTINATION)
+
