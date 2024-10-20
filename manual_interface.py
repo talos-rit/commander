@@ -7,7 +7,6 @@ import tkinter
 
 #Publisher.rotate(45)
 
-UP = "up"
 
 class ManualInterface:
     """
@@ -26,54 +25,57 @@ class ManualInterface:
         self.left = "left"
         self.right= "right"
         
-        
          # unicode arrow symbols
         
         self.up_arrow = "\u2191"
         self.down_arrow = "\u2193"
         self.left_arrow = "\u2190"
         self.right_arrow = "\u2192"
+        self.home = "🏠"
         
         self.rootWindow = tkinter.Tk()
         self.rootWindow.title("Talos Manual Interface")
         
         self.pressed_keys = {} # keeps track of keys which are pressed down
-        self.move_delay_ms = 10
+        self.move_delay_ms = 300 # time inbetween each directional command being sent while directional button is depressed
         
         # setting up manual vs automatic control toggle
         
         self.manual_mode = True  # True for manual, False for computer vision
         self.mode_label = tkinter.Label(self.rootWindow, text = "Mode: Manual", font = ("Cascadia Code", 12))
-        self.mode_label.grid(row = 0, column = 4)
+        self.mode_label.grid(row = 1, column = 4)
            
-        self.toggle_button = tkinter.Button(self.rootWindow, text = "Switch to Automatic Control", font = ("Cascadia Code", 12), command = self.toggle_command_mode)
-        self.toggle_button.grid(row = 2, column = 4, padx = 50)
+        self.toggle_button = tkinter.Button(self.rootWindow, text = "Switch", font = ("Cascadia Code", 12), command = self.toggle_command_mode)
+        self.toggle_button.grid(row = 2, column = 4, padx = 15)
         
+        # setting up home button
+        
+        self.home_button = tkinter.Button(self.rootWindow, text = self.home, font = ("Cascadia Code", 16), command = self.move_home)
+        self.home_button.grid(row = 3, column = 4)
         
         # setting up directional buttons
         
-        self.up_button = tkinter.Button(self.rootWindow, text = self.up_arrow, height = 2, width = 10, font = ("Cascadia Code", 16))
+        self.up_button = tkinter.Button(self.rootWindow, text = self.up_arrow, height = 2, width = 10, font = ("Cascadia Code", 16, "bold"))
         self.up_button.grid(row = 1, column = 1, padx = 10, pady = 10)
         
         self.bind_button(self.up_button, self.up)
 
-        self.down_button = tkinter.Button(self.rootWindow, text = self.down_arrow, height = 2, width = 10, font = ("Cascadia Code", 16))
+        self.down_button = tkinter.Button(self.rootWindow, text = self.down_arrow, height = 2, width = 10, font = ("Cascadia Code", 16, "bold"))
         self.down_button.grid(row = 3, column = 1, padx = 10, pady = 10)
 
         self.bind_button(self.down_button, self.down)
 
-        self.left_button = tkinter.Button(self.rootWindow, text = self.left_arrow, height = 2, width = 10, font = ("Cascadia Code", 16))
+        self.left_button = tkinter.Button(self.rootWindow, text = self.left_arrow, height = 2, width = 10, font = ("Cascadia Code", 16, "bold"))
         self.left_button.grid(row = 2, column = 0, padx = 10, pady = 10)
         
         self.bind_button(self.left_button, self.left)
 
-        self.right_button = tkinter.Button(self.rootWindow, text = self.right_arrow, height = 2, width = 10, font = ("Cascadia Code", 16))
+        self.right_button = tkinter.Button(self.rootWindow, text = self.right_arrow, height = 2, width = 10, font = ("Cascadia Code", 16, "bold"))
         self.right_button.grid(row = 2, column = 2, padx = 10, pady = 10)
         
         self.bind_button(self.right_button, self.right)
         
         self.setup_keyboard_controls()
-        
         
     def setup_keyboard_controls(self):
         """ does the tedious work of binding the keyboard arrow keys to the button controls
@@ -90,7 +92,6 @@ class ManualInterface:
         self.rootWindow.bind("<KeyPress-Right>", lambda event: self.start_move(self.right))
         self.rootWindow.bind("<KeyRelease-Right>", lambda event: self.stop_move(self.right))
         
-    
     def bind_button(self, button, direction):
         """ shortens the constructor by binding button up/down presses
 
@@ -102,6 +103,11 @@ class ManualInterface:
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
     
+    def move_home(self):
+        """ moves the robotic arm from its home position
+        """
+        
+        print("Moving to home...")
     
     def start_move(self, direction):
         """ moves the robotic arm a static number of degrees per second
@@ -109,14 +115,14 @@ class ManualInterface:
         Args:
             direction (string): global variables for directional commands are provided at the top of this file 
         """
-        
         if self.manual_mode:
             if direction not in self.pressed_keys:
                 
                 self.pressed_keys[direction] = True
                 self.keep_moving(direction)
-    
-    
+                
+                self.change_button_state(direction, "sunken")
+                   
     def stop_move(self, direction):
         """ stops a movement going the current direction
 
@@ -126,6 +132,19 @@ class ManualInterface:
         if self.manual_mode:
             if direction in self.pressed_keys:
                 self.pressed_keys.pop(direction)
+                
+                self.change_button_state(direction, "raised")
+    
+    def change_button_state(self, direction, depression):
+        
+        if direction == self.up:
+            self.up_button.config(relief = depression)
+        elif direction == self.down:
+            self.down_button.config(relief = depression)
+        elif direction == self.left:
+            self.left_button.config(relief = depression)
+        elif direction == self.right:
+            self.right_button.config(relief = depression)
     
     def keep_moving(self, direction):
         """ continuously allows moving to continue as controls are pressed and stops them once released
@@ -148,7 +167,6 @@ class ManualInterface:
         
         if(self.manual_mode):
             self.mode_label.config(text = "Mode: Manual")
-            self.toggle_button.config(text = "Switch to Automatic Control")
             
             self.up_button.config(state = "normal")
             self.down_button.config(state = "normal")
@@ -159,7 +177,6 @@ class ManualInterface:
             
         else:
             self.mode_label.config(text = "Mode: Automatic")
-            self.toggle_button.config(text = "Switch to Manual Control")
             
             self.up_button.config(state = "disabled")
             self.down_button.config(state = "disabled")
