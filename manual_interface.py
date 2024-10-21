@@ -18,7 +18,7 @@ class ManualInterface:
         self.left = "left"
         self.right= "right"
         
-         # unicode arrow symbols
+         # unicode button symbols
         
         self.up_arrow = "\u2191"
         self.down_arrow = "\u2193"
@@ -103,7 +103,7 @@ class ManualInterface:
     def move_home(self):
         """ Moves the robotic arm from its current location to its home position
         """
-        
+        print("Moving home")
         Publisher.home(1000)
     
     
@@ -161,7 +161,7 @@ class ManualInterface:
         """
         if direction in self.pressed_keys:
             
-            Publisher.polar_pan(10, 10, 1000)
+            Publisher.polar_pan(10, 10, 1000, 3000)
             print("Moving " + direction) # replace with movement functionality
             
             self.rootWindow.after(self.move_delay_ms, lambda: self.keep_moving(direction)) # lambda used as function reference
