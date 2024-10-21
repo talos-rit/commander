@@ -25,7 +25,10 @@ class Connection:
         Payload	        UINT8[]	Command Info
         CRC	            UINT16	Checksum
         """
-        # Get a unique, incrementing command id
+        # Get a unique, incrementing command id. Increment by 2, so that the response
+        # from the operator always returns odd command ids and the publisher always sends
+        # even command ids. Commands can be associated with each other by checking if they
+        # have the same modulus of 2.
         command_id = Publisher.command_count
         Publisher.command_count += 2
 
