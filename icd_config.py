@@ -1,8 +1,8 @@
 from enum import Enum
-from ctypes import c_uint8, c_uint16, c_uint32
+from ctypes import c_int8, c_uint8, c_int16, c_uint16, c_int32, c_uint32
 
 
-def int_to_bytes(num, num_bits=16):
+def int_to_bytes(num, num_bits=16, unsigned=True):
     """
     Helper function for converting integers to bits
     """
@@ -11,11 +11,20 @@ def int_to_bytes(num, num_bits=16):
     # Convert to C types accourding to ICD to ensure the correct number of bits.
     # This can be expanded in the future if needed
     if num_bits == 8:
-        c_type_int = c_uint8(num)
+        if unsigned:
+            c_type_int = c_uint8(num)
+        else:
+            c_type_int = c_int8(num)
     elif num_bits == 16:
-        c_type_int = c_uint16(num)
+        if unsigned:
+            c_type_int = c_uint16(num)
+        else:
+            c_type_int = c_int16(num)
     elif num_bits == 32:
-        c_type_int = c_uint32(num)
+        if unsigned:
+            c_type_int = c_uint32(num)
+        else:
+            c_type_int = c_int32(num)
     else:
         raise Exception("Unsupported number of bits given to int_to_bytes")
 
@@ -26,6 +35,7 @@ def int_to_bytes(num, num_bits=16):
 class Command(Enum):
     HANDSHAKE = 0x0000
     POLAR_PAN = 0x0001
+    HOME = 0x0002
 
     def __int__(self):
         """

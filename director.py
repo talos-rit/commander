@@ -6,4 +6,4 @@ from publisher import Publisher
 
 
 Publisher.handshake()
-Publisher.handshake()
+Publisher.home(1000)

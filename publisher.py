@@ -25,18 +25,21 @@ class Connection:
         Payload	        UINT8[]	Command Info
         CRC	            UINT16	Checksum
         """
-        # Get a unique, incrementing command id
+        # Get a unique, incrementing command id. Increment by 2, so that the response
+        # from the operator always returns odd command ids and the publisher always sends
+        # even command ids. Commands can be associated with each other by checking if they
+        # have the same modulus of 2.
         command_id = Publisher.command_count
-        Publisher.command_count += 1
+        Publisher.command_count += 2
 
         payload_length = len(payload)
         # TODO: Implement checksum. May get removed
-        crc = int_to_bytes(0, num_bits=16)
+        crc = int_to_bytes(0, num_bits=16, unsigned=True)
 
-        command_id = int_to_bytes(command_id, num_bits=32)
-        reserved = int_to_bytes(0, num_bits=16)
-        command = int_to_bytes(command, num_bits=16)
-        payload_length = int_to_bytes(payload_length, num_bits=16)
+        command_id = int_to_bytes(command_id, num_bits=32, unsigned=True)
+        reserved = int_to_bytes(0, num_bits=16, unsigned=True)
+        command = int_to_bytes(command, num_bits=16, unsigned=True)
+        payload_length = int_to_bytes(payload_length, num_bits=16, unsigned=True)
 
         # Put header together
         header = command_id + reserved + command + payload_length
@@ -61,9 +64,9 @@ class Publisher:
         payload = b""
 
         Publisher.connection.publish(
-                destination=HANDSHAKE_DESTINATION,
-                command=int(Command.HANDSHAKE),
-                payload=payload
+            destination=HANDSHAKE_DESTINATION,
+            command=int(Command.HANDSHAKE),
+            payload=payload
         )
 
 
@@ -72,20 +75,33 @@ class Publisher:
         """
         Delta Azimuth	INT32	Requested change in azimuth
         Delta Altitude	INT32	Requested change in altitude
-        Delay (ms)  	INT32	How long to wait until executing pan
-        Duration (ms)	INT32	How long the pan should take to execute
+        Delay (ms)  	UINT32	How long to wait until executing pan
+        Duration (ms)	UINT32	How long the pan should take to execute
         """
-        delta_azimuth = int_to_bytes(delta_azimuth, num_bits=32)
-        delta_altitude = int_to_bytes(delta_altitude, num_bits=32)
-        delay = int_to_bytes(delay, num_bits=32)
-        duration = int_to_bytes(duration, num_bits=32)
+        delta_azimuth = int_to_bytes(delta_azimuth, num_bits=32, unsigned=False)
+        delta_altitude = int_to_bytes(delta_altitude, num_bits=32, unsigned=False)
+        delay = int_to_bytes(delay, num_bits=32, unsigned=True)
+        duration = int_to_bytes(duration, num_bits=32, unsigned=True)
 
         # Put everything together
         payload = delta_azimuth + delta_altitude + delay + duration
 
         Publisher.connection.publish(
-                destination=INSTRUCTIONS_DESTINATION,
-                command=int(Command.POLAR_PAN),
-                payload=payload
+            destination=INSTRUCTIONS_DESTINATION,
+            command=int(Command.POLAR_PAN),
+            payload=payload
         )
 
+
+    @staticmethod
+    def home(delay_ms: int):
+        """
+        Delay (ms)	UINT32	How long to wait until executing pan
+        """
+        delay = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
+
+        Publisher.connection.publish(
+            destination=INSTRUCTIONS_DESTINATION,
+            command=int(Command.HOME),
+            payload=delay
+        )
