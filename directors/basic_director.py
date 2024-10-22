@@ -91,7 +91,7 @@ class BasicDirector:
                     if change_in_x != 0:
                         current_time = time.time()
                         if current_time - self.last_command_time >= self.command_delay or self.last_command_time == 0:
-                            rotation = change_in_x * horizontal_dpp
+                            rotation = -(change_in_x * horizontal_dpp)
                             print(rotation)
                             Publisher.rotate_azimuth(rotation)
                             self.last_command_time = current_time
