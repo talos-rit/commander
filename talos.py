@@ -12,7 +12,7 @@ def main():
 
     interface = ManualInterface()
     interface.launch_user_interface()
-    
+
     """
     tracker = MediaPipeTracker(args.source)
     director = BasicDirector(tracker)

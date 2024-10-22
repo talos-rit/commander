@@ -1,5 +1,16 @@
+from enum import Enum
 from publisher import Publisher
 import tkinter
+
+class Direction(Enum):
+    """ Directional Enum for interface controls
+
+    """
+    UP = 1
+    DOWN = 2
+    LEFT = 3
+    RIGHT = 4
+
 
 class ManualInterface:
     """
@@ -10,13 +21,6 @@ class ManualInterface:
     def __init__(self):
         """ Constructor sets up tkinter manual interface, including buttons and labels
         """
-        
-        # directional strings for movement commands
-        
-        self.up = "up"
-        self.down = "down"
-        self.left = "left"
-        self.right= "right"
         
          # unicode button symbols
         
@@ -36,6 +40,7 @@ class ManualInterface:
         # setting up manual vs automatic control toggle
         
         self.manual_mode = True  # True for manual, False for computer vision
+        
         self.mode_label = tkinter.Label(self.rootWindow, text = "Mode: Manual", font = ("Cascadia Code", 12))
         self.mode_label.grid(row = 2, column = 4)
            
@@ -52,22 +57,22 @@ class ManualInterface:
         self.up_button = tkinter.Button(self.rootWindow, text = self.up_arrow, height = 2, width = 10, font = ("Cascadia Code", 16, "bold"))
         self.up_button.grid(row = 1, column = 1, padx = 10, pady = 10)
         
-        self.bind_button(self.up_button, self.up)
+        self.bind_button(self.up_button, Direction.UP)
 
         self.down_button = tkinter.Button(self.rootWindow, text = self.down_arrow, height = 2, width = 10, font = ("Cascadia Code", 16, "bold"))
         self.down_button.grid(row = 3, column = 1, padx = 10, pady = 10)
 
-        self.bind_button(self.down_button, self.down)
+        self.bind_button(self.down_button, Direction.DOWN)
 
         self.left_button = tkinter.Button(self.rootWindow, text = self.left_arrow, height = 2, width = 10, font = ("Cascadia Code", 16, "bold"))
         self.left_button.grid(row = 2, column = 0, padx = 10, pady = 10)
         
-        self.bind_button(self.left_button, self.left)
+        self.bind_button(self.left_button, Direction.LEFT)
 
         self.right_button = tkinter.Button(self.rootWindow, text = self.right_arrow, height = 2, width = 10, font = ("Cascadia Code", 16, "bold"))
         self.right_button.grid(row = 2, column = 2, padx = 10, pady = 10)
         
-        self.bind_button(self.right_button, self.right)
+        self.bind_button(self.right_button, Direction.RIGHT)
         
         self.setup_keyboard_controls()
         
@@ -75,17 +80,17 @@ class ManualInterface:
     def setup_keyboard_controls(self):
         """ Does the tedious work of binding the keyboard arrow keys to the button controls.
         """
-        self.rootWindow.bind("<KeyPress-Up>", lambda event: self.start_move(self.up))
-        self.rootWindow.bind("<KeyRelease-Up>", lambda event: self.stop_move(self.up))
+        self.rootWindow.bind("<KeyPress-Up>", lambda event: self.start_move(Direction.UP))
+        self.rootWindow.bind("<KeyRelease-Up>", lambda event: self.stop_move(Direction.UP))
         
-        self.rootWindow.bind("<KeyPress-Down>", lambda event: self.start_move(self.down))
-        self.rootWindow.bind("<KeyRelease-Down>", lambda event: self.stop_move(self.down))
+        self.rootWindow.bind("<KeyPress-Down>", lambda event: self.start_move(Direction.DOWN))
+        self.rootWindow.bind("<KeyRelease-Down>", lambda event: self.stop_move(Direction.DOWN))
         
-        self.rootWindow.bind("<KeyPress-Left>", lambda event: self.start_move(self.left))
-        self.rootWindow.bind("<KeyRelease-Left>", lambda event: self.stop_move(self.left))
+        self.rootWindow.bind("<KeyPress-Left>", lambda event: self.start_move(Direction.LEFT))
+        self.rootWindow.bind("<KeyRelease-Left>", lambda event: self.stop_move(Direction.LEFT))
         
-        self.rootWindow.bind("<KeyPress-Right>", lambda event: self.start_move(self.right))
-        self.rootWindow.bind("<KeyRelease-Right>", lambda event: self.stop_move(self.right))
+        self.rootWindow.bind("<KeyPress-Right>", lambda event: self.start_move(Direction.RIGHT))
+        self.rootWindow.bind("<KeyRelease-Right>", lambda event: self.stop_move(Direction.RIGHT))
         
         
     def bind_button(self, button, direction):
@@ -98,14 +103,6 @@ class ManualInterface:
         
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
-    
-    
-    def move_home(self):
-        """ Moves the robotic arm from its current location to its home position
-        """
-        print("Moving home")
-        Publisher.home(1000)
-    
     
     def start_move(self, direction):
         """ Moves the robotic arm a static number of degrees per second.
@@ -125,7 +122,7 @@ class ManualInterface:
         """ Stops a movement going the current direction.
 
         Args:
-            direction (_string_): global variables for directional commands are provided at the top of this file 
+            direction (string): global variables for directional commands are provided at the top of this file 
         """
         if self.manual_mode:
             if direction in self.pressed_keys:
@@ -138,19 +135,19 @@ class ManualInterface:
         """ Changes button state to sunken or raised based on input depression argument.
 
         Args:
-            direction (_type_): the directional button to change.
-            depression (_type_): "raised" or "sunken", the depression state to change to.
+            direction (enum): the directional button to change.
+            depression (string): "raised" or "sunken", the depression state to change to.
         """
         
-        if direction == self.up:
-            self.up_button.config(relief = depression)
-        elif direction == self.down:
-            self.down_button.config(relief = depression)
-        elif direction == self.left:
-            self.left_button.config(relief = depression)
-        elif direction == self.right:
-            self.right_button.config(relief = depression)
-    
+        match direction:
+            case Direction.UP:
+                self.up_button.config(relief = depression)
+            case Direction.DOWN:
+                self.down_button.config(relief = depression)
+            case Direction.LEFT:
+                self.left_button.config(relief = depression)
+            case Direction.RIGHT:
+                self.right_button.config(relief = depression)
     
     def keep_moving(self, direction):
         """ Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
@@ -161,12 +158,33 @@ class ManualInterface:
         """
         if direction in self.pressed_keys:
             
-            Publisher.polar_pan(10, 10, 1000, 3000)
-            print("Moving " + direction) # replace with movement functionality
+            print("Moving", end = " ")
             
-            self.rootWindow.after(self.move_delay_ms, lambda: self.keep_moving(direction)) # lambda used as function reference
+            # moves toward input direction by delta 10 (degrees)
+            match direction:
+                case Direction.UP:
+                    Publisher.polar_pan(0, 10, 1000, 3000)
+                    print("up")
+                case Direction.DOWN:
+                    Publisher.polar_pan(0, -10, 1000, 3000)
+                    print("down")
+                case Direction.LEFT:
+                    Publisher.polar_pan(-10, 0, 1000, 3000)
+                    print("left")
+                case Direction.RIGHT:
+                    Publisher.polar_pan(10, 0, 1000, 3000)
+                    print("right")
+            
+            self.rootWindow.after(self.move_delay_ms, lambda: self.keep_moving(direction)) # lambda used as function reference to execute when required
         
         
+    def move_home(self):
+        """ Moves the robotic arm from its current location to its home position
+        """
+        print("Moving home")
+        Publisher.home(1000) # sends a command to move to home via the publisher
+    
+    
     def launch_user_interface(self):
         """ Launches user interface on demand.
         """
@@ -201,6 +219,4 @@ class ManualInterface:
             
             self.home_button.config(state = "disabled")
             
-            self.pressed_keys = {self.up, self.down, self.left, self.right}
-
-
+            self.pressed_keys = {Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT}
