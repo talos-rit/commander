@@ -90,37 +90,6 @@ def main():
         p.stepSimulation()
 
 
-    # angle_increment = 0.5  # This can be adjusted as needed (e.g., move to 0.5 radians)
-    # hold_time = 1  # How long to hold each position in seconds
-
-    # for joint_index in range(5):
-
-    #     current_angle = p.getJointState(robot_id, joint_index)[0]
-    #     new_angle = current_angle + angle_increment
-
-    #     # Set the joint to the new angle
-    #     p.resetJointState(robot_id, joint_index, new_angle)
-
-    #     # Step the simulation for a certain duration
-    #     start_time = time.time()
-    #     while time.time() - start_time < hold_time:
-    #         p.stepSimulation()
-    #         time.sleep(1.0 / 240.0)  # Adjust as needed to control simulation speed
-
-
-    #     current_angle = p.getJointState(robot_id, joint_index)[0]
-    #     new_angle = current_angle - angle_increment
-
-    #     # Set the joint to the new angle
-    #     p.resetJointState(robot_id, joint_index, new_angle)
-
-    #     # Step the simulation to move the joint back
-    #     start_time = time.time()
-    #     while time.time() - start_time < hold_time:
-    #         p.stepSimulation()
-    #         time.sleep(1.0 / 240.0)
-
-
     # Set up the ActiveMQ listener
     conn = setup_active_mq_listener(robot_id)
 

@@ -5,3 +5,4 @@ abcmeta==2.2.0
 opencv-python==4.10.0.84
 mediapipe==0.10.15
 numpy==1.26.0
+pyyaml==6.0.2

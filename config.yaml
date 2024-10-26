@@ -1,0 +1,7 @@
+acceptable_box_percent: 0.5
+frame_width: 320
+frame_height: 568
+vertical_field_of_view: 90
+horizontal_field_of_view: 60
+confirmation_delay: 2.0
+command_delay: 8.0

@@ -10,7 +10,7 @@ def main():
     args = parser.parse_args()
 
     tracker = MediaPipeTracker(args.source)
-    director = BasicDirector(tracker)
+    director = BasicDirector(tracker, "./config.yaml")
 
     while True:
         frame = tracker.capture_frame()
