@@ -1,22 +1,35 @@
 import pybullet as p
 import stomp
+from stomp.utils import encode
 import time
 import math
+import struct
 
 class MyListener(stomp.ConnectionListener):
     def __init__(self, robot_id):
         self.robot_id = robot_id
 
     def on_message(self, frame):
-        message = frame.body
+        message = encode(frame.body, encoding='utf-8')
+        
+        command_id, reserved, command, payload_length = struct.unpack('>I H H H', message[:10])
+        
+        delta_azimuth, delta_altitude, delay, duration = struct.unpack('>iiII', message[10:26])
 
-        # Parse the message and execute corresponding action
-        if "Rotate azimuth" in message:
-            deg = float(message.split(' ')[-1])  # Extract degree value
-            self.rotate_azimuth(deg)
-        elif "Rotate altitude" in message:
-            deg = float(message.split(' ')[-1])  # Extract degree value
-            self.rotate_altitude(deg)
+        print("Command ID:", command_id)
+        print("Reserved:", reserved)
+        print("Command:", command)
+        print("Payload Length:", payload_length)
+        print("Delta Azimuth:", delta_azimuth)
+        print("Delta Altitude:", delta_altitude)
+        print("Delay:", delay)
+        print("Duration:", duration)
+
+
+        if delta_azimuth != 0:
+            self.rotate_azimuth(delta_azimuth)
+        if delta_altitude != 0:
+            self.rotate_altitude(delta_altitude)
 
     def rotate_azimuth(self, deg):
         joint_index = 0  # Azimuth joint index

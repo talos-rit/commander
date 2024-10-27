@@ -103,7 +103,8 @@ class BasicDirector:
                         if current_time - self.last_command_time >= self.command_delay or self.last_command_time == 0:
                             rotation = -(change_in_x * horizontal_dpp)
                             print(rotation)
-                            Publisher.rotate_azimuth(rotation)
+                            rotation = int(round(rotation))
+                            Publisher.polar_pan(rotation, 0, 0, 3000)
                             self.last_command_time = current_time
                             self.movement_detection_start_time = None
 
@@ -112,7 +113,9 @@ class BasicDirector:
                         if current_time - self.last_command_time >= self.command_delay or self.last_command_time == 0:
                             rotation = change_in_y * vertical_dpp
                             print(rotation)
-                            Publisher.rotate_altitude(rotation)
+                            rotation = int(round(rotation))
+                            #Publisher.rotate_altitude(rotation)
+                            Publisher.polar_pan(0, rotation, 0, 3000)
                             self.last_command_time = current_time
                             self.movement_detection_start_time = None
             else:
