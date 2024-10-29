@@ -61,7 +61,7 @@ def setup_active_mq_listener(robot_id):
     """
     Set up the ActiveMQ connection and listener for receiving movement commands.
     """
-    conn = stomp.Connection()  # [('localhost', 8161)]
+    conn = stomp.Connection(auto_decode=False)  # [('localhost', 8161)]
     listener = MyListener(robot_id)
     conn.set_listener('', listener)
     conn.connect('admin', 'admin', wait=True)  # Replace with ActiveMQ username and password
