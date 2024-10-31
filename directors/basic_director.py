@@ -24,6 +24,9 @@ class BasicDirector:
             return yaml.safe_load(file)
         
     def calculate_center_bounding_box(self, x, y, w, h):
+        """
+        Simple method to calculate the center of a bounding box
+        """
         return x + (w // 2), y + (h // 2)
     
     def calculate_acceptable_box(self):

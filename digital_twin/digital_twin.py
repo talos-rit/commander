@@ -10,6 +10,11 @@ class MyListener(stomp.ConnectionListener):
         self.robot_id = robot_id
 
     def on_message(self, frame):
+        """
+        This method is called whenever the listener receives a message from active mq. 
+        Right now it only works for polar pan, it parses the message and calls 
+        delta azimuth or delta altitude.
+        """
         message = encode(frame.body, encoding='utf-8')
         
         command_id, reserved, command, payload_length = struct.unpack('>I H H H', message[:10])
@@ -32,6 +37,9 @@ class MyListener(stomp.ConnectionListener):
             self.rotate_altitude(delta_altitude)
 
     def rotate_azimuth(self, deg):
+        """
+        Method to rotate the base of the digital twin
+        """
         joint_index = 0  # Azimuth joint index
         current_angle = p.getJointState(self.robot_id, joint_index)[0]
         new_angle = current_angle + math.radians(deg)  # Convert degrees to radians
@@ -103,8 +111,6 @@ def main():
         p.stepSimulation()
 
 
-    # Set up the ActiveMQ listener
-    conn = setup_active_mq_listener(robot_id)
 
     # Run the simulation and keep listening for ActiveMQ commands
     try:
