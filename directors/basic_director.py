@@ -52,15 +52,6 @@ class BasicDirector:
         #print(frame)
         #print("Start of test")
 
-        #Hardcoding resolution values for now based on smartphone video
-        frame_width = 320
-        frame_height = 568
-        vertical_field_of_view = 90
-        horizontal_field_of_view = 60
-
-        #Calculating degrees per pixel
-        horizontal_dpp = horizontal_field_of_view / frame_width
-        vertical_dpp = vertical_field_of_view / frame_height
 
         if len(frame) > 0:
             acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom = self.calculate_acceptable_box();
@@ -104,7 +95,7 @@ class BasicDirector:
                     if change_in_x != 0:
                         current_time = time.time()
                         if current_time - self.last_command_time >= self.command_delay or self.last_command_time == 0:
-                            rotation = -(change_in_x * horizontal_dpp)
+                            rotation = -(change_in_x * self.horizontal_dpp)
                             print(rotation)
                             rotation = int(round(rotation))
                             Publisher.polar_pan(rotation, 0, 0, 3000)
@@ -114,7 +105,7 @@ class BasicDirector:
                     if change_in_y != 0:
                         current_time = time.time()
                         if current_time - self.last_command_time >= self.command_delay or self.last_command_time == 0:
-                            rotation = change_in_y * vertical_dpp
+                            rotation = change_in_y * self.vertical_dpp
                             print(rotation)
                             rotation = int(round(rotation))
                             #Publisher.rotate_altitude(rotation)
