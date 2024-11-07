@@ -16,7 +16,7 @@ class Connection:
         self.connection = stomp.Connection()
         self.connection.connect('admin', 'admin', wait=True)
 
-    def publish(self, destination, command: int, payload: bytes):
+    def publish(self, destination, command: int, payload: bytes = None):
         """
         Command ID      UINT32	Unique ID for individual commands
         RESERVED     	UINT16	RESERVED
@@ -32,7 +32,11 @@ class Connection:
         command_id = Publisher.command_count
         Publisher.command_count += 2
 
-        payload_length = len(payload)
+        if payload != None:
+            payload_length = len(payload)
+        else:
+            payload_length = 0
+
         # TODO: Implement checksum. May get removed
         crc = int_to_bytes(0, num_bits=16, unsigned=True)
 
@@ -45,7 +49,12 @@ class Connection:
         header = command_id + reserved + command + payload_length
 
         # Put everything together 
-        body = header + payload + crc
+        body = header
+
+        if payload != None:
+            body += payload
+
+        body += crc
 
         self.connection.send(body=body, destination=destination)
 
@@ -71,7 +80,7 @@ class Publisher:
 
 
     @staticmethod
-    def polar_pan(delta_azimuth: int, delta_altitude: int, delay: int, duration: int):
+    def polar_pan_discrete(delta_azimuth: int, delta_altitude: int, delay: int, duration: int):
         """
         Delta Azimuth	INT32	Requested change in azimuth
         Delta Altitude	INT32	Requested change in altitude
@@ -88,8 +97,45 @@ class Publisher:
 
         Publisher.connection.publish(
             destination=INSTRUCTIONS_DESTINATION,
-            command=int(Command.POLAR_PAN),
+            command=int(Command.POLAR_PAN_DISCRETE),
             payload=payload
+        )
+
+
+    @staticmethod
+    def polar_pan_continuous_start(moving_azimuth: int = 0, moving_altitude: int = 0):
+        """
+        Starts/maintains a continuous polar pan rotation.
+
+        Args:
+        Moving Azimuth     UINT8    -1, 0, or 1
+        Moving Altitude    UINT8    -1, 0, or 1
+
+        The values in the body describe whether or not the arm is rotating in a given direction. 
+        1 rotates counter-clockwise along the axis of movement, -1 rotates clockwise along the axis of 
+        movement and 0 means no rotation.
+        """
+        moving_azimuth = int_to_bytes(moving_azimuth, num_bits=8, unsigned=True)
+        moving_altitude = int_to_bytes(moving_altitude, num_bits=8, unsigned=True)
+
+        # Put everything together
+        payload = moving_azimuth + moving_altitude
+
+        Publisher.connection.publish(
+            destination=INSTRUCTIONS_DESTINATION,
+            command=int(Command.POLAR_PAN_CONTINUOUS_START),
+            payload=payload
+        )
+
+
+    @staticmethod
+    def polar_pan_continuous_stop():
+        """
+        Stops a continuous polar pan rotation.
+        """
+        Publisher.connection.publish(
+            destination=INSTRUCTIONS_DESTINATION,
+            command=int(Command.POLAR_PAN_CONTINUOUS_STOP)
         )
 
 

@@ -34,8 +34,10 @@ def int_to_bytes(num, num_bits=16, unsigned=True):
 
 class Command(Enum):
     HANDSHAKE = 0x0000
-    POLAR_PAN = 0x0001
+    POLAR_PAN_DISCRETE = 0x0001
     HOME = 0x0002
+    POLAR_PAN_CONTINUOUS_START = 0x0003
+    POLAR_PAN_CONTINUOUS_STOP = 0x0004
 
     def __int__(self):
         """
