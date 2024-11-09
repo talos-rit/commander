@@ -59,7 +59,7 @@ class BasicDirector:
             #Calculate where the middle point of the bounding box lies in relation to the box
             # Unpack bounding box
             #Right now I am going to assume we only want the first face
-            first_face = frame[0]
+            first_face = frame[0] # TODO change this later
             x, y, w, h = first_face
 
             # Calculate the center of the bounding box
