@@ -1,4 +1,4 @@
-import pybullet as p
+import pybullet as pyblt
 import stomp
 from stomp.utils import encode
 import time
@@ -45,27 +45,27 @@ class MyListener(stomp.ConnectionListener):
         Method to rotate the base of the digital twin
         """
         joint_index = self.AZIMUTH_JOIN_INDEX  # Azimuth joint index
-        current_angle = p.getJointState(self.robot_id, joint_index)[0]
+        current_angle = pyblt.getJointState(self.robot_id, joint_index)[0]
         new_angle = current_angle + math.radians(deg)  # Convert degrees to radians
-        p.resetJointState(self.robot_id, joint_index, new_angle)
-        p.stepSimulation()
+        pyblt.resetJointState(self.robot_id, joint_index, new_angle)
+        pyblt.stepSimulation()
         print(f"Rotated azimuth by {deg} degrees.")
 
     def rotate_altitude(self, deg):
         joint_index = self.ALTITUDE_JOIN_INDEX  # Altitude joint index
-        current_angle = p.getJointState(self.robot_id, joint_index)[0]
+        current_angle = pyblt.getJointState(self.robot_id, joint_index)[0]
         new_angle = current_angle + math.radians(deg)  # Convert degrees to radians
-        p.resetJointState(self.robot_id, joint_index, new_angle)
-        p.stepSimulation()
+        pyblt.resetJointState(self.robot_id, joint_index, new_angle)
+        pyblt.stepSimulation()
         print(f"Rotated altitude by {deg} degrees.")
 
 def load_robot(urdf_path):
     """
     Load a URDF robot model into the PyBullet simulation environment.
     """
-    p.setAdditionalSearchPath(".")
+    pyblt.setAdditionalSearchPath(".")
 
-    robot_id = p.loadURDF(urdf_path, useFixedBase=True)
+    robot_id = pyblt.loadURDF(urdf_path, useFixedBase=True)
 
     return robot_id
 
@@ -83,7 +83,7 @@ def setup_active_mq_listener(robot_id):
 
 def main():
     # Start PyBullet in GUI mode
-    physics_client = p.connect(p.GUI)
+    physics_client = pyblt.connect(pyblt.GUI)
 
     # Path to the URDF file
     urdf_path = "sboter4u_model/robots/sboter4u_model.urdf"
@@ -92,39 +92,39 @@ def main():
     robot_id = load_robot(urdf_path)
 
     # Get joint information
-    num_joints = p.getNumJoints(robot_id)
+    num_joints = pyblt.getNumJoints(robot_id)
     for i in range(num_joints):
-        joint_info = p.getJointInfo(robot_id, i)
+        joint_info = pyblt.getJointInfo(robot_id, i)
         print(f"Joint {i}: {joint_info[1].decode('utf-8')}") 
 
     # Set gravity and enable real-time simulation
-    p.setGravity(0, 0, 0)
-    p.setRealTimeSimulation(1)
+    pyblt.setGravity(0, 0, 0)
+    pyblt.setRealTimeSimulation(1)
 
 
     BSEPRhome = [0.00000, -2.09925, 1.65843, 1.54994, 0.00000]
 
     # Set each joint to the home position
     for joint_index, angle in enumerate(BSEPRhome):
-        p.resetJointState(robot_id, joint_index, angle)
-        p.stepSimulation()
+        pyblt.resetJointState(robot_id, joint_index, angle)
+        pyblt.stepSimulation()
 
         #This is to set the gripper to be pointing straight ahead
         new_angle = 1.54994 - math.radians(65)
-        p.resetJointState(robot_id, 3, new_angle)
-        p.stepSimulation()
+        pyblt.resetJointState(robot_id, 3, new_angle)
+        pyblt.stepSimulation()
 
 
 
     # Run the simulation and keep listening for ActiveMQ commands
     try:
         while True:
-            p.stepSimulation()
+            pyblt.stepSimulation()
             time.sleep(1.0 / 240.0)  # Adjust the simulation speed
     except KeyboardInterrupt:
         print("Simulation terminated.")
     finally:
-        p.disconnect()
+        pyblt.disconnect()
         conn.disconnect()
 
 # Run the main function when the script is executed
