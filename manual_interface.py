@@ -163,16 +163,16 @@ class ManualInterface:
             # moves toward input direction by delta 10 (degrees)
             match direction:
                 case Direction.UP:
-                    Publisher.polar_pan(0, 10, 1000, 3000)
+                    Publisher.polar_pan_discrete(0, 10, 1000, 3000)
                     print("up")
                 case Direction.DOWN:
-                    Publisher.polar_pan(0, -10, 1000, 3000)
+                    Publisher.polar_pan_discrete(0, -10, 1000, 3000)
                     print("down")
                 case Direction.LEFT:
-                    Publisher.polar_pan(-10, 0, 1000, 3000)
+                    Publisher.polar_pan_discrete(-10, 0, 1000, 3000)
                     print("left")
                 case Direction.RIGHT:
-                    Publisher.polar_pan(10, 0, 1000, 3000)
+                    Publisher.polar_pan_discrete(10, 0, 1000, 3000)
                     print("right")
             
             self.rootWindow.after(self.move_delay_ms, lambda: self.keep_moving(direction)) # lambda used as function reference to execute when required
