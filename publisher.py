@@ -108,15 +108,15 @@ class Publisher:
         Starts/maintains a continuous polar pan rotation.
 
         Args:
-        Moving Azimuth     UINT8    -1, 0, or 1
-        Moving Altitude    UINT8    -1, 0, or 1
+        Moving Azimuth     INT8    -1, 0, or 1
+        Moving Altitude    INT8    -1, 0, or 1
 
         The values in the body describe whether or not the arm is rotating in a given direction. 
         1 rotates counter-clockwise along the axis of movement, -1 rotates clockwise along the axis of 
         movement and 0 means no rotation.
         """
-        moving_azimuth = int_to_bytes(moving_azimuth, num_bits=8, unsigned=True)
-        moving_altitude = int_to_bytes(moving_altitude, num_bits=8, unsigned=True)
+        moving_azimuth = int_to_bytes(moving_azimuth, num_bits=8, unsigned=False)
+        moving_altitude = int_to_bytes(moving_altitude, num_bits=8, unsigned=False)
 
         # Put everything together
         payload = moving_azimuth + moving_altitude
