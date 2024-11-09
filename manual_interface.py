@@ -1,6 +1,9 @@
 from enum import Enum
 from publisher import Publisher
 import tkinter
+import time
+from threading import Thread
+
 
 class Direction(Enum):
     """ Directional Enum for interface controls
@@ -10,6 +13,12 @@ class Direction(Enum):
     DOWN = 2
     LEFT = 3
     RIGHT = 4
+
+    def __int__(self):
+        """
+        Used for casting Enum object to integer
+        """
+        return self.value
 
 
 class ManualInterface:
@@ -75,6 +84,8 @@ class ManualInterface:
         self.bind_button(self.right_button, Direction.RIGHT)
         
         self.setup_keyboard_controls()
+
+        self.last_key_presses = {}
         
         
     def setup_keyboard_controls(self):
@@ -111,6 +122,9 @@ class ManualInterface:
             direction (string): global variables for directional commands are provided at the top of this file 
         """
         if self.manual_mode:
+
+            self.last_key_presses[int(direction)] = time.time()
+
             if direction not in self.pressed_keys:
                 
                 self.pressed_keys[direction] = True
@@ -126,9 +140,33 @@ class ManualInterface:
         """
         if self.manual_mode:
             if direction in self.pressed_keys:
-                self.pressed_keys.pop(direction)
-                
-                self.change_button_state(direction, "raised")
+                if int(direction) in self.last_key_presses:
+                    last_pressed_time = self.last_key_presses[int(direction)]
+
+                    # Fix for operating systems that spam KEYDOWN KEYUP when a key is
+                    # held down:
+
+                    # I know this is jank but this is the best way I could figure out...
+                    # Time.sleep stops the whole function, so new key presses will not
+                    # be heard until after the sleep. So, create a new thread which is
+                    # async to wait for a new key press
+                    def stop_func():
+                        # Wait a fraction of a second
+                        time.sleep(0.1)
+                        # Get the last time the key was pressed again
+                        new_last_pressed_time = self.last_key_presses[int(direction)]
+                       
+                        # Check if the key has been pressed or if the times are the same
+                        if new_last_pressed_time == last_pressed_time:
+                            self.pressed_keys.pop(direction)
+                            self.change_button_state(direction, "raised")
+
+                    # Start the thread
+                    thread = Thread(target=stop_func)
+                    thread.start()
+                else:
+                    self.pressed_keys.pop(direction)
+                    self.change_button_state(direction, "raised")
     
     
     def change_button_state(self, direction, depression):
@@ -148,6 +186,11 @@ class ManualInterface:
                 self.left_button.config(relief = depression)
             case Direction.RIGHT:
                 self.right_button.config(relief = depression)
+
+        # Send a continuous polar pan STOP if no key is pressed
+        if len(self.pressed_keys) == 0:
+            Publisher.polar_pan_continuous_stop()
+            print("Stopping")
     
     def keep_moving(self, direction):
         """ Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
@@ -159,21 +202,28 @@ class ManualInterface:
         if direction in self.pressed_keys:
             
             print("Moving", end = " ")
+            moving_azimuth = 0
+            moving_altitude = 0
             
             # moves toward input direction by delta 10 (degrees)
             match direction:
                 case Direction.UP:
-                    Publisher.polar_pan_discrete(0, 10, 1000, 3000)
+                    moving_altitude = 1
                     print("up")
                 case Direction.DOWN:
-                    Publisher.polar_pan_discrete(0, -10, 1000, 3000)
+                    moving_altitude = -1
                     print("down")
                 case Direction.LEFT:
-                    Publisher.polar_pan_discrete(-10, 0, 1000, 3000)
+                    moving_azimuth = 1
                     print("left")
                 case Direction.RIGHT:
-                    Publisher.polar_pan_discrete(10, 0, 1000, 3000)
+                    moving_azimuth = -1
                     print("right")
+
+            Publisher.polar_pan_continuous_start(
+                moving_azimuth=moving_azimuth,
+                moving_altitude=moving_altitude
+            )
             
             self.rootWindow.after(self.move_delay_ms, lambda: self.keep_moving(direction)) # lambda used as function reference to execute when required
         
