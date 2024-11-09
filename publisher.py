@@ -1,5 +1,6 @@
 import stomp
 from icd_config import Command, int_to_bytes
+from stomp.utils import encode
 
 
 HANDSHAKE_DESTINATION = '/queue/handshake'
@@ -56,7 +57,7 @@ class Connection:
 
         body += crc
 
-        self.connection.send(body=body, destination=destination)
+        self.connection.send(body=body, destination=destination, content_type='application/octet-stream')
 
 
 class Publisher:
