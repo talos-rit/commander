@@ -147,7 +147,6 @@ class ManualInterface:
 
             if direction not in self.pressed_keys:
                 self.pressed_keys[direction] = True
-                self.keep_moving(direction)
                 
                 self.change_button_state(direction, "sunken")
 
@@ -166,6 +165,8 @@ class ManualInterface:
                         case Direction.RIGHT:
                             Publisher.polar_pan_discrete(10, 0, 1000, 3000)
                             print("Polar pan discrete right")
+                else:
+                    self.keep_moving(direction)
                    
     def stop_move(self, direction):
         """ Stops a movement going the current direction.
@@ -236,29 +237,28 @@ class ManualInterface:
         Args:
             direction (_type_): global variables for directional commands are provided at the top of this file
         """
-        if direction in self.pressed_keys:
-            
+        if self.continuous_mode and len(self.pressed_keys) > 0:
             moving_azimuth = 0
             moving_altitude = 0
-            
-            # moves toward input direction by delta 10 (degrees)
-            match direction:
-                case Direction.UP:
-                    moving_altitude = 1
-                case Direction.DOWN:
-                    moving_altitude = -1
-                case Direction.LEFT:
-                    moving_azimuth = 1
-                case Direction.RIGHT:
-                    moving_azimuth = -1
 
-            if self.continuous_mode:
-                print(f"Polar pan cont Azimuth: {moving_azimuth} Altitude: {moving_altitude}")
-                Publisher.polar_pan_continuous_start(
-                    moving_azimuth=moving_azimuth,
-                    moving_altitude=moving_altitude
-                )
-            
+            # Use addition so that if two opposing keys are pressed it cancels out
+            if Direction.UP in self.pressed_keys:
+                moving_altitude += 1
+            if Direction.DOWN in self.pressed_keys:
+                moving_altitude -= 1
+            if Direction.LEFT in self.pressed_keys:
+                moving_azimuth += 1
+            if Direction.RIGHT in self.pressed_keys:
+                moving_azimuth -= 1
+
+            print(f"Polar pan cont Azimuth: {moving_azimuth} Altitude: {moving_altitude}")
+
+            Publisher.polar_pan_continuous_start(
+                moving_azimuth=moving_azimuth,
+                moving_altitude=moving_altitude
+            )
+       
+        if self.continuous_mode:
             self.rootWindow.after(self.move_delay_ms, lambda: self.keep_moving(direction)) # lambda used as function reference to execute when required
         
         
