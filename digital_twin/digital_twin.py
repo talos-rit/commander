@@ -6,6 +6,10 @@ import math
 import struct
 
 class MyListener(stomp.ConnectionListener):
+
+    AZIMUTH_JOIN_INDEX = 0
+    ALTITUDE_JOIN_INDEX = 3
+
     def __init__(self, robot_id):
         self.robot_id = robot_id
 
@@ -40,7 +44,7 @@ class MyListener(stomp.ConnectionListener):
         """
         Method to rotate the base of the digital twin
         """
-        joint_index = 0  # Azimuth joint index
+        joint_index = self.AZIMUTH_JOIN_INDEX  # Azimuth joint index
         current_angle = p.getJointState(self.robot_id, joint_index)[0]
         new_angle = current_angle + math.radians(deg)  # Convert degrees to radians
         p.resetJointState(self.robot_id, joint_index, new_angle)
@@ -48,7 +52,7 @@ class MyListener(stomp.ConnectionListener):
         print(f"Rotated azimuth by {deg} degrees.")
 
     def rotate_altitude(self, deg):
-        joint_index = 3  # Altitude joint index
+        joint_index = self.ALTITUDE_JOIN_INDEX  # Altitude joint index
         current_angle = p.getJointState(self.robot_id, joint_index)[0]
         new_angle = current_angle + math.radians(deg)  # Convert degrees to radians
         p.resetJointState(self.robot_id, joint_index, new_angle)
