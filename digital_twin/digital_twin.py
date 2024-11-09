@@ -104,6 +104,9 @@ def main():
 
     BSEPRhome = [0.00000, -2.09925, 1.65843, 1.54994, 0.00000]
 
+    # Set up the ActiveMQ listener
+    conn = setup_active_mq_listener(robot_id)
+
     # Set each joint to the home position
     for joint_index, angle in enumerate(BSEPRhome):
         pyblt.resetJointState(robot_id, joint_index, angle)
