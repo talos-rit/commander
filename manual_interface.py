@@ -39,6 +39,14 @@ class ManualInterface:
         self.right_arrow = "\u2192"
         self.home = "🏠"
         self.switch = " ⤭ "
+
+        # button labels
+        self.MOVEMENT_MODE = "Movement Mode: "
+        self.CONTINUOUS_MODE_LABEL = self.MOVEMENT_MODE + "Continuous"
+        self.DISCRETE_MODE_LABEL = self.MOVEMENT_MODE + "Discrete"
+        self.CONTROL_MODE = "Control Mode: "
+        self.MANUAL_MODE_LABEL = self.CONTROL_MODE + "Manual"
+        self.AUTOMATIC_MODE_LABEL = self.CONTROL_MODE + "Automatic"
                 
         self.rootWindow = tkinter.Tk()
         self.rootWindow.title("Talos Manual Interface")
@@ -50,7 +58,7 @@ class ManualInterface:
         
         self.manual_mode = True  # True for manual, False for computer vision
         
-        self.mode_label = tkinter.Label(self.rootWindow, text = "Mode: Manual", font = ("Cascadia Code", 12))
+        self.mode_label = tkinter.Label(self.rootWindow, text = self.MANUAL_MODE_LABEL, font = ("Cascadia Code", 12))
         self.mode_label.grid(row = 2, column = 4)
            
         self.toggle_button = tkinter.Button(
@@ -65,7 +73,7 @@ class ManualInterface:
 
         self.continuous_mode = True
 
-        self.cont_mode_label = tkinter.Label(self.rootWindow, text = "Mode: Continuous", font = ("Cascadia Code", 12))
+        self.cont_mode_label = tkinter.Label(self.rootWindow, text = self.CONTINUOUS_MODE_LABEL, font = ("Cascadia Code", 12))
         self.cont_mode_label.grid(row = 1, column = 4)
 
         self.cont_toggle_button = tkinter.Button(
@@ -279,9 +287,9 @@ class ManualInterface:
         self.continuous_mode = not self.continuous_mode
 
         if self.continuous_mode:
-            self.cont_mode_label.config(text = "Mode: Continuous")
+            self.cont_mode_label.config(text = self.CONTINUOUS_MODE_LABEL)
         else:
-            self.cont_mode_label.config(text = "Mode: Discrete")
+            self.cont_mode_label.config(text = self.DISCRETE_MODE_LABEL)
     
     
     def toggle_command_mode(self):
@@ -291,7 +299,7 @@ class ManualInterface:
         self.manual_mode = not self.manual_mode
         
         if self.manual_mode:
-            self.mode_label.config(text = "Mode: Manual")
+            self.mode_label.config(text = self.MANUAL_MODE_LABEL)
             
             self.up_button.config(state = "normal")
             self.down_button.config(state = "normal")
@@ -303,7 +311,7 @@ class ManualInterface:
             self.pressed_keys = {}
             
         else:
-            self.mode_label.config(text = "Mode: Automatic")
+            self.mode_label.config(text = self.AUTOMATIC_MODE_LABEL)
             
             self.up_button.config(state = "disabled")
             self.down_button.config(state = "disabled")
