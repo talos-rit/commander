@@ -2,6 +2,7 @@ from tracking.tracker import Tracker
 from publisher import Publisher
 import time
 import yaml
+import cv2
 
 class BasicDirector:
     # The director class is responsible for processing the frames captured by the tracker
@@ -27,7 +28,7 @@ class BasicDirector:
         """
         Simple method to calculate the center of a bounding box
         """
-        return x + (w // 2), y + (h // 2)
+        return (x + w) // 2, (y + h) // 2
     
     def calculate_acceptable_box(self):
         #Use the frame height and width to calculate an acceptable box
@@ -98,7 +99,7 @@ class BasicDirector:
                             rotation = -(change_in_x * self.horizontal_dpp)
                             print(rotation)
                             rotation = int(round(rotation))
-                            Publisher.polar_pan(rotation, 0, 0, 3000)
+                            Publisher.polar_pan_discrete(rotation, 0, 0, 3000)
                             self.last_command_time = current_time
                             self.movement_detection_start_time = None
 
@@ -109,7 +110,7 @@ class BasicDirector:
                             print(rotation)
                             rotation = int(round(rotation))
                             #Publisher.rotate_altitude(rotation)
-                            Publisher.polar_pan(0, rotation, 0, 3000)
+                            #Publisher.polar_pan_discrete(0, rotation, 0, 3000)
                             self.last_command_time = current_time
                             self.movement_detection_start_time = None
             else:
