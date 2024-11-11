@@ -1,6 +1,9 @@
 from enum import Enum
 from publisher import Publisher
 import tkinter
+import time
+from threading import Thread
+
 
 class Direction(Enum):
     """ Directional Enum for interface controls
@@ -10,6 +13,12 @@ class Direction(Enum):
     DOWN = 2
     LEFT = 3
     RIGHT = 4
+
+    def __int__(self):
+        """
+        Used for casting Enum object to integer
+        """
+        return self.value
 
 
 class ManualInterface:
@@ -30,6 +39,14 @@ class ManualInterface:
         self.right_arrow = "\u2192"
         self.home = "🏠"
         self.switch = " ⤭ "
+
+        # button labels
+        self.MOVEMENT_MODE = "Movement Mode: "
+        self.CONTINUOUS_MODE_LABEL = self.MOVEMENT_MODE + "Continuous"
+        self.DISCRETE_MODE_LABEL = self.MOVEMENT_MODE + "Discrete"
+        self.CONTROL_MODE = "Control Mode: "
+        self.MANUAL_MODE_LABEL = self.CONTROL_MODE + "Manual"
+        self.AUTOMATIC_MODE_LABEL = self.CONTROL_MODE + "Automatic"
                 
         self.rootWindow = tkinter.Tk()
         self.rootWindow.title("Talos Manual Interface")
@@ -41,11 +58,31 @@ class ManualInterface:
         
         self.manual_mode = True  # True for manual, False for computer vision
         
-        self.mode_label = tkinter.Label(self.rootWindow, text = "Mode: Manual", font = ("Cascadia Code", 12))
+        self.mode_label = tkinter.Label(self.rootWindow, text = self.MANUAL_MODE_LABEL, font = ("Cascadia Code", 12))
         self.mode_label.grid(row = 2, column = 4)
            
-        self.toggle_button = tkinter.Button(self.rootWindow, text = self.switch, font = ("Cascadia Code", 16, "bold"), command = self.toggle_command_mode)
+        self.toggle_button = tkinter.Button(
+            self.rootWindow,
+            text = self.switch,
+            font = ("Cascadia Code", 16, "bold"),
+            command = self.toggle_command_mode
+        )
         self.toggle_button.grid(row = 2, column = 5, padx = 10)
+
+        # Setup up continuous/discrete toggle
+
+        self.continuous_mode = True
+
+        self.cont_mode_label = tkinter.Label(self.rootWindow, text = self.CONTINUOUS_MODE_LABEL, font = ("Cascadia Code", 12))
+        self.cont_mode_label.grid(row = 1, column = 4)
+
+        self.cont_toggle_button = tkinter.Button(
+            self.rootWindow,
+            text = self.switch,
+            font = ("Cascadia Code", 16, "bold"),
+            command = self.toggle_continuous_mode
+        )
+        self.cont_toggle_button.grid(row = 1, column = 5, padx = 10)
         
         # setting up home button
         
@@ -75,6 +112,8 @@ class ManualInterface:
         self.bind_button(self.right_button, Direction.RIGHT)
         
         self.setup_keyboard_controls()
+
+        self.last_key_presses = {}
         
         
     def setup_keyboard_controls(self):
@@ -111,12 +150,31 @@ class ManualInterface:
             direction (string): global variables for directional commands are provided at the top of this file 
         """
         if self.manual_mode:
+
+            self.last_key_presses[int(direction)] = time.time()
+
             if direction not in self.pressed_keys:
-                
                 self.pressed_keys[direction] = True
-                self.keep_moving(direction)
                 
                 self.change_button_state(direction, "sunken")
+
+                if not self.continuous_mode:
+                    # moves toward input direction by delta 10 (degrees)
+                    match direction:
+                        case Direction.UP:
+                            Publisher.polar_pan_discrete(0, 10, 1000, 3000)
+                            print("Polar pan discrete up")
+                        case Direction.DOWN:
+                            Publisher.polar_pan_discrete(0, -10, 1000, 3000)
+                            print("Polar pan discrete down")
+                        case Direction.LEFT:
+                            Publisher.polar_pan_discrete(-10, 0, 1000, 3000)
+                            print("Polar pan discrete left")
+                        case Direction.RIGHT:
+                            Publisher.polar_pan_discrete(10, 0, 1000, 3000)
+                            print("Polar pan discrete right")
+                else:
+                    self.keep_moving(direction)
                    
     def stop_move(self, direction):
         """ Stops a movement going the current direction.
@@ -126,9 +184,33 @@ class ManualInterface:
         """
         if self.manual_mode:
             if direction in self.pressed_keys:
-                self.pressed_keys.pop(direction)
-                
-                self.change_button_state(direction, "raised")
+                if int(direction) in self.last_key_presses:
+                    last_pressed_time = self.last_key_presses[int(direction)]
+
+                    # Fix for operating systems that spam KEYDOWN KEYUP when a key is
+                    # held down:
+
+                    # I know this is jank but this is the best way I could figure out...
+                    # Time.sleep stops the whole function, so new key presses will not
+                    # be heard until after the sleep. So, create a new thread which is
+                    # async to wait for a new key press
+                    def stop_func():
+                        # Wait a fraction of a second
+                        time.sleep(0.05)
+                        # Get the last time the key was pressed again
+                        new_last_pressed_time = self.last_key_presses[int(direction)]
+                       
+                        # Check if the key has been pressed or if the times are the same
+                        if new_last_pressed_time == last_pressed_time:
+                            self.pressed_keys.pop(direction)
+                            self.change_button_state(direction, "raised")
+
+                    # Start the thread
+                    thread = Thread(target=stop_func)
+                    thread.start()
+                else:
+                    self.pressed_keys.pop(direction)
+                    self.change_button_state(direction, "raised")
     
     
     def change_button_state(self, direction, depression):
@@ -148,6 +230,13 @@ class ManualInterface:
                 self.left_button.config(relief = depression)
             case Direction.RIGHT:
                 self.right_button.config(relief = depression)
+
+        if self.continuous_mode:
+            # Send a continuous polar pan STOP if no key is pressed
+            if len(self.pressed_keys) == 0:
+                Publisher.polar_pan_continuous_stop()
+                print("Polar pan cont STOP")
+
     
     def keep_moving(self, direction):
         """ Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
@@ -156,25 +245,28 @@ class ManualInterface:
         Args:
             direction (_type_): global variables for directional commands are provided at the top of this file
         """
-        if direction in self.pressed_keys:
-            
-            print("Moving", end = " ")
-            
-            # moves toward input direction by delta 10 (degrees)
-            match direction:
-                case Direction.UP:
-                    Publisher.polar_pan_discrete(0, 10, 1000, 3000)
-                    print("up")
-                case Direction.DOWN:
-                    Publisher.polar_pan_discrete(0, -10, 1000, 3000)
-                    print("down")
-                case Direction.LEFT:
-                    Publisher.polar_pan_discrete(-10, 0, 1000, 3000)
-                    print("left")
-                case Direction.RIGHT:
-                    Publisher.polar_pan_discrete(10, 0, 1000, 3000)
-                    print("right")
-            
+        if self.continuous_mode and len(self.pressed_keys) > 0:
+            moving_azimuth = 0
+            moving_altitude = 0
+
+            # Use addition so that if two opposing keys are pressed it cancels out
+            if Direction.UP in self.pressed_keys:
+                moving_altitude += 1
+            if Direction.DOWN in self.pressed_keys:
+                moving_altitude -= 1
+            if Direction.LEFT in self.pressed_keys:
+                moving_azimuth += 1
+            if Direction.RIGHT in self.pressed_keys:
+                moving_azimuth -= 1
+
+            print(f"Polar pan cont Azimuth: {moving_azimuth} Altitude: {moving_altitude}")
+
+            Publisher.polar_pan_continuous_start(
+                moving_azimuth=moving_azimuth,
+                moving_altitude=moving_altitude
+            )
+       
+        if self.continuous_mode:
             self.rootWindow.after(self.move_delay_ms, lambda: self.keep_moving(direction)) # lambda used as function reference to execute when required
         
         
@@ -189,6 +281,15 @@ class ManualInterface:
         """ Launches user interface on demand.
         """
         self.rootWindow.mainloop()
+
+
+    def toggle_continuous_mode(self):
+        self.continuous_mode = not self.continuous_mode
+
+        if self.continuous_mode:
+            self.cont_mode_label.config(text = self.CONTINUOUS_MODE_LABEL)
+        else:
+            self.cont_mode_label.config(text = self.DISCRETE_MODE_LABEL)
     
     
     def toggle_command_mode(self):
@@ -198,7 +299,7 @@ class ManualInterface:
         self.manual_mode = not self.manual_mode
         
         if self.manual_mode:
-            self.mode_label.config(text = "Mode: Manual")
+            self.mode_label.config(text = self.MANUAL_MODE_LABEL)
             
             self.up_button.config(state = "normal")
             self.down_button.config(state = "normal")
@@ -210,7 +311,7 @@ class ManualInterface:
             self.pressed_keys = {}
             
         else:
-            self.mode_label.config(text = "Mode: Automatic")
+            self.mode_label.config(text = self.AUTOMATIC_MODE_LABEL)
             
             self.up_button.config(state = "disabled")
             self.down_button.config(state = "disabled")
