@@ -4,4 +4,4 @@ frame_height: 480
 vertical_field_of_view: 48
 horizontal_field_of_view: 89
 confirmation_delay: 1.0
-command_delay: 1.0
+command_delay: 0.25

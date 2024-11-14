@@ -7,6 +7,7 @@ import cv2
 class BasicDirector:
     # The director class is responsible for processing the frames captured by the tracker
     def __init__(self, tracker : Tracker, config_path):
+        self.last_command_stop = False # bool to ensure only one polar_pan_continuous_stop command is sent at a time
         self.tracker = tracker
         self.config = self.load_config(config_path)
         self.frame_width = self.config['frame_width']
@@ -92,26 +93,21 @@ class BasicDirector:
                     elif bbox_center_y > acceptable_box_bottom:
                         #print("Move camera down: " + "Bbox center y= " + str(bbox_center_y) + " acceptable bottom: " + str(acceptable_box_bottom))
                         change_in_y = bbox_center_y - acceptable_box_bottom
-                
-                    if change_in_x != 0:
-                        current_time = time.time()
-                        if current_time - self.last_command_time >= self.command_delay or self.last_command_time == 0:
-                            rotation = -(change_in_x * self.horizontal_dpp)
-                            print(rotation)
-                            rotation = int(round(rotation))
-                            Publisher.polar_pan_discrete(rotation, 0, 0, 3000)
-                            self.last_command_time = current_time
-                            self.movement_detection_start_time = None
 
-                    if change_in_y != 0:
-                        current_time = time.time()
-                        if current_time - self.last_command_time >= self.command_delay or self.last_command_time == 0:
-                            rotation = change_in_y * self.vertical_dpp
-                            print(rotation)
-                            rotation = int(round(rotation))
-                            #Publisher.rotate_altitude(rotation)
-                            #Publisher.polar_pan_discrete(0, rotation, 0, 3000)
-                            self.last_command_time = current_time
-                            self.movement_detection_start_time = None
+                    if change_in_x > 0:
+                        Publisher.polar_pan_continuous_start(-1, 0)
+                        self.last_command_stop = False
+                    elif change_in_x < 0:
+                        Publisher.polar_pan_continuous_start(1, 0)
+                        self.last_command_stop = False
+                    else:
+                        if(not self.last_command_stop):
+                            Publisher.polar_pan_continuous_stop()
+                            self.last_command_stop = True
+                
             else:
+                if(not self.last_command_stop):
+                    Publisher.polar_pan_continuous_stop()
+                    self.last_command_stop = True
+
                 self.movement_detection_start_time = None

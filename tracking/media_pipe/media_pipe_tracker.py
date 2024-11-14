@@ -19,7 +19,7 @@ class MediaPipeTracker(Tracker):
         if self.source:
             self.cap = cv2.VideoCapture(self.source)  
         else:
-            self.cap = cv2.VideoCapture(0)
+            self.cap = cv2.VideoCapture(4)
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
