@@ -69,28 +69,9 @@ class MediaPipeTracker(Tracker):
 
         hasFrame, frame = self.cap.read()
         if not hasFrame:
-            return None
+            return None, None
 
         bboxes = self.detectPerson(self.object_detector, frame)
-
-        #Drawing boxes on screen this can be removed later
-        
-        for bbox in bboxes:
-            x1, y1, x2, y2 = bbox
-            # Draw the rectangle on the frame (color = green, thickness = 2)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-            color = (0, 255, 0)  # Green color for the center point
-            radius = 10          # Radius of the circle
-            thickness = -1       # -1 fills the circle
-
-            bbox_center_x = (x1 + x2) // 2
-            bbox_center_y = (y1 + y2) // 2
-
-            cv2.circle(frame, (bbox_center_x, bbox_center_y), radius, color, thickness)
-
-        # Display the frame with bounding boxes in a window
-        cv2.imshow('Object Detection', frame)
         
 
-        return bboxes
+        return bboxes, frame

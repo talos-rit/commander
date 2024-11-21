@@ -50,8 +50,8 @@ class BasicTracker(Tracker):
 
         hasFrame, frame = self.cap.read()
         if not hasFrame:
-            return None
+            return None, None
 
         bboxes = self.detectFace(self.faceCascade, frame)
         
-        return bboxes
+        return bboxes, frame

@@ -1,6 +1,4 @@
 acceptable_box_percent: 0.4
-frame_width: 640
-frame_height: 480
 vertical_field_of_view: 48
 horizontal_field_of_view: 89
 confirmation_delay: 1.0
