@@ -14,19 +14,19 @@ def main():
     interface.launch_user_interface()
 
     
-    tracker = MediaPipeTracker(args.source)
-    director = BasicDirector(tracker, "./config.yaml")
+    # tracker = MediaPipeTracker(args.source)
+    # director = BasicDirector(tracker, "./config.yaml")
 
-    while True:
-        frame = tracker.capture_frame()
+    # while True:
+    #     frame = tracker.capture_frame()
 
-        #Helpful for bounding boxes on screen, this can be removed later
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    #     #Helpful for bounding boxes on screen, this can be removed later
+    #     if cv2.waitKey(1) & 0xFF == ord('q'):
+    #         break
 
-        if frame is None:
-            break
-        director.process_frame(frame)
+    #     if frame is None:
+    #         break
+    #     director.process_frame(frame)
     
 
 
