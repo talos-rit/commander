@@ -2,10 +2,13 @@ import stomp
 from icd_config import Command, int_to_bytes
 from stomp.utils import encode
 import socket
+import time
 
 
 HANDSHAKE_DESTINATION = '/queue/handshake'
 INSTRUCTIONS_DESTINATION = '/queue/instructions'
+SOCKET_HOST = 'localhost'
+SOCKET_PORT = 61616
 
 
 class Connection:
@@ -19,9 +22,16 @@ class Connection:
         #self.connection.connect('admin', 'admin', wait=True)
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.host = "localhost"
-        self.port = 61616
-        self.socket.connect((self.host, self.port))
+
+        while(True):
+            try:
+                self.socket.connect((SOCKET_HOST, SOCKET_PORT))
+                print("Connected to socket: " + SOCKET_HOST + ":" + str(SOCKET_PORT))
+                break
+            except ConnectionRefusedError: # catch refused connection for retry
+                print("Connection to " + SOCKET_HOST + ":" + str(SOCKET_PORT) + " failed, retrying in 5s")
+                time.sleep(5)
+
 
     def close_socket(self):
         self.socket.close()
@@ -66,8 +76,7 @@ class Connection:
 
         body += crc
 
-        self.socket.sendall(body)
-        #self.connection.send(body=body, destination=destination, content_type='application/octet-stream')
+        self.socket.send(body)
 
 
 class Publisher:
