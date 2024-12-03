@@ -1,4 +1,5 @@
 import cv2
+import yaml
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -8,7 +9,7 @@ from tracking.tracker import Tracker
 class MediaPipeTracker(Tracker):
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source : str):
+    def __init__(self, source : str, config_path):
         self.source = source
 
         base_options = python.BaseOptions(model_asset_path="tracking/media_pipe/efficientdet_lite0.tflite")
@@ -19,7 +20,13 @@ class MediaPipeTracker(Tracker):
         if self.source:
             self.cap = cv2.VideoCapture(self.source)  
         else:
-            self.cap = cv2.VideoCapture(4)
+            config = self.load_config(config_path)
+            camera_index = config['camera_index']
+            self.cap = cv2.VideoCapture(camera_index)
+
+    def load_config(self, config_path):
+        with open(config_path, 'r') as file:
+            return yaml.safe_load(file)
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
