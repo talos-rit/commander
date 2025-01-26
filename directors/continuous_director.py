@@ -15,6 +15,9 @@ class ContinuousDirector(BaseDirector):
         self.command_delay = self.config['command_delay']
         self.last_command_time = 0  # Track the time of the last command
         self.movement_detection_start_time = None  # Time when the person first moved outside the box
+        self.idle_mode = False
+        self.idle_start_time = None
+        self.idle_time_threshold = 15
 
 
     # This method is called to process each frame
@@ -50,6 +53,16 @@ class ContinuousDirector(BaseDirector):
 
                 # Check if they've been outside for at least the confirmation delay
                 if current_time - self.movement_detection_start_time >= self.confirmation_delay:
+
+                    #First get out of idle mode
+                    if self.idle_mode:
+                        self.idle_mode = False;
+                        #This is where we want to do idle stop command
+                        print("Exiting idle mode")
+
+                    #Reset idle timer because the speaker has left the box
+                    self.idle_start_time = None
+
                     change_in_x = 0
                     change_in_y = 0
                     #Move accordinly
@@ -68,9 +81,11 @@ class ContinuousDirector(BaseDirector):
                         change_in_y = bbox_center_y - acceptable_box_bottom
 
                     if change_in_x > 0:
+                        print("Start rotation clockwise")
                         Publisher.polar_pan_continuous_start(-1, 0)
                         self.last_command_stop = False
                     elif change_in_x < 0:
+                        print("Start rotation counter-clockwise")
                         Publisher.polar_pan_continuous_start(1, 0)
                         self.last_command_stop = False
                     else:
@@ -79,9 +94,24 @@ class ContinuousDirector(BaseDirector):
                             self.last_command_stop = True
                 
             else:
+                #Stop movement
                 if(not self.last_command_stop):
                     Publisher.polar_pan_continuous_stop()
                     print("Stop")
                     self.last_command_stop = True
 
                 self.movement_detection_start_time = None
+
+                #Now check to see if we need to start idle mode 
+                if not self.idle_mode:
+                    if self.idle_start_time is None:
+                        self.idle_start_time = time.time()  # Start the idle timer
+                    elif time.time() - self.idle_start_time >= self.idle_time_threshold:
+                        # Switch to idle mode
+                        self.idle_mode = True
+                        print("Entering idle mode.")
+                        #Send the command to start idle mode
+                else:
+                    # Already in idle mode
+                    print("In idle mode")
+                    pass
