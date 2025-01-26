@@ -1,7 +1,6 @@
-acceptable_box_percent: 0.4
-frame_width: 640
-frame_height: 480
-vertical_field_of_view: 48
-horizontal_field_of_view: 89
-confirmation_delay: 1.0
-command_delay: 1.0
+acceptable_box_percent: 0.4  # Percentage of the frame width and height used to define the size of the acceptable box
+vertical_field_of_view: 48  # vertical FOV of camera being used
+horizontal_field_of_view: 89  # horizontal FOV of camera being used
+confirmation_delay: 0.25  # Amount of time subject is outside of acceptable box before a command is sent
+command_delay: 0.25  # Wait time before another command can be sent 
+camera_index: 0  # Index of the camera device to be used for video capture
