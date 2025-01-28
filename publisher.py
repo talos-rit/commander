@@ -1,44 +1,33 @@
-import stomp
+from config import SOCKET_HOST, SOCKET_PORT
 from icd_config import Command, int_to_bytes
-from stomp.utils import encode
 import socket
 import time
-
-
-HANDSHAKE_DESTINATION = '/queue/handshake'
-INSTRUCTIONS_DESTINATION = '/queue/instructions'
-SOCKET_HOST = 'localhost'
-SOCKET_PORT = 61616
+import threading
 
 
 class Connection:
-    """
-    The publisher class does not have an initialization since it is a static class.
-    This class exists to initialize a single connection instance that is used by the
-    publisher. Also contains a function that is used to publish messages.
-    """
-    def __init__(self):
-        #self.connection = stomp.Connection()
-        #self.connection.connect('admin', 'admin', wait=True)
-
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.is_connected = False
+        self.async_connect()
 
-        while(True):
-            try:
-                self.socket.connect((SOCKET_HOST, SOCKET_PORT))
-                print("Connected to socket: " + SOCKET_HOST + ":" + str(SOCKET_PORT))
-                break
-            except ConnectionRefusedError: # catch refused connection for retry
-                print("Connection to " + SOCKET_HOST + ":" + str(SOCKET_PORT) + " failed, retrying in 5s")
-                time.sleep(5)
+    def async_connect(self):
+        thread = threading.Thread(target=self.connect)
+        thread.start()
 
+    def connect(self):
+        raise NotImplementedError("connect method is not implemented")
 
     def close_socket(self):
         self.socket.close()
+        self.is_connected = False
 
-    def publish(self, destination, command: int, payload: bytes = None):
+    def publish(self, command: int, payload: bytes = None):
         """
         Command ID      UINT32	Unique ID for individual commands
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         RESERVED     	UINT16	RESERVED
         Command Value	UINT16	Command for device to carry out
         Length	        UINT16	Length of Payload
@@ -79,11 +68,24 @@ class Connection:
         self.socket.send(body)
 
 
+class OperatorConnection(Connection):
+    def connect(self):
+        while(True):
+            try:
+                self.socket.connect((self.host, self.port))
+                self.is_connected = True
+                print("Connected to socket: " + self.host + ":" + str(self.port))
+                break
+            except ConnectionRefusedError: # catch refused connection for retry
+                print("Connection to " + self.host + ":" + str(self.port) + " failed, retrying in 5s")
+                time.sleep(5)
+
+
 class Publisher:
     """
     A static class that is used to publish instructions to the operator.
     """
-    connection = Connection()
+    connection = OperatorConnection(host=SOCKET_HOST, port=SOCKET_PORT)
     command_count = 0
 
     @staticmethod
@@ -96,7 +98,6 @@ class Publisher:
         payload = b""
 
         Publisher.connection.publish(
-            destination=HANDSHAKE_DESTINATION,
             command=int(Command.HANDSHAKE),
             payload=payload
         )
@@ -119,7 +120,6 @@ class Publisher:
         payload = delta_azimuth + delta_altitude + delay + duration
 
         Publisher.connection.publish(
-            destination=INSTRUCTIONS_DESTINATION,
             command=int(Command.POLAR_PAN_DISCRETE),
             payload=payload
         )
@@ -145,7 +145,6 @@ class Publisher:
         payload = moving_azimuth + moving_altitude
 
         Publisher.connection.publish(
-            destination=INSTRUCTIONS_DESTINATION,
             command=int(Command.POLAR_PAN_CONTINUOUS_START),
             payload=payload
         )
@@ -157,7 +156,6 @@ class Publisher:
         Stops a continuous polar pan rotation.
         """
         Publisher.connection.publish(
-            destination=INSTRUCTIONS_DESTINATION,
             command=int(Command.POLAR_PAN_CONTINUOUS_STOP)
         )
 
@@ -170,7 +168,6 @@ class Publisher:
         delay = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
 
         Publisher.connection.publish(
-            destination=INSTRUCTIONS_DESTINATION,
             command=int(Command.HOME),
             payload=delay
         )
