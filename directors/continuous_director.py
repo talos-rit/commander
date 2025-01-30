@@ -1,68 +1,41 @@
 from tracking.tracker import Tracker
+from directors.base_director import BaseDirector
 from publisher import Publisher
 import time
 import yaml
 import cv2
 
-class BasicDirector:
+class ContinuousDirector(BaseDirector):
     # The director class is responsible for processing the frames captured by the tracker
     def __init__(self, tracker : Tracker, config_path):
+        super().__init__(config_path)
         self.last_command_stop = False # bool to ensure only one polar_pan_continuous_stop command is sent at a time
         self.tracker = tracker
-        self.config = self.load_config(config_path)
-        self.frame_width = self.config['frame_width']
-        self.frame_height = self.config['frame_height']
-        self.acceptable_box_percent = self.config['acceptable_box_percent']
-        self.horizontal_dpp = self.config['horizontal_field_of_view'] / self.frame_width
-        self.vertical_dpp = self.config['vertical_field_of_view'] / self.frame_height
         self.confirmation_delay = self.config['confirmation_delay']
         self.command_delay = self.config['command_delay']
         self.last_command_time = 0  # Track the time of the last command
         self.movement_detection_start_time = None  # Time when the person first moved outside the box
 
 
-    def load_config(self, config_path):
-        with open(config_path, 'r') as file:
-            return yaml.safe_load(file)
-        
-    def calculate_center_bounding_box(self, x, y, w, h):
-        """
-        Simple method to calculate the center of a bounding box
-        """
-        return (x + w) // 2, (y + h) // 2
-    
-    def calculate_acceptable_box(self):
-        #Use the frame height and width to calculate an acceptable box
-        # Calculate the frame's center
-        frame_center_x = self.frame_width // 2
-        frame_center_y = self.frame_height // 2
-
-        # Define the acceptable box (50% of width and height around the center)
-        acceptable_width = int(self.frame_width * self.acceptable_box_percent)
-        acceptable_height = int(self.frame_height * self.acceptable_box_percent)
-
-        acceptable_box_left = frame_center_x - (acceptable_width // 2)
-        acceptable_box_top = frame_center_y - (acceptable_height // 2)
-        acceptable_box_right = frame_center_x + (acceptable_width // 2)
-        acceptable_box_bottom = frame_center_y + (acceptable_height // 2)
-        return acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom
-
-
     # This method is called to process each frame
-    def process_frame(self, frame : list):
+    def process_frame(self, bounding_box : list, frame):
     # Do something with the frame
-        #print(frame)
-        #print("Start of test")
 
+        frameOpenCV = frame.copy()
+        frame_height = frameOpenCV.shape[0]
+        frame_width = frameOpenCV.shape[1]
 
-        if len(frame) > 0:
-            acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom = self.calculate_acceptable_box();
+        if len(bounding_box) > 0:
+            acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom = self.calculate_acceptable_box(frame_width, frame_height);
 
             #Calculate where the middle point of the bounding box lies in relation to the box
             # Unpack bounding box
             #Right now I am going to assume we only want the first face
-            first_face = frame[0] # TODO change this later
+            first_face = bounding_box[0] # TODO change this later
             x, y, w, h = first_face
+
+            #Draw on visuals
+            self.draw_visuals(x, y, w, h, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frame)
 
             # Calculate the center of the bounding box
             bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(x, y, w, h)
@@ -108,6 +81,7 @@ class BasicDirector:
             else:
                 if(not self.last_command_stop):
                     Publisher.polar_pan_continuous_stop()
+                    print("Stop")
                     self.last_command_stop = True
 
                 self.movement_detection_start_time = None
