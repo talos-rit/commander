@@ -1,72 +1,19 @@
-import stomp
+from config import SOCKET_HOST, SOCKET_PORT
 from icd_config import Command, int_to_bytes
-from stomp.utils import encode
-
-
-HANDSHAKE_DESTINATION = '/queue/handshake'
-INSTRUCTIONS_DESTINATION = '/queue/instructions'
-
-
-class Connection:
-    """
-    The publisher class does not have an initialization since it is a static class.
-    This class exists to initialize a single connection instance that is used by the
-    publisher. Also contains a function that is used to publish messages.
-    """
-    def __init__(self):
-        self.connection = stomp.Connection()
-        self.connection.connect('admin', 'admin', wait=True)
-
-    def publish(self, destination, command: int, payload: bytes = None):
-        """
-        Command ID      UINT32	Unique ID for individual commands
-        RESERVED     	UINT16	RESERVED
-        Command Value	UINT16	Command for device to carry out
-        Length	        UINT16	Length of Payload
-        Payload	        UINT8[]	Command Info
-        CRC	            UINT16	Checksum
-        """
-        # Get a unique, incrementing command id. Increment by 2, so that the response
-        # from the operator always returns odd command ids and the publisher always sends
-        # even command ids. Commands can be associated with each other by checking if they
-        # have the same modulus of 2.
-        command_id = Publisher.command_count
-        Publisher.command_count += 2
-
-        if payload != None:
-            payload_length = len(payload)
-        else:
-            payload_length = 0
-
-        # TODO: Implement checksum. May get removed
-        crc = int_to_bytes(0, num_bits=16, unsigned=True)
-
-        command_id = int_to_bytes(command_id, num_bits=32, unsigned=True)
-        reserved = int_to_bytes(0, num_bits=16, unsigned=True)
-        command = int_to_bytes(command, num_bits=16, unsigned=True)
-        payload_length = int_to_bytes(payload_length, num_bits=16, unsigned=True)
-
-        # Put header together
-        header = command_id + reserved + command + payload_length
-
-        # Put everything together 
-        body = header
-
-        if payload != None:
-            body += payload
-
-        body += crc
-
-        self.connection.send(body=body, destination=destination, content_type='application/octet-stream')
+from connections import OperatorConnection
+import time
 
 
 class Publisher:
     """
     A static class that is used to publish instructions to the operator.
     """
-    connection = Connection()
+    connection = OperatorConnection(host=SOCKET_HOST, port=SOCKET_PORT)
     command_count = 0
 
+    @staticmethod
+    def close_connection():
+        Publisher.connection.close_socket()
 
     @staticmethod
     def handshake():
@@ -74,7 +21,6 @@ class Publisher:
         payload = b""
 
         Publisher.connection.publish(
-            destination=HANDSHAKE_DESTINATION,
             command=int(Command.HANDSHAKE),
             payload=payload
         )
@@ -97,7 +43,6 @@ class Publisher:
         payload = delta_azimuth + delta_altitude + delay + duration
 
         Publisher.connection.publish(
-            destination=INSTRUCTIONS_DESTINATION,
             command=int(Command.POLAR_PAN_DISCRETE),
             payload=payload
         )
@@ -123,7 +68,6 @@ class Publisher:
         payload = moving_azimuth + moving_altitude
 
         Publisher.connection.publish(
-            destination=INSTRUCTIONS_DESTINATION,
             command=int(Command.POLAR_PAN_CONTINUOUS_START),
             payload=payload
         )
@@ -135,7 +79,6 @@ class Publisher:
         Stops a continuous polar pan rotation.
         """
         Publisher.connection.publish(
-            destination=INSTRUCTIONS_DESTINATION,
             command=int(Command.POLAR_PAN_CONTINUOUS_STOP)
         )
 
@@ -148,7 +91,21 @@ class Publisher:
         delay = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
 
         Publisher.connection.publish(
-            destination=INSTRUCTIONS_DESTINATION,
             command=int(Command.HOME),
             payload=delay
         )
+
+
+def main():
+    while (not Publisher.connection.is_connected):
+        time.sleep(1)
+
+    Publisher.home(0)
+
+    # Stay alive
+    while True:
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()
