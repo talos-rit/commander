@@ -312,7 +312,6 @@ class ManualInterface:
                 continue
             director.process_frame(bounding_box, frame, self.running_director)
 
-            time.sleep(0.03)
 
     def start_director_thread(self): 
         if self.director_thread is None or not self.director_thread.is_alive():
