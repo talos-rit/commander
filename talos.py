@@ -11,6 +11,11 @@ def main():
     parser.add_argument("--source", type=str, default="", help="Path to video file or URL of stream")
     args = parser.parse_args()
 
+
+    while (not Publisher.connection.is_connected):
+        print("Waiting to connect...")
+        time.sleep(5)
+
     #interface = ManualInterface()
     #interface.launch_user_interface()
 
