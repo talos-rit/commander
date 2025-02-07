@@ -57,7 +57,7 @@ class BaseDirector(ABC):
         cv2.circle(frame, (bbox_center_x, bbox_center_y), radius, color, thickness)
 
         # Display the frame with bounding boxes in a window
-        cv2.imshow('Object Detection', frame)
+        #cv2.imshow('Object Detection', frame)
 
     # Processes the bounding box and sends commands 
     @abstractmethod
