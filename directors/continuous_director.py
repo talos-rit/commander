@@ -28,6 +28,8 @@ class ContinuousDirector(BaseDirector):
         if len(bounding_box) > 0:
             acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom = self.calculate_acceptable_box(frame_width, frame_height)
 
+                 
+
             #Calculate where the middle point of the bounding box lies in relation to the box
             # Unpack bounding box
             #Right now I am going to assume we only want the first face
