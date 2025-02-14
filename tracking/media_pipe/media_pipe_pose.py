@@ -33,6 +33,8 @@ class MediaPipePose(Tracker):
             self.cap = cv2.VideoCapture(camera_index)
 
         self.speaker_bbox = None
+        self.lost_counter = 0
+        self.lost_threshold = 10
 
     def load_config(self, config_path):
         with open(config_path, 'r') as file:
@@ -104,11 +106,10 @@ class MediaPipePose(Tracker):
             # Check that the vertical difference between wrists and shoulders is minimal.
             vertical_diff_left = abs(left_wrist.y - left_shoulder.y)
             vertical_diff_right = abs(right_wrist.y - right_shoulder.y)
-            #print(f"Vertical difference - left: {vertical_diff_left}, right: {vertical_diff_right}")
+
             if vertical_diff_left < 0.1 and vertical_diff_right < 0.1:
                 return True
             
-        #print("X pose not detected.")
         return False
 
     def compute_center(self, bbox):
@@ -150,12 +151,12 @@ class MediaPipePose(Tracker):
                     pose_result = self.pose_detector.detect(mp_image)
                     if pose_result and pose_result.pose_landmarks:
                         landmarks = pose_result.pose_landmarks[0]
-                        # Debug: print the pose landmarks.
-                        #print("Pose landmarks:", landmarks)
+   
                         # Check for the X formation.
                         if self.is_x_pose(landmarks):
                             self.speaker_bbox = bbox
                             print("Speaker detected with X pose:", self.speaker_bbox)
+
             # While speaker not yet locked, return all detected bounding boxes.
             # We want to return them because we still want to draw the bounding boxes in the director
             # We may need to add something to director to ensure it doesn't send commands 
@@ -166,28 +167,29 @@ class MediaPipePose(Tracker):
             # This is a makeshift way of ensuring we are getting the same target
             # Currently this is a struggle with people walking in front of the target
 
-            # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox.
-            min_distance = float('inf')
-            best_bbox = None
-            for bbox in bboxes:
-                dist = self.bbox_distance(bbox, self.speaker_bbox)
-                # Use a threshold (50 pixels) to decide if the detection is similar
-                if dist < min_distance and dist < 50:
-                    min_distance = dist
-                    best_bbox = bbox
-            if best_bbox is not None:
-                # Update the stored speaker bounding box  
-                self.speaker_bbox = best_bbox
-            #else:
-                # If no matching bbox is found, consider the speaker lost
-                # This currently does not work well and we will probably want
-                # to look for a different way to reset the speaker
-                #print("Speaker lost. Resetting speaker_bbox")
-                #self.speaker_bbox = None
+            if len(bboxes) == 0:
+                # No detections
+                self.lost_counter += 1
+            else:
+                # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox.
+                min_distance = float('inf')
+                best_bbox = None
+                for bbox in bboxes:
+                    dist = self.bbox_distance(bbox, self.speaker_bbox)
+                    if dist < min_distance:
+                        min_distance = dist
+                        best_bbox = bbox
+                if best_bbox is not None and min_distance < 100:
+                    # Update the stored speaker bounding box  
+                    self.speaker_bbox = best_bbox
+                    self.lost_counter = 0
+                else:
+                    self.lost_counter += 1
 
-            # Return only the speaker's bounding box
-            # if self.speaker_bbox is not None:
-            #     return self.speaker_bbox, frame
-            # else:
-            #     return [], frame
+            if self.lost_counter >= self.lost_threshold:
+                print("Speaker lost for too many frames. Resetting locked on speaker.")
+                self.speaker_bbox = None
+                self.lost_counter = 0 
+
+
             return ([self.speaker_bbox] if self.speaker_bbox is not None else []), frame

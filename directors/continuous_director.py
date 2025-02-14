@@ -26,9 +26,7 @@ class ContinuousDirector(BaseDirector):
         frame_width = frameOpenCV.shape[1]
 
         if len(bounding_box) > 0:
-            acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom = self.calculate_acceptable_box(frame_width, frame_height)
-
-                 
+            acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom = self.calculate_acceptable_box(frame_width, frame_height)    
 
             #Calculate where the middle point of the bounding box lies in relation to the box
             # Unpack bounding box
@@ -37,7 +35,7 @@ class ContinuousDirector(BaseDirector):
             x, y, w, h = first_face
 
             #Draw on visuals
-            self.draw_visuals(x, y, w, h, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frame)
+            self.draw_visuals(bounding_box, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frame)
 
             # Calculate the center of the bounding box
             bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(x, y, w, h)

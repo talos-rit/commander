@@ -16,8 +16,8 @@ def main():
     #interface = ManualInterface()
     #interface.launch_user_interface()
 
-    #tracker = MediaPipePose(args.source, "./config.yaml")
-    tracker = MediaPipeTracker(args.source, "./config.yaml")
+    tracker = MediaPipePose(args.source, "./config.yaml")
+    #tracker = MediaPipeTracker(args.source, "./config.yaml")
     #tracker = BasicTracker(args.source, "./config.yaml")
     #tracker = YOLOTracker(args.source, "./config.yaml")
     #director = DiscreteDirector(tracker, "./config.yaml")
