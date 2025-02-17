@@ -21,7 +21,7 @@ class DiscreteDirector(BaseDirector):
 
 
     # This method is called to process each frame
-    def process_frame(self, bounding_box : list, frame, running_director):
+    def process_frame(self, bounding_box : list, frame, is_director_running):
     # Do something with the frame
 
         #Getting frame width and frame height

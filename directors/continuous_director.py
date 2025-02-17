@@ -16,11 +16,11 @@ class ContinuousDirector(BaseDirector):
         self.command_delay = self.config['command_delay']
         self.last_command_time = 0  # Track the time of the last command
         self.movement_detection_start_time = None  # Time when the person first moved outside the box
-        self.video_label = video_label
+        self.video_label = video_label #Label on the manual interface that shows the video feed with bounding boxes
 
 
     # This method is called to process each frame
-    def process_frame(self, bounding_box : list, frame, running_director):
+    def process_frame(self, bounding_box : list, frame, is_director_running):
     # Do something with the frame
 
         frameOpenCV = frame.copy()
@@ -42,7 +42,7 @@ class ContinuousDirector(BaseDirector):
             # Calculate the center of the bounding box
             bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(x, y, w, h)
 
-            if running_director: 
+            if is_director_running: 
                 #Are we inside the acceptable box
                 if (bbox_center_x < acceptable_box_left or bbox_center_x > acceptable_box_right or
                     bbox_center_y < acceptable_box_top or bbox_center_y > acceptable_box_bottom):

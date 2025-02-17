@@ -123,10 +123,11 @@ class ManualInterface:
         #Setting up integrated video
         # Create a label that will display video frames.
         self.video_label = tkinter.Label(self.rootWindow)
+        #This line ensures it stays on the top of the manual interface and centers it in the  middle
         self.video_label.grid(row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew")
         
         # Flags for director loop
-        self.running_director = False
+        self.is_director_running = False
         self.director_thread = None
 
         self.start_director_thread()
@@ -310,7 +311,7 @@ class ManualInterface:
 
             if bounding_box is None or frame is None:
                 continue
-            director.process_frame(bounding_box, frame, self.running_director)
+            director.process_frame(bounding_box, frame, self.is_director_running)
 
 
     def start_director_thread(self): 
