@@ -130,7 +130,7 @@ class MediaPipePose(Tracker):
         if not hasFrame:
             return None, None
         #Use this rotate if the mp4 is showing up incorrectly
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         bboxes = self.detectPerson(self.object_detector, frame)
 
         if len(bboxes) < 1:
@@ -140,8 +140,8 @@ class MediaPipePose(Tracker):
         if self.speaker_bbox is None:
             # If no speaker is locked in yet, look for the X pose.
             # We assume only one person is in frame when the X pose is made.
-            if len(bboxes) == 1:
-                bbox = bboxes[0]
+            for box in bboxes:
+                bbox = box
                 x1, y1, x2, y2 = bbox
                 cropped = frame[y1:y2, x1:x2]
                 if cropped.size > 0:
@@ -156,6 +156,7 @@ class MediaPipePose(Tracker):
                         if self.is_x_pose(landmarks):
                             self.speaker_bbox = bbox
                             print("Speaker detected with X pose:", self.speaker_bbox)
+                            return [self.speaker_bbox], frame
 
             # While speaker not yet locked, return all detected bounding boxes.
             # We want to return them because we still want to draw the bounding boxes in the director
@@ -179,7 +180,7 @@ class MediaPipePose(Tracker):
                     if dist < min_distance:
                         min_distance = dist
                         best_bbox = bbox
-                if best_bbox is not None and min_distance < 100:
+                if best_bbox is not None and min_distance < 150:
                     # Update the stored speaker bounding box  
                     self.speaker_bbox = best_bbox
                     self.lost_counter = 0
@@ -187,7 +188,7 @@ class MediaPipePose(Tracker):
                     self.lost_counter += 1
 
             if self.lost_counter >= self.lost_threshold:
-                print("Speaker lost for too many frames. Resetting locked on speaker.")
+                print("Speaker lost for too many frames. Resetting single speaker.")
                 self.speaker_bbox = None
                 self.lost_counter = 0 
 
