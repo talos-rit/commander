@@ -32,12 +32,21 @@ def int_to_bytes(num, num_bits=16, unsigned=True):
     return bytes(reversed(bytes(c_type_int)))
 
 
+def bytes_to_int(bytes):
+    return int.from_bytes(bytes, byteorder='big')
+
+
 class Command(Enum):
     HANDSHAKE = 0x0000
+    HANDSHAKE_RETURN = 0x8000
     POLAR_PAN_DISCRETE = 0x0001
+    POLAR_PAN_DISCRETE_RETURN = 0x8001
     HOME = 0x0002
+    HOME_RETURN = 0x8002
     POLAR_PAN_CONTINUOUS_START = 0x0003
+    POLAR_PAN_CONTINUOUS_START_RETURN = 0x8003
     POLAR_PAN_CONTINUOUS_STOP = 0x0004
+    POLAR_PAN_CONTINUOUS_STOP_RETURN = 0x8004
 
     def __int__(self):
         """

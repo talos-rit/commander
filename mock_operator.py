@@ -1,17 +1,34 @@
-import stomp
+from config import SOCKET_HOST, SOCKET_PORT
+from icd_config import int_to_bytes 
 import time
-from publisher import INSTRUCTIONS_DESTINATION
+from connections import CommandConnection
 
-class MyListener(stomp.ConnectionListener):
-    def on_error(self, frame):
-        print('received an error "%s"' % frame.body)
 
-    def on_message(self, frame):
-        print('received a message "%s"' % bytes(frame.body, 'utf-8'))
+class MockOperator:
+    connection = CommandConnection(host=SOCKET_HOST, port=SOCKET_PORT)
 
-conn = stomp.Connection()
-conn.set_listener(name='My listener', listener=MyListener())
-conn.connect('admin', 'admin', wait=True)
-conn.subscribe(destination=INSTRUCTIONS_DESTINATION, id=1)
-time.sleep(10)
-conn.disconnect()
+    @staticmethod
+    def close_connection():
+        MockOperator.connection.close_socket()
+
+    @staticmethod
+    def send_return_code(command_id, payload):
+        MockOperator.connection.publish(
+            command=command_id,
+            payload=payload
+        )
+
+
+def create_return_payload(success):
+    return int_to_bytes(int(success), num_bits=16, unsigned=True)
+
+
+def main():
+    while (not MockOperator.connection.is_connected):
+        time.sleep(1)
+
+    print("Mock operator is connected!")
+
+
+if __name__ == "__main__":
+    main()
