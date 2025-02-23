@@ -4,6 +4,8 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from tracking.tracker import Tracker
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="google.protobuf.symbol_database")
 
 
 class MediaPipeTracker(Tracker):

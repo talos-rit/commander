@@ -2,6 +2,7 @@ import math
 import cv2
 import yaml
 import mediapipe as mp
+import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from tracking.tracker import Tracker
@@ -34,7 +35,10 @@ class MediaPipePose(Tracker):
 
         self.speaker_bbox = None
         self.lost_counter = 0
-        self.lost_threshold = 10
+        self.lost_threshold = 20
+
+        self.speaker_color = None
+        self.color_threshold = 10
 
     def load_config(self, config_path):
         with open(config_path, 'r') as file:
@@ -130,7 +134,7 @@ class MediaPipePose(Tracker):
         if not hasFrame:
             return None, None
         #Use this rotate if the mp4 is showing up incorrectly
-        #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         bboxes = self.detectPerson(self.object_detector, frame)
 
         if len(bboxes) < 1:
@@ -155,6 +159,8 @@ class MediaPipePose(Tracker):
                         # Check for the X formation.
                         if self.is_x_pose(landmarks):
                             self.speaker_bbox = bbox
+
+                            self.speaker_color = np.mean(cropped, axis=(0, 1))
                             print("Speaker detected with X pose:", self.speaker_bbox)
                             return [self.speaker_bbox], frame
 
@@ -173,16 +179,36 @@ class MediaPipePose(Tracker):
                 self.lost_counter += 1
             else:
                 # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox.
-                min_distance = float('inf')
                 best_bbox = None
+                min_distance = float('inf')
+                best_candidate_color = None
+
                 for bbox in bboxes:
+                    # Compute spatial distance.
                     dist = self.bbox_distance(bbox, self.speaker_bbox)
-                    if dist < min_distance:
-                        min_distance = dist
-                        best_bbox = bbox
+                    x1, y1, x2, y2 = bbox
+                    candidate_crop = frame[y1:y2, x1:x2]
+                    if candidate_crop.size > 0:
+                        candidate_color = np.mean(candidate_crop, axis=(0, 1))
+                        # Compute the Euclidean distance between the candidate color and the stored speaker color.
+                        color_diff = np.linalg.norm(np.array(candidate_color) - np.array(self.speaker_color))
+
+                        if dist < min_distance:
+                            # #Multiple people we also want to check color
+                            if len(bboxes) > 1:    
+                                if color_diff < self.color_threshold:
+                                    min_distance = dist
+                                    best_bbox = bbox
+                                    best_candidate_color = candidate_color
+                            else:
+                                    min_distance = dist
+                                    best_bbox = bbox
+                                    best_candidate_color = candidate_color
+
                 if best_bbox is not None and min_distance < 150:
-                    # Update the stored speaker bounding box  
+                    # Found a candidate that is spatially close and with similar color.
                     self.speaker_bbox = best_bbox
+                    self.speaker_color = best_candidate_color
                     self.lost_counter = 0
                 else:
                     self.lost_counter += 1
@@ -190,6 +216,7 @@ class MediaPipePose(Tracker):
             if self.lost_counter >= self.lost_threshold:
                 print("Speaker lost for too many frames. Resetting single speaker.")
                 self.speaker_bbox = None
+                self.speaker_color = None
                 self.lost_counter = 0 
 
 
