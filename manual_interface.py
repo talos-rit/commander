@@ -345,7 +345,7 @@ class ManualInterface:
             
             self.home_button.config(state = "normal")
             
-            self.running_director = False
+            self.is_director_running = False
             self.pressed_keys = {}
             
         else:
@@ -359,4 +359,4 @@ class ManualInterface:
             self.home_button.config(state = "disabled")
             
             self.pressed_keys = {Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT}
-            self.running_director = True
+            self.is_director_running = True
