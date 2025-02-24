@@ -4,8 +4,6 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from tracking.tracker import Tracker
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="google.protobuf.symbol_database")
 
 
 class MediaPipeTracker(Tracker):
@@ -79,11 +77,11 @@ class MediaPipeTracker(Tracker):
         hasFrame, frame = self.cap.read()
         if not hasFrame:
             return None, None
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
         bboxes = self.detectPerson(self.object_detector, frame)
-        if len(bboxes) < 1:
-            #This is for when there is no person in frame, we still want the video to show
-            cv2.imshow('Object Detection', frame)
+        # if len(bboxes) < 1:
+        #     #This is for when there is no person in frame, we still want the video to show
+        #     cv2.imshow('Object Detection', frame)
         
         return bboxes, frame

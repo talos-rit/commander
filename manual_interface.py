@@ -1,7 +1,13 @@
 from enum import Enum
 from publisher import Publisher
+from tracking.media_pipe.media_pipe_tracker import *
+from tracking.media_pipe.media_pipe_pose import *
+from directors.continuous_director import *
+from directors.discrete_director import *
 import tkinter
 import time
+from threading import Thread
+from PIL import Image, ImageTk
 from threading import Thread
 
 
@@ -114,6 +120,18 @@ class ManualInterface:
         self.setup_keyboard_controls()
 
         self.last_key_presses = {}
+
+        #Setting up integrated video
+        # Create a label that will display video frames.
+        self.video_label = tkinter.Label(self.rootWindow)
+        #This line ensures it stays on the top of the manual interface and centers it in the  middle
+        self.video_label.grid(row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew")
+        
+        # Flags for director loop
+        self.is_director_running = False
+        self.director_thread = None
+
+        self.start_director_thread()
         
         
     def setup_keyboard_controls(self):
@@ -282,6 +300,26 @@ class ManualInterface:
         """
         self.rootWindow.mainloop()
 
+    def director_loop(self):
+        """ Launches the tracker and director.
+        """
+        tracker = MediaPipePose(source="", config_path="./config.yaml")
+
+        director = ContinuousDirector(tracker, "./config.yaml", self.video_label)
+
+        while True:
+            bounding_box, frame = tracker.capture_frame()
+
+            if bounding_box is None or frame is None:
+                continue
+            director.process_frame(bounding_box, frame, self.is_director_running, True)
+
+
+    def start_director_thread(self): 
+        if self.director_thread is None or not self.director_thread.is_alive():
+            self.director_thread = Thread(target=self.director_loop, daemon=True)
+            self.director_thread.start()
+
 
     def toggle_continuous_mode(self):
         self.continuous_mode = not self.continuous_mode
@@ -308,6 +346,7 @@ class ManualInterface:
             
             self.home_button.config(state = "normal")
             
+            self.is_director_running = False
             self.pressed_keys = {}
             
         else:
@@ -321,3 +360,4 @@ class ManualInterface:
             self.home_button.config(state = "disabled")
             
             self.pressed_keys = {Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT}
+            self.is_director_running = True

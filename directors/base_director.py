@@ -38,7 +38,7 @@ class BaseDirector(ABC):
 
 
     #Draws acceptable box, bounding box, and center dot onto the video
-    def draw_visuals(self, bounding_box, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frame):
+    def draw_visuals(self, bounding_box, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frame, is_interface_running):
 
         for box in bounding_box:
             x1, y1, x2, y2 = box
@@ -57,9 +57,9 @@ class BaseDirector(ABC):
             bbox_center_y = (y1 + y2) // 2
 
             cv2.circle(frame, (bbox_center_x, bbox_center_y), radius, color, thickness)
+        if not is_interface_running:
+            cv2.imshow('Object Detection', frame)
 
-        # Display the frame with bounding boxes in a window
-        cv2.imshow('Object Detection', frame)
 
     # Processes the bounding box and sends commands 
     @abstractmethod
