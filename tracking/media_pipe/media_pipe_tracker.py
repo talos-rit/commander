@@ -79,8 +79,5 @@ class MediaPipeTracker(Tracker):
             return None, None
 
         bboxes = self.detectPerson(self.object_detector, frame)
-        if len(bboxes) < 1:
-            #This is for when there is no person in frame, we still want the video to show
-            cv2.imshow('Object Detection', frame)
         
         return bboxes, frame
