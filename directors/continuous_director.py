@@ -75,17 +75,17 @@ class ContinuousDirector(BaseDirector):
                             #print("start")
                             self.last_command_stop = False
                         elif change_in_x < 0:
-                            #Publisher.polar_pan_continuous_start(1, 0)
+                            Publisher.polar_pan_continuous_start(1, 0)
                             #print("start")
                             self.last_command_stop = False
                         else:
                             if(not self.last_command_stop):
-                                #Publisher.polar_pan_continuous_stop()
+                                Publisher.polar_pan_continuous_stop()
                                 self.last_command_stop = True
                     
                 else:
                     if(not self.last_command_stop):
-                        #Publisher.polar_pan_continuous_stop()
+                        Publisher.polar_pan_continuous_stop()
                         print("Stop")
                         self.last_command_stop = True
 
