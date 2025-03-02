@@ -1,3 +1,3 @@
 # Publisher
-SOCKET_HOST = "localhost"
+SOCKET_HOST = "operator.talos"
 SOCKET_PORT = 61616

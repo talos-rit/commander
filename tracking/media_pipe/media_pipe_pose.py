@@ -134,7 +134,7 @@ class MediaPipePose(Tracker):
         if not hasFrame:
             return None, None
         #Use this rotate if the mp4 is showing up incorrectly
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         bboxes = self.detectPerson(self.object_detector, frame)
 
         # if len(bboxes) < 1:
