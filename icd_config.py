@@ -47,6 +47,8 @@ class Command(Enum):
     POLAR_PAN_CONTINUOUS_START_RETURN = 0x8003
     POLAR_PAN_CONTINUOUS_STOP = 0x0004
     POLAR_PAN_CONTINUOUS_STOP_RETURN = 0x8004
+    SET_SPEED = 0x0005
+    SET_SPEED_RETURN = 0x8005
 
     def __int__(self):
         """
