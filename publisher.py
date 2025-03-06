@@ -96,6 +96,19 @@ class Publisher:
         )
 
 
+    @staticmethod
+    def set_speed(speed: int):
+        """
+        Speed 	UINT8 	What to set the speed of all axes to on the scorbot
+        """
+        speed_bytes = int_to_bytes(speed, num_bits=8, unsigned=True)
+
+        Publisher.connection.publish(
+            command=Command.SET_SPEED,
+            payload=speed_bytes
+        )
+
+
 def main():
     while (not Publisher.connection.is_connected):
         time.sleep(1)
