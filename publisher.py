@@ -109,6 +109,90 @@ class Publisher:
         )
 
 
+    @staticmethod
+    def get_speed():
+        """
+        Command to get the speed of all axes on Talos
+        """
+        # Sends an empty payload 
+        payload = b""
+
+        Publisher.connection.publish(
+            command=Command.GET_SPEED,
+            payload=payload
+        )
+
+
+    @staticmethod
+    def cartesian_move_discrete():
+        """
+        Args:
+        Delta X 	INT32 	Requested change in X
+        Delta Y 	INT32 	Requested change in Y
+        Delta Z 	INT32 	Requested change in Z
+        Delay (ms) 	UINT32 	How long to wait until executing pan
+        Time 	    UINT32 	How long the pan should take to execute
+        """
+        payload = ""
+
+        Publisher.connection.publish(
+            command=Command.CARTESIAN_MOVE_DISCRETE,
+            payload=payload
+        )
+
+
+    @staticmethod
+    def cartesian_move_continuous_start():
+        """
+        Starts/maintains a continuous cartesian movement.
+
+        Args:
+        Moving X 	INT8 	-1, 0, or 1
+        Moving Y 	INT8 	-1, 0, or 1
+        Moving Z 	INT8 	-1, 0, or 1
+        """
+        payload = ""
+
+        Publisher.connection.publish(
+            command=Command.CARTESIAN_MOVE_CONTINUOUS_START,
+            payload=payload
+        )
+
+
+    @staticmethod
+    def cartesian_move_continuous_stop():
+        """
+        Stops a continuous cartesian move.
+        """
+        # Sends an empty payload 
+        payload = b""
+
+        Publisher.connection.publish(
+            command=Command.CARTESIAN_MOVE_CONTINUOUS_STOP,
+            payload=payload
+        )
+
+
+    @staticmethod
+    def execute_hardware_operation():
+        """
+        Some operations require high coupling with the specifics of the hardware 
+        (e.g. axis-by-axis positions). Such operations should be defined by a separate 
+        companion ICD, to avoid coupling the high level API with the hardware
+
+        Args:
+        Subcommand Value 	UINT16 	Command for function in hardware specific ICD
+        RESERVED 	        UINT32 	RESERVED
+        Payload 	        UINT8[] 	Payload defined by hardware specific ICD
+        """
+        payload = ""
+
+        Publisher.connection.publish(
+            command=Command.EXECUTE_HARDWARE_OPERATION,
+            payload=payload
+        )
+
+
 def main():
     while (not Publisher.connection.is_connected):
         time.sleep(1)
