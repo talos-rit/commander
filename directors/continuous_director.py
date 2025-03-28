@@ -37,7 +37,7 @@ class ContinuousDirector(BaseDirector):
             x, y, w, h = first_face
 
             #Draw on visuals
-            self.draw_visuals(bounding_box, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frameOpenCV, is_interface_running)
+            #self.draw_visuals(bounding_box, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frameOpenCV, is_interface_running)
 
             # Calculate the center of the bounding box
             bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(x, y, w, h)

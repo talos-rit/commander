@@ -49,6 +49,7 @@ class BaseDirector(ABC):
             thickness = 2  # Thickness of the rectangle lines
             cv2.rectangle(frame, (acceptable_box_left, acceptable_box_top), (acceptable_box_right, acceptable_box_bottom), color, thickness)
 
+
             color = (0, 255, 0)  # Green color for the center point
             radius = 10          # Radius of the circle
             thickness = -1       # -1 fills the circle
