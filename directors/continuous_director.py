@@ -36,6 +36,11 @@ class ContinuousDirector(BaseDirector):
             first_face = bounding_box[0] # TODO change this later
             x, y, w, h = first_face
 
+            top = y
+            bottom = y + h
+            center = frame_height // 2
+            average = (top + bottom) // 2
+
             #Draw on visuals
             self.draw_visuals(bounding_box, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frameOpenCV, is_interface_running)
 
@@ -63,12 +68,18 @@ class ContinuousDirector(BaseDirector):
                         elif bbox_center_x > acceptable_box_right:
                             #print("Move camera right: " + "Bbox center x= " + str(bbox_center_x) + " acceptable right: " + str(acceptable_box_right))
                             change_in_x = bbox_center_x - acceptable_box_right
-                        if bbox_center_y < acceptable_box_top:
-                            #print("Move camera up: " + "Bbox center y= " + str(bbox_center_y) + " acceptable top: " + str(acceptable_box_top))
-                            change_in_y = bbox_center_y - acceptable_box_top
-                        elif bbox_center_y > acceptable_box_bottom:
-                            #print("Move camera down: " + "Bbox center y= " + str(bbox_center_y) + " acceptable bottom: " + str(acceptable_box_bottom))
-                            change_in_y = bbox_center_y - acceptable_box_bottom
+
+                        #Adding a 1/10 of the frame buffer to the average so there is a 2/10 frame safety area
+                        frame_buffer = frame_height // 10
+                        center_top = center - frame_buffer
+                        center_bottom = center + frame_buffer
+
+                        if average < center_top:
+                            print("Move camera up: " + "Average: " + str(average) + " Center: " + str(center))
+                            change_in_y = average - center_top
+                        elif average > center_bottom:
+                            print("Move camera down: " + "Average: " + str(average) + " Center: " + str(center))
+                            change_in_y = average - center_bottom
 
                         if change_in_x > 0:
                             Publisher.polar_pan_continuous_start(-1, 0)
