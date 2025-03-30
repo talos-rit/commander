@@ -65,8 +65,8 @@ class Connection:
 
         body += crc
 
-        #self.socket.send(body)
-        # response = self.socket.recv(2048)
+        self.socket.send(body)
+        #response = self.socket.recv(2048)
         return 1
 
 

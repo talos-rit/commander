@@ -124,7 +124,7 @@ class YOLOTracker(Tracker):
         hasFrame, frame = self.cap.read()
         if not hasFrame:
             return None, None
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         bboxes = self.detectPerson(self.object_detector, frame)
         
         self.draw_visuals(bboxes, frame)

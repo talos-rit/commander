@@ -11,9 +11,9 @@ from manual_interface import ManualInterface
 
 def main():
 
-    # while (not Publisher.connection.is_connected):
-    #     print("Waiting to connect...")
-    #     time.sleep(5)
+    while (not Publisher.connection.is_connected):
+        print("Waiting to connect...")
+        time.sleep(5)
   
     # interface = ManualInterface()
     # interface.launch_user_interface()  
@@ -22,9 +22,9 @@ def main():
     parser.add_argument("--source", type=str, default="", help="Path to video file or URL of stream")
     args = parser.parse_args()
 
-    #tracker = MediaPipePose(args.source, "./config.yaml")
+    tracker = MediaPipePose(args.source, "./config.yaml")
     #tracker = MediaPipeTracker(args.source, "./config.yaml")
-    tracker = YOLOTracker(args.source, "./config.yaml")
+    #tracker = YOLOTracker(args.source, "./config.yaml")
     #director = DiscreteDirector(tracker, "./config.yaml")
     director = ContinuousDirector(tracker, "./config.yaml", None)
 
