@@ -4,6 +4,7 @@ from tracking.media_pipe.media_pipe_tracker import *
 from tracking.media_pipe.media_pipe_pose import *
 from directors.continuous_director import *
 from directors.discrete_director import *
+from tracking.yolo.yolo_tracker import *
 import tkinter
 import time
 from threading import Thread
@@ -303,7 +304,7 @@ class ManualInterface:
     def director_loop(self):
         """ Launches the tracker and director.
         """
-        tracker = MediaPipePose(source="", config_path="./config.yaml")
+        tracker = YOLOTracker(source="", config_path="./config.yaml")
 
         director = ContinuousDirector(tracker, "./config.yaml", self.video_label)
 
