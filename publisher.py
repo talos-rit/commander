@@ -10,6 +10,7 @@ class Publisher:
     """
     connection = OperatorConnection(host=SOCKET_HOST, port=SOCKET_PORT)
     command_count = 0
+    ENCODING = 'utf-8'
 
     @staticmethod
     def close_connection():
@@ -106,6 +107,73 @@ class Publisher:
         Publisher.connection.publish(
             command=Command.SET_SPEED,
             payload=speed_bytes
+        )
+    
+    @staticmethod
+    def save_position(name: str, anchor: bool, parent: str):
+        """
+        Saves a position. 
+
+        If this command is sent with a name that already exists, 
+        it will be overwritten with the new arguments.
+        If reference is an empty string (length of 0), 
+        the default value will be used (can be reconfigured, unconfigured default is empty string).
+        If the reference string is empty, 
+        the Anchor value is ignored and the position is always treated as if anchor is set to false.
+
+        Name    CHAR[]      Name descriptor for the position (non null terminated)
+        Anchor  BOOLEAN     Whether the position will move relative to the parent position
+        Parent  CHAR[]      Another previously saved position to act as a parent (or refernce) position
+        """
+
+        name_len_bytes  = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_bytes = name.encode(Publisher.ENCODING)
+
+        anchor_bytes = b'\x01' if anchor else b'\x00'
+
+        parent_len_bytes = int_to_bytes(len(parent), num_bits=8, unsigned=True)
+        parent_bytes = parent.encode(Publisher.ENCODING)
+
+        payload = name_len_bytes + name_bytes + anchor_bytes + parent_len_bytes + parent_bytes
+
+        Publisher.connection.publish(
+            command=Command.SAVE_POSITION,
+            payload=payload
+        )
+    
+    @staticmethod
+    def delete_position(name: str):
+        """
+        Given a position name, deletes that position information. 
+
+        Name    CHAR[]  Name descriptor for the position (non null terminated)
+        """
+
+        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_bytes = name.encode(Publisher.ENCODING)
+
+        payload = name_len_bytes + name_bytes
+
+        Publisher.connection.publish(
+            command=Command.DELETE_POSITION,
+            payload=payload
+        )
+
+    @staticmethod
+    def go_to_position(name: str):
+        """
+        Move to a pre-defined position. 
+
+        Name    CHAR[]  Name descriptor for the position (non null terminated)
+        """
+        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_bytes = name.encode(Publisher.ENCODING)
+
+        payload = name_len_bytes + name_bytes
+
+        Publisher.connection.publish(
+            command=Command.GO_TO_POSITION,
+            payload=payload
         )
 
 
