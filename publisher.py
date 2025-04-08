@@ -170,7 +170,11 @@ class Publisher:
         assert_normalized(moving_y)
         assert_normalized(moving_z)
 
-        payload = ""
+        moving_x_bytes = int_to_bytes(moving_x, num_bits=8, unsigned=False)
+        moving_y_bytes = int_to_bytes(moving_y, num_bits=8, unsigned=False)
+        moving_z_bytes = int_to_bytes(moving_z, num_bits=8, unsigned=False)
+
+        payload = moving_x_bytes + moving_y_bytes + moving_z_bytes
 
         Publisher.connection.publish(
             command=Command.CARTESIAN_MOVE_CONTINUOUS_START,
@@ -193,7 +197,7 @@ class Publisher:
 
 
     @staticmethod
-    def execute_hardware_operation():
+    def execute_hardware_operation(subcommand_value, operations_payload):
         """
         Some operations require high coupling with the specifics of the hardware 
         (e.g. axis-by-axis positions). Such operations should be defined by a separate 
@@ -204,7 +208,11 @@ class Publisher:
         RESERVED 	        UINT32 	    RESERVED
         Payload 	        UINT8[] 	Payload defined by hardware specific ICD
         """
-        payload = ""
+
+        subcommand_value_bytes = int_to_bytes(subcommand_value, num_bits=16, unsigned=True)
+        reserved_bytes = int_to_bytes(0, num_bits=32, unsigned=True)
+
+        payload = subcommand_value_bytes + reserved_bytes + operations_payload
 
         Publisher.connection.publish(
             command=Command.EXECUTE_HARDWARE_OPERATION,
