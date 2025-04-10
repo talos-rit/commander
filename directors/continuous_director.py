@@ -41,13 +41,13 @@ class ContinuousDirector(BaseDirector):
 
             # Calculate the center of the bounding box
             bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(x, y, w, h)
+            current_time = time.time()
 
             if is_director_running: 
                 #Are we inside the acceptable box
                 if (bbox_center_x < acceptable_box_left or bbox_center_x > acceptable_box_right or
                     bbox_center_y < acceptable_box_top or bbox_center_y > acceptable_box_bottom):
 
-                    current_time = time.time()
                     if self.movement_detection_start_time is None:
                         self.movement_detection_start_time = current_time
 
@@ -90,6 +90,8 @@ class ContinuousDirector(BaseDirector):
                         self.last_command_stop = True
 
                     self.movement_detection_start_time = None
+
+            self.last_command_time = current_time
 
         # Once all drawings and processing are done, update the display.
         # Convert from BGR to RGB
