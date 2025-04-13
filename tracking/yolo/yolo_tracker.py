@@ -12,36 +12,20 @@ import yaml
 class YOLOTracker(Tracker):
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source : str, config_path):
-        self.source = source
+    def __init__(self, source : str, config_path, video_label):
+        self.speaker_bbox = None  #Shared reference. Only here to avoid pylint errors.
+        super().__init__(source, config_path, video_label)
 
         self.object_detector = YOLO("yolo11m.pt")
 
-        pose_base_options = python.BaseOptions(model_asset_path="tracking/media_pipe/pose_landmarker_lite.task")
-        pose_options = vision.PoseLandmarkerOptions(
-            base_options=pose_base_options,
-            # Additional options (e.g., running on CPU) can be specified here.
-        )
-        self.pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
+        self.pose_detector = YOLO("yolo11m-pose.pt")
 
-        # Open the video source
-        if self.source:
-            self.cap = cv2.VideoCapture(self.source)
-        else:
-            config = self.load_config(config_path)
-            camera_index = config['camera_index']
-            self.cap = cv2.VideoCapture(camera_index)
 
-        self.speaker_bbox = None
         self.lost_counter = 0
         self.lost_threshold = 100
 
         self.speaker_color = None
         self.color_threshold = 15
-
-    def load_config(self, config_path):
-        with open(config_path, 'r') as file:
-            return yaml.safe_load(file)
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
@@ -51,9 +35,6 @@ class YOLOTracker(Tracker):
 
         if not inWidth:
             inWidth = int((frameWidth / frameHeight) * inHeight)
-
-        scaleHeight = frameHeight / inHeight
-        scaleWidth = frameWidth / inWidth
 
         frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
         frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
@@ -74,38 +55,53 @@ class YOLOTracker(Tracker):
 
         return bboxes
     
-    def is_x_pose(self, pose_landmarks):
+    def is_x_pose_yolo(self, person_keypoints, threshold=0.1):
         """
-        Determine if the pose corresponds to an X formation.
-        This example assumes that the pose landmarks are accessible by index.
-        For MediaPipe Pose, typical landmark indices might be:
-            - left_shoulder: 11
-            - right_shoulder: 12
-            - left_wrist: 15
-            - right_wrist: 16
-        Adjust these indices and thresholds as needed.
+        Given the keypoints for one person from a YOLOv8 pose detection,
+        check if they are in the "X-Pose."
+
+        'person_keypoints' is expected to be either:
+        - shape (17, 2) -> (x, y)
+        - shape (17, 3) -> (x, y, confidence)
+        Indices: left_shoulder=5, right_shoulder=6, left_wrist=9, right_wrist=10 in COCO format.
+
+        threshold: maximum vertical difference (normalized) allowed between wrists and shoulders.
         """
-        try:
-            # Extract landmarks by index.
-            left_shoulder = pose_landmarks[11]
-            right_shoulder = pose_landmarks[12]
-            left_wrist = pose_landmarks[15]
-            right_wrist = pose_landmarks[16]
-        except (IndexError, TypeError) as e:
-            print("Error extracting landmarks:", e)
+
+        # Ensure we have enough keypoints
+        #print(person_keypoints[0])
+
+        if person_keypoints.shape[1] < 11:
+            # print("shape")
+            # print(person_keypoints.shape[0])
             return False
 
-        # Check that the left wrist is to the left of the left shoulder and
-        # the right wrist is to the right of the right shoulder.
-        if left_wrist.x < left_shoulder.x and right_wrist.x > right_shoulder.x:
-            # Check that the vertical difference between wrists and shoulders is minimal.
-            vertical_diff_left = abs(left_wrist.y - left_shoulder.y)
-            vertical_diff_right = abs(right_wrist.y - right_shoulder.y)
 
-            if vertical_diff_left < 0.1 and vertical_diff_right < 0.1:
+        kp_xy = person_keypoints.xyn[0]
+
+        # Now kp_xy[i, 0] is x, kp_xy[i, 1] is y for keypoint i
+        # For example, let's get the left shoulder (index 5) and right shoulder (index 6).
+
+        x_ls  = float(kp_xy[5, 0])
+        y_ls  = float(kp_xy[5, 1])
+        x_rs = float(kp_xy[6, 0])
+        y_rs = float(kp_xy[6, 1])
+        x_lw  = float(kp_xy[10, 0])
+        y_lw  = float(kp_xy[10, 1])
+        x_rw = float(kp_xy[11, 0])
+        y_rw = float(kp_xy[11, 1])
+        #print("XLS" + str(x_ls))
+
+        # 1) Check horizontal arrangement: left wrist < left shoulder AND right wrist > right shoulder
+        if x_lw < x_ls and x_rw > x_rs:
+            # 2) Check vertical difference
+            vertical_diff_left  = abs(y_lw - y_ls)
+            #print(vertical_diff_left)
+
+            if (vertical_diff_left < threshold):
                 return True
-            
-        return False
+
+        return False    
 
     def compute_center(self, bbox):
         """Compute the center of a bounding box."""
@@ -119,7 +115,7 @@ class YOLOTracker(Tracker):
         return math.sqrt((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2)
     
     # Capture a frame from the source and detect faces in the frame
-    def capture_frame(self):
+    def capture_frame(self, is_interface_running):
 
         hasFrame, frame = self.cap.read()
         if not hasFrame:
@@ -127,7 +123,9 @@ class YOLOTracker(Tracker):
         #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         bboxes = self.detectPerson(self.object_detector, frame)
         
-        self.draw_visuals(bboxes, frame)
+        self.draw_visuals(bboxes, frame, is_interface_running)
+
+        self.change_video_frame(frame, is_interface_running)
 
         if self.speaker_bbox is None:
             # If no speaker is locked in yet, look for the X pose.
@@ -137,74 +135,61 @@ class YOLOTracker(Tracker):
                 x1, y1, x2, y2 = bbox
                 cropped = frame[y1:y2, x1:x2]
                 if cropped.size > 0:
-                    cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-                    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cropped_rgb)
+                    cropped = cropped.astype("uint8")
                     # Run pose detection on the cropped image.
-                    pose_result = self.pose_detector.detect(mp_image)
-                    if pose_result and pose_result.pose_landmarks:
-                        landmarks = pose_result.pose_landmarks[0]
-   
-                        # Check for the X formation.
-                        if self.is_x_pose(landmarks):
-                            self.speaker_bbox = bbox
-
-                            smaller_box = self.getCroppedBox(box, frame)
-                            color = self.get_dominant_color(smaller_box)
-                            self.speaker_color = color
-                            print("Speaker detected with X pose:", self.speaker_bbox)
-                            return [self.speaker_bbox], frame
+                    pose_result = self.pose_detector(cropped, verbose=False)
+                    if len(pose_result) > 0:
+                        # "results[0]" is the prediction for this single image/crop
+                        result = pose_result[0]
+                        if result.keypoints is not None:
+                            if self.is_x_pose_yolo(result.keypoints):
+                                self.speaker_bbox = box
+                                smaller_box = self.getCroppedBox(box, frame)
+                                color = self.get_dominant_color(smaller_box)
+                                self.speaker_color = color
+                                print("Speaker detected with X pose:", self.speaker_bbox)
+                                return [self.speaker_bbox], frame
 
             # While speaker not yet locked, return all detected bounding boxes.
-            # We want to return them because we still want to draw the bounding boxes in the director
-            # We may need to add something to director to ensure it doesn't send commands 
-            # Or we can just leave it to operate on first bounding box while there is no speaker
+            # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
             return bboxes, frame
+        
+        # If frame is empty after detecting a speaker, increment the lost speaker counter
+        if len(bboxes) == 0:
+            # No detections
+            self.lost_counter += 1
         else:
-            # The way I decided to do this is to find the bounding box closest to the previously stored one
-            # This is a makeshift way of ensuring we are getting the same target
-            # Currently this is a struggle with people walking in front of the target
+            # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox.
+            best_bbox = None
+            best_candidate_color = None
 
-            if len(bboxes) == 0:
-                # No detections
-                self.lost_counter += 1
+            for bbox in bboxes:
+                x1, y1, x2, y2 = bbox
+                smaller_box = self.getCroppedBox(bbox, frame)
+                color = self.get_dominant_color(smaller_box)
+                # Compute the Euclidean distance between the candidate color and the stored speaker color.
+                color_diff = abs(self.speaker_color - color)
+
+                if color_diff < self.color_threshold:
+                    best_bbox = bbox
+                    best_candidate_color = color
+
+            if best_bbox is not None:
+                # Found a candidate has similar color.
+                self.speaker_bbox = best_bbox
+                self.speaker_color = best_candidate_color
+                self.lost_counter = 0
             else:
-                # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox.
-                best_bbox = None
-                min_distance = float('inf')
-                best_candidate_color = None
+                self.lost_counter += 1
 
-                for bbox in bboxes:
-                    # Compute spatial distance.
-                    dist = self.bbox_distance(bbox, self.speaker_bbox)
-                    x1, y1, x2, y2 = bbox
-                    smaller_box = self.getCroppedBox(bbox, frame)
-                    color = self.get_dominant_color(smaller_box)
-                    # Compute the Euclidean distance between the candidate color and the stored speaker color.
-                    color_diff = abs(self.speaker_color - color)
-
-                    #if dist < min_distance and color_diff < self.color_threshold:
-                    if color_diff < self.color_threshold:
-                        min_distance = dist
-                        best_bbox = bbox
-                        best_candidate_color = color
-
-                #if best_bbox is not None and min_distance < 150:
-                if best_bbox is not None:
-                    # Found a candidate that is spatially close and with similar color.
-                    self.speaker_bbox = best_bbox
-                    self.speaker_color = best_candidate_color
-                    self.lost_counter = 0
-                else:
-                    self.lost_counter += 1
-
-            if self.lost_counter >= self.lost_threshold:
-                print("Speaker lost for too many frames. Resetting single speaker.")
-                self.speaker_bbox = None
-                self.speaker_color = None
-                self.lost_counter = 0 
+        if self.lost_counter >= self.lost_threshold:
+            print("Speaker lost for too many frames. Resetting single speaker.")
+            self.speaker_bbox = None
+            self.speaker_color = None
+            self.lost_counter = 0 
 
 
-            return ([self.speaker_bbox] if self.speaker_bbox is not None else []), frame
+        return ([self.speaker_bbox] if self.speaker_bbox is not None else []), frame
 
 
     def getCroppedBox(self, bbox, frame):
@@ -220,77 +205,6 @@ class YOLOTracker(Tracker):
         chest_crop = frame[chest_start:chest_end, exclude_extra:exclude_extra2]
 
         return chest_crop
-
-    #Draws acceptable box, bounding box, and center dot onto the video
-    def draw_visuals(self, bounding_box, frame):
-
-        for box in bounding_box:
-            x1, y1, x2, y2 = box
-            # Draw the rectangle on the frame (color = green, thickness = 2)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-            x1, y1, x2, y2 = box
-
-            # Default crop is just lower portion of the bbox
-            height = y2 - y1
-            width = x2 - x1
-            chest_start = y1 + int(height * 0.3)
-            chest_end = y1 + int(height * 0.5)
-            exclude_extra = x1 + int(width * 0.3)
-            exclude_extra2 = x1 + int(width * 0.7)
-            chest_crop = frame[chest_start:chest_end, x1:x2]
-            cv2.rectangle(frame, (exclude_extra, chest_start), (exclude_extra2, chest_end), (0, 150, 150), 2)
-
-            dominant_color = self.get_dominant_color(chest_crop)
-
-            # We'll use max saturation and value to show vivid color
-            hsv_color = np.uint8([[[dominant_color, 255, 255]]])  # HSV image with 1 pixel
-            bgr_color = cv2.cvtColor(hsv_color, cv2.COLOR_HSV2BGR)[0][0]  # Extract as (B, G, R)
-            bgr_color = tuple(int(c) for c in bgr_color)
-
-            patch_width = 30
-            patch_height = 30
-            patch_top_left = (x1, y1 - patch_height - 5)
-            patch_bottom_right = (x1 + patch_width, y1 - 5)
-
-            if patch_top_left[1] > 0:
-                cv2.rectangle(frame, patch_top_left, patch_bottom_right, bgr_color, -1)
-
-            label = f"Hue: {dominant_color}"
-            cv2.putText(frame, label, (x1, y1 - patch_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
-
-            color = (0, 255, 0)  # Green color for the center point
-            radius = 10          # Radius of the circle
-            thickness = -1       # -1 fills the circle
-
-            bbox_center_x = (x1 + x2) // 2
-            bbox_center_y = (y1 + y2) // 2
-
-            cv2.circle(frame, (bbox_center_x, bbox_center_y), radius, color, thickness)
-
-
-            # If speaker_bbox exists, draw line + distance
-            if self.speaker_bbox is not None:
-                sx1, sy1, sx2, sy2 = self.speaker_bbox
-                speaker_center_x = (sx1 + sx2) // 2
-                speaker_center_y = (sy1 + sy2) // 2
-
-                cv2.circle(frame, (speaker_center_x, speaker_center_y), radius, (0, 0, 255), thickness)
-
-                # Draw line
-                cv2.line(frame, (bbox_center_x, bbox_center_y), (speaker_center_x, speaker_center_y), (255, 0, 0), 2)
-
-                # Compute distance
-                dist = math.sqrt((bbox_center_x - speaker_center_x) ** 2 + (bbox_center_y - speaker_center_y) ** 2)
-                dist_text = f"{int(dist)} px"
-
-                # Find midpoint of line to place label
-                mid_x = (bbox_center_x + speaker_center_x) // 2
-                mid_y = (bbox_center_y + speaker_center_y) // 2
-
-                cv2.putText(frame, dist_text, (mid_x, mid_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        cv2.imshow('Object Detection', frame)
 
 
     def get_dominant_color(self, image, quantize_level=16):

@@ -4,11 +4,10 @@ from publisher import Publisher
 import time
 import yaml
 import cv2
-from PIL import Image, ImageTk
 
 class ContinuousDirector(BaseDirector):
     # The director class is responsible for processing the frames captured by the tracker
-    def __init__(self, tracker : Tracker, config_path, video_label):
+    def __init__(self, tracker : Tracker, config_path):
         super().__init__(config_path)
         self.last_command_stop = False # bool to ensure only one polar_pan_continuous_stop command is sent at a time
         self.tracker = tracker
@@ -16,33 +15,32 @@ class ContinuousDirector(BaseDirector):
         self.command_delay = self.config['command_delay']
         self.last_command_time = 0  # Track the time of the last command
         self.movement_detection_start_time = None  # Time when the person first moved outside the box
-        self.video_label = video_label #Label on the manual interface that shows the video feed with bounding boxes
 
 
     # This method is called to process each frame
-    def process_frame(self, bounding_box : list, frame, is_director_running, is_interface_running):
-    # Do something with the frame
-
+    def process_frame(self, bounding_box : list, frame, is_director_running):
+        """
+        Based on received bounding box, this method tells the arm where to move the keep the subject in the acceptable box..
+        It does this by continuously sending polar pan start and a direction until the subject is in the acceptable box.
+        Then it sends a polar pan stop.    
+        """
         frameOpenCV = frame.copy()
         frame_height = frameOpenCV.shape[0]
         frame_width = frameOpenCV.shape[1]
 
         if len(bounding_box) > 0:
-            acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom = self.calculate_acceptable_box(frame_width, frame_height)    
+            acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom = self.calculate_acceptable_box(frame_width, frame_height)   
 
-            #Calculate where the middle point of the bounding box lies in relation to the box
+            #C alculate where the middle point of the bounding box lies in relation to the box
             # Unpack bounding box
-            #Right now I am going to assume we only want the first face
-            first_face = bounding_box[0] # TODO change this later
+            # If there is a single speaker it should return one bounding box anyway
+            first_face = bounding_box[0] 
             x, y, w, h = first_face
 
             top = y
             bottom = y + h
             center = frame_height // 2
             average = (top + bottom) // 2
-
-            #Draw on visuals
-            self.draw_visuals(bounding_box, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frameOpenCV, is_interface_running)
 
             # Calculate the center of the bounding box
             bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(x, y, w, h)
@@ -109,22 +107,3 @@ class ContinuousDirector(BaseDirector):
                         self.last_command_stop = True
 
                     self.movement_detection_start_time = None
-        if is_interface_running:
-            # Once all drawings and processing are done, update the display.
-            # Convert from BGR to RGB
-            frame_rgb = cv2.cvtColor(frameOpenCV, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
-
-            # Set desired dimensions (adjust these values as needed)
-            desired_width = 640
-            desired_height = 480
-            pil_image = pil_image.resize((desired_width, desired_height), Image.Resampling.LANCZOS)
-
-            imgtk = ImageTk.PhotoImage(image=pil_image)
-
-            # Update the label
-            self.video_label.after(0, lambda imgtk=imgtk: self.update_video_label(imgtk))
-
-    def update_video_label(self, imgtk):
-        self.video_label.config(image=imgtk)
-        self.video_label.image = imgtk
