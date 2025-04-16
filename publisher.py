@@ -4,6 +4,13 @@ from connections import OperatorConnection
 import time
 
 
+def assert_normalized(num: int):
+    abs_num = abs(num)
+
+    if abs_num != 0 and abs_num != 1:
+        raise ValueError(f"Invalid value provided. Value should be -1, 0, or 1. Got: {num}")
+
+
 class Publisher:
     """
     A static class that is used to publish instructions to the operator.
@@ -62,6 +69,9 @@ class Publisher:
         1 rotates counter-clockwise along the axis of movement, -1 rotates clockwise along the axis of 
         movement and 0 means no rotation.
         """
+        assert_normalized(moving_azimuth)
+        assert_normalized(moving_altitude)
+
         moving_azimuth = int_to_bytes(moving_azimuth, num_bits=8, unsigned=False)
         moving_altitude = int_to_bytes(moving_altitude, num_bits=8, unsigned=False)
 
@@ -255,6 +265,107 @@ class Publisher:
             command=Command.GET_CARTESIAN_POSITION,
             payload=payload
         )
+
+    @staticmethod
+    def get_speed():
+        """
+        Command to get the speed of all axes on Talos
+        """
+        # Sends an empty payload 
+        payload = b""
+
+        Publisher.connection.publish(
+            command=Command.GET_SPEED,
+            payload=payload
+        )
+
+
+    @staticmethod
+    def cartesian_move_discrete(delta_x, delta_y, delta_z, delay_ms, time):
+        """
+        Args:
+        Delta X 	INT32 	Requested change in X
+        Delta Y 	INT32 	Requested change in Y
+        Delta Z 	INT32 	Requested change in Z
+        Delay (ms) 	UINT32 	How long to wait until executing pan
+        Time 	    UINT32 	How long the pan should take to execute
+        """
+        delta_x_bytes = int_to_bytes(delta_x, num_bits=32, unsigned=False)
+        delta_y_bytes = int_to_bytes(delta_y, num_bits=32, unsigned=False)
+        delta_z_bytes = int_to_bytes(delta_z, num_bits=32, unsigned=False)
+        delay_ms_bytes = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
+        time_bytes = int_to_bytes(time, num_bits=32, unsigned=True)
+        payload = delta_x_bytes + delta_y_bytes + delta_z_bytes + delay_ms_bytes + time_bytes
+
+        Publisher.connection.publish(
+            command=Command.CARTESIAN_MOVE_DISCRETE,
+            payload=payload
+        )
+
+
+    @staticmethod
+    def cartesian_move_continuous_start(moving_x, moving_y, moving_z):
+        """
+        Starts/maintains a continuous cartesian movement.
+
+        Args:
+        Moving X 	INT8 	-1, 0, or 1
+        Moving Y 	INT8 	-1, 0, or 1
+        Moving Z 	INT8 	-1, 0, or 1
+        """
+        assert_normalized(moving_x)
+        assert_normalized(moving_y)
+        assert_normalized(moving_z)
+
+        moving_x_bytes = int_to_bytes(moving_x, num_bits=8, unsigned=False)
+        moving_y_bytes = int_to_bytes(moving_y, num_bits=8, unsigned=False)
+        moving_z_bytes = int_to_bytes(moving_z, num_bits=8, unsigned=False)
+
+        payload = moving_x_bytes + moving_y_bytes + moving_z_bytes
+
+        Publisher.connection.publish(
+            command=Command.CARTESIAN_MOVE_CONTINUOUS_START,
+            payload=payload
+        )
+
+
+    @staticmethod
+    def cartesian_move_continuous_stop():
+        """
+        Stops a continuous cartesian move.
+        """
+        # Sends an empty payload 
+        payload = b""
+
+        Publisher.connection.publish(
+            command=Command.CARTESIAN_MOVE_CONTINUOUS_STOP,
+            payload=payload
+        )
+
+
+    @staticmethod
+    def execute_hardware_operation(subcommand_value, operations_payload):
+        """
+        Some operations require high coupling with the specifics of the hardware 
+        (e.g. axis-by-axis positions). Such operations should be defined by a separate 
+        companion ICD, to avoid coupling the high level API with the hardware
+
+        Args:
+        Subcommand Value 	UINT16 	    Command for function in hardware specific ICD
+        RESERVED 	        UINT32 	    RESERVED
+        Payload 	        UINT8[] 	Payload defined by hardware specific ICD
+        """
+
+        subcommand_value_bytes = int_to_bytes(subcommand_value, num_bits=16, unsigned=True)
+        reserved_bytes = int_to_bytes(0, num_bits=32, unsigned=True)
+
+        payload = subcommand_value_bytes + reserved_bytes + operations_payload
+
+        Publisher.connection.publish(
+            command=Command.EXECUTE_HARDWARE_OPERATION,
+            payload=payload
+        )
+
 
 def main():
     while (not Publisher.connection.is_connected):
