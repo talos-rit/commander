@@ -1,6 +1,8 @@
 from enum import Enum
 from publisher import Publisher
 from tracking.media_pipe.media_pipe_tracker import *
+from tracking.media_pipe.media_pipe_pose import *
+from tracking.yolo.yolo_tracker import *
 from directors.continuous_director import *
 from directors.discrete_director import *
 import tkinter
@@ -302,12 +304,15 @@ class ManualInterface:
     def director_loop(self):
         """ Launches the tracker and director.
         """
-        tracker = MediaPipeTracker(source="", config_path="./config.yaml")
+        #tracker = MediaPipePose(source="", config_path="./config.yaml", video_label=self.video_label)
+        #tracker = MediaPipeTracker(source="", config_path="./config.yaml", video_label=self.video_label)
+        tracker = YOLOTracker(source="", config_path="./config.yaml", video_label=self.video_label)
 
-        director = ContinuousDirector(tracker, "./config.yaml", self.video_label)
+        director = ContinuousDirector(tracker, "./config.yaml")
+        #director = DiscreteDirector(tracker, "./config.yaml")
 
         while True:
-            bounding_box, frame = tracker.capture_frame()
+            bounding_box, frame = tracker.capture_frame(True)
 
             if bounding_box is None or frame is None:
                 continue
