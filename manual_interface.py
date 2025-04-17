@@ -305,8 +305,8 @@ class ManualInterface:
         """ Launches the tracker and director.
         """
         #tracker = MediaPipePose(source="", config_path="./config.yaml", video_label=self.video_label)
-        tracker = MediaPipeTracker(source="", config_path="./config.yaml", video_label=self.video_label)
-        #tracker = YOLOTracker(source="", config_path="./config.yaml", video_label=self.video_label)
+        #tracker = MediaPipeTracker(source="", config_path="./config.yaml", video_label=self.video_label)
+        tracker = YOLOTracker(source="", config_path="./config.yaml", video_label=self.video_label)
 
         director = ContinuousDirector(tracker, "./config.yaml")
         #director = DiscreteDirector(tracker, "./config.yaml")

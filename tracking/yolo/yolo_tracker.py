@@ -7,6 +7,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import math
 import yaml
+import torch
 
 
 class YOLOTracker(Tracker):
@@ -16,13 +17,14 @@ class YOLOTracker(Tracker):
         self.speaker_bbox = None  #Shared reference. Only here to avoid pylint errors.
         super().__init__(source, config_path, video_label)
 
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.object_detector = YOLO("yolo11m.pt")
 
         self.pose_detector = YOLO("yolo11m-pose.pt")
 
 
         self.lost_counter = 0
-        self.lost_threshold = 100
+        self.lost_threshold = 300
 
         self.speaker_color = None
         self.color_threshold = 15
@@ -39,19 +41,26 @@ class YOLOTracker(Tracker):
         frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
         frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
 
-        detection_result = object_detector(frameRGB, classes=0, verbose=False, imgsz=(576, 320), device='cpu')
+        detection_result = object_detector(frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device)
         #print(detection_result)
         bboxes = []
         if detection_result:
-            # print(detection_result[0].boxes)
-            for detection in detection_result:
-                xyxy = detection.boxes.xyxyn
-                #print(detection.boxes.xyxy)
-                x1 = int(xyxy[0][0] * frameWidth)
-                y1 = int(xyxy[0][1] * frameHeight)
-                x2 = int(xyxy[0][2] * frameWidth)
-                y2 = int(xyxy[0][3] * frameHeight)
+            #print(detection_result[0].boxes.xyxyn)
+            for xyxy in detection_result[0].boxes.xyxyn:
+                x1 = int(xyxy[0] * frameWidth)
+                y1 = int(xyxy[1] * frameHeight)
+                x2 = int(xyxy[2] * frameWidth)
+                y2 = int(xyxy[3] * frameHeight)
                 bboxes.append((x1, y1, x2, y2))
+            # for i, detection in enumerate(detection_result):
+            #     xyxy = detection.boxes.xyxyn
+            #     x1 = int(xyxy[i][0] * frameWidth)
+            #     y1 = int(xyxy[i][1] * frameHeight)
+            #     x2 = int(xyxy[i][2] * frameWidth)
+            #     y2 = int(xyxy[i][3] * frameHeight)
+            #     bboxes.append((x1, y1, x2, y2))
+            # print(bboxes)
+            
 
         return bboxes
     
@@ -72,8 +81,8 @@ class YOLOTracker(Tracker):
         #print(person_keypoints[0])
 
         if person_keypoints.shape[1] < 11:
-            # print("shape")
-            # print(person_keypoints.shape[0])
+            print("shape")
+            print(person_keypoints.shape[0])
             return False
 
 
@@ -137,7 +146,7 @@ class YOLOTracker(Tracker):
                 if cropped.size > 0:
                     cropped = cropped.astype("uint8")
                     # Run pose detection on the cropped image.
-                    pose_result = self.pose_detector(cropped, verbose=False)
+                    pose_result = self.pose_detector(cropped, verbose=False, device=self.device)
                     if len(pose_result) > 0:
                         # "results[0]" is the prediction for this single image/crop
                         result = pose_result[0]
