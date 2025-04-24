@@ -36,26 +36,6 @@ class BaseDirector(ABC):
         acceptable_box_bottom = frame_center_y + (acceptable_height // 2)
         return acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom
 
-    #Draws acceptable box, bounding box, and center dot onto the video
-    def draw_visuals(self, x1, y1, x2, y2, acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom, frame):
-        #print("draw")
-
-        # Draw the rectangle on the frame (color = green, thickness = 2)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-        color = (0, 0, 255)  # Green color for the rectangle
-        thickness = 2  # Thickness of the rectangle lines
-        cv2.rectangle(frame, (acceptable_box_left, acceptable_box_top), (acceptable_box_right, acceptable_box_bottom), color, thickness)
-
-        color = (0, 255, 0)  # Green color for the center point
-        radius = 10          # Radius of the circle
-        thickness = -1       # -1 fills the circle
-
-        bbox_center_x = (x1 + x2) // 2
-        bbox_center_y = (y1 + y2) // 2
-
-        cv2.circle(frame, (bbox_center_x, bbox_center_y), radius, color, thickness)
-
 
     # Processes the bounding box and sends commands 
     @abstractmethod
