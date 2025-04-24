@@ -87,14 +87,14 @@ class KeepAwayDirector(BaseDirector):
                             Publisher.polar_pan_continuous_start(1, 0)
                             #print("start")
                             self.last_command_stop = False
-                        elif change_in_y < 0:
-                            Publisher.polar_pan_continuous_start(0, 1)
-                            #print("start")
-                            self.last_command_stop = False
-                        elif change_in_y > 0:
-                            Publisher.polar_pan_continuous_start(0, -1)
-                            #print("start")
-                            self.last_command_stop = False
+                        # elif change_in_y < 0:
+                        #     Publisher.polar_pan_continuous_start(0, 1)
+                        #     #print("start")
+                        #     self.last_command_stop = False
+                        # elif change_in_y > 0:
+                        #     Publisher.polar_pan_continuous_start(0, -1)
+                        #     #print("start")
+                        #     self.last_command_stop = False
                         else:
                             if(not self.last_command_stop):
                                 Publisher.polar_pan_continuous_stop()
