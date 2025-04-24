@@ -1,9 +1,11 @@
 from enum import Enum
 from publisher import Publisher
 from tracking.media_pipe.media_pipe_tracker import *
+from tracking.media_pipe.media_pipe_pose import *
 from tracking.keep_away.keep_away_tracker import *
 from tracking.keep_away.keep_away_director import *
-from tracking.media_pipe.media_pipe_pose import *
+from tracking.squid_game.squid_game_tracker import *
+from tracking.squid_game.squid_game_director import *
 from tracking.yolo.yolo_tracker import *
 from directors.continuous_director import *
 from directors.discrete_director import *
@@ -139,6 +141,14 @@ class ManualInterface:
             command=self.toggle_keep_away_mode
         )
         self.keepaway_button.grid(row=2, column=6, padx=10)
+
+        self.squid_game_button = tkinter.Button(
+            self.rootWindow,
+            text="Play Squid Game",
+            font=("Cascadia Code", 12),
+            command=self.toggle_squid_game_mode
+        )
+        self.squid_game_button.grid(row=1, column=6, padx=10)
 
         self.yolo_button = tkinter.Button(
             self.rootWindow,
@@ -344,19 +354,30 @@ class ManualInterface:
                 if last_mode == "keepaway":
                     print("Entering Keep Away")
                     self.keepaway_button.config(text="Standard Mode")
+                    self.squid_game_button.config(text="Squid Game Mode")
                     self.yolo_button.config(text="Yolo Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                     tracker  = KeepAwayTracker(source="", config_path="./config.yaml", video_label=self.video_label)
                     director = KeepAwayDirector(tracker, "./config.yaml")
+                elif last_mode == "squid-game":
+                    print("Entering Squid Game")
+                    self.squid_game_button.config(text="Standard Mode")
+                    self.keepaway_button.config(text="Keep Away Mode")
+                    self.yolo_button.config(text="Yolo Mode")
+                    self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
+                    tracker  = SquidGameTracker(source="", config_path="./config.yaml", video_label=self.video_label)
+                    director = SquidGameDirector(tracker, "./config.yaml")
                 elif last_mode == "yolo":
                     print("Entering Yolo")
                     self.yolo_button.config(text="Standard Mode")
+                    self.squid_game_button.config(text="Squid Game Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                     self.keepaway_button.config(text="Keep Away Mode")
                     tracker  = YOLOTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
                     director = ContinuousDirector(tracker, "./config.yaml")
                 elif last_mode == "mediapipepose":
                     self.media_pipe_pose_button.config(text="Standard Mode")
+                    self.squid_game_button.config(text="Squid Game Mode")
                     self.yolo_button.config(text="Yolo Mode")
                     self.keepaway_button.config(text="Keep Away Mode")
                     print("Entering Media Pipe Pose")
@@ -365,6 +386,7 @@ class ManualInterface:
                 else:
                     print("Entering Media Pipe")
                     self.yolo_button.config(text="Yolo Mode")
+                    self.squid_game_button.config(text="Squid Game Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                     self.keepaway_button.config(text="Keep Away Mode")
                     tracker  = MediaPipeTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
@@ -397,6 +419,12 @@ class ManualInterface:
             self.current_mode = "standard"
         else: 
             self.current_mode = "keepaway"
+
+    def toggle_squid_game_mode(self):
+        if self.current_mode == "squid-game":
+            self.current_mode = "standard"
+        else:
+            self.current_mode = "squid-game"
 
     def toggle_media_pipe_pose_mode(self):
         """Switch between normal tracking and Media Pipe Pose mode."""
