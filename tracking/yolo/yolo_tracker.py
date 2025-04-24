@@ -18,9 +18,9 @@ class YOLOTracker(Tracker):
         super().__init__(source, config_path, video_label)
 
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.object_detector = YOLO("yolo11m.pt")
+        self.object_detector = YOLO("yolo11n.pt")
 
-        self.pose_detector = YOLO("yolo11m-pose.pt")
+        self.pose_detector = YOLO("yolo11n-pose.pt")
 
 
         self.lost_counter = 0
