@@ -65,7 +65,7 @@ class Connection:
 
         body += crc
 
-        self.socket.send(body)
+        #self.socket.send(body)
         #response = self.socket.recv(2048)
         return 1
 
@@ -74,7 +74,7 @@ class OperatorConnection(Connection):
     def connect(self):
         while(True):
             try:
-                self.socket.connect((self.host, self.port))
+                #self.socket.connect((self.host, self.port))
                 self.is_connected = True
                 print("Connected to socket: " + self.host + ":" + str(self.port))
                 break

@@ -3,4 +3,4 @@ vertical_field_of_view: 48  # vertical FOV of camera being used
 horizontal_field_of_view: 89  # horizontal FOV of camera being used
 confirmation_delay: 0.25  # Amount of time subject is outside of acceptable box before a command is sent
 command_delay: 0.25  # Wait time before another command can be sent 
-camera_index: 1 # Index of the camera device to be used for video capture
+camera_index: 0 # Index of the camera device to be used for video capture

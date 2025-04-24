@@ -1,6 +1,8 @@
 from enum import Enum
 from publisher import Publisher
 from tracking.media_pipe.media_pipe_tracker import *
+from tracking.keep_away.keep_away_tracker import *
+from tracking.keep_away.keep_away_director import *
 from tracking.media_pipe.media_pipe_pose import *
 from tracking.yolo.yolo_tracker import *
 from directors.continuous_director import *
@@ -127,6 +129,34 @@ class ManualInterface:
         self.video_label = tkinter.Label(self.rootWindow)
         #This line ensures it stays on the top of the manual interface and centers it in the  middle
         self.video_label.grid(row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew")
+
+        #Set up keep away button
+        # Keep‐Away mode toggle button
+        self.keepaway_button = tkinter.Button(
+            self.rootWindow,
+            text="Play Keep Away",
+            font=("Cascadia Code", 12),
+            command=self.toggle_keep_away_mode
+        )
+        self.keepaway_button.grid(row=2, column=6, padx=10)
+
+        self.yolo_button = tkinter.Button(
+            self.rootWindow,
+            text="Yolo Tracker",
+            font=("Cascadia Code", 12),
+            command=self.toggle_yolo_mode
+        )
+        self.yolo_button.grid(row=3, column=6, padx=10)
+
+        self.media_pipe_pose_button = tkinter.Button(
+            self.rootWindow,
+            text="Media Pipe Pose Tracker",
+            font=("Cascadia Code", 12),
+            command=self.toggle_media_pipe_pose_mode
+        )
+        self.media_pipe_pose_button.grid(row=4, column=6, padx=10)
+
+        self.current_mode = "standard"
         
         # Flags for director loop
         self.is_director_running = False
@@ -302,21 +332,49 @@ class ManualInterface:
         self.rootWindow.mainloop()
 
     def director_loop(self):
-        """ Launches the tracker and director.
-        """
-        #tracker = MediaPipePose(source="", config_path="./config.yaml", video_label=self.video_label)
-        #tracker = MediaPipeTracker(source="", config_path="./config.yaml", video_label=self.video_label)
-        tracker = YOLOTracker(source="", config_path="./config.yaml", video_label=self.video_label)
-
-        director = ContinuousDirector(tracker, "./config.yaml")
-        #director = DiscreteDirector(tracker, "./config.yaml")
+        """Runs and starts the director loop"""
+        last_mode = None
+        tracker   = None
+        director  = None
 
         while True:
-            bounding_box, frame = tracker.capture_frame(True)
+            # if mode changed, tear down & rebuild
+            if self.current_mode != last_mode:
+                last_mode = self.current_mode
+                if last_mode == "keepaway":
+                    print("Entering Keep Away")
+                    self.keepaway_button.config(text="Standard Mode")
+                    self.yolo_button.config(text="Yolo Mode")
+                    self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
+                    tracker  = KeepAwayTracker(source="", config_path="./config.yaml", video_label=self.video_label)
+                    director = KeepAwayDirector(tracker, "./config.yaml")
+                elif last_mode == "yolo":
+                    print("Entering Yolo")
+                    self.yolo_button.config(text="Standard Mode")
+                    self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
+                    self.keepaway_button.config(text="Keep Away Mode")
+                    tracker  = YOLOTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
+                    director = ContinuousDirector(tracker, "./config.yaml")
+                elif last_mode == "mediapipepose":
+                    self.media_pipe_pose_button.config(text="Standard Mode")
+                    self.yolo_button.config(text="Yolo Mode")
+                    self.keepaway_button.config(text="Keep Away Mode")
+                    print("Entering Media Pipe Pose")
+                    tracker  = MediaPipePose(source="",    config_path="./config.yaml", video_label=self.video_label)
+                    director = ContinuousDirector(tracker, "./config.yaml")
+                else:
+                    print("Entering Media Pipe")
+                    self.yolo_button.config(text="Yolo Mode")
+                    self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
+                    self.keepaway_button.config(text="Keep Away Mode")
+                    tracker  = MediaPipeTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
+                    director = ContinuousDirector(tracker, "./config.yaml")
 
-            if bounding_box is None or frame is None:
+            bbox, frame = tracker.capture_frame(True)
+            if bbox is None or frame is None:
                 continue
-            director.process_frame(bounding_box, frame, self.is_director_running)
+
+            director.process_frame(bbox, frame, self.is_director_running)
 
 
     def start_director_thread(self): 
@@ -332,6 +390,27 @@ class ManualInterface:
             self.cont_mode_label.config(text = self.CONTINUOUS_MODE_LABEL)
         else:
             self.cont_mode_label.config(text = self.DISCRETE_MODE_LABEL)
+
+    def toggle_keep_away_mode(self):
+        """Switch between normal tracking and Keep‑Away game mode."""
+        if self.current_mode == "keepaway":
+            self.current_mode = "standard"
+        else: 
+            self.current_mode = "keepaway"
+
+    def toggle_media_pipe_pose_mode(self):
+        """Switch between normal tracking and Media Pipe Pose mode."""
+        if self.current_mode == "mediapipepose":
+            self.current_mode = "standard"
+        else: 
+            self.current_mode = "mediapipepose"
+
+    def toggle_yolo_mode(self):
+        """Switch between normal tracking and yolo mode."""
+        if self.current_mode == "yolo":
+            self.current_mode = "standard"
+        else: 
+            self.current_mode = "yolo"
     
     
     def toggle_command_mode(self):
