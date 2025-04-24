@@ -136,10 +136,27 @@ class ManualInterface:
             self.rootWindow,
             text="Play Keep Away",
             font=("Cascadia Code", 12),
-            command=self.toggle_game_mode
+            command=self.toggle_keep_away_mode
         )
         self.keepaway_button.grid(row=2, column=6, padx=10)
-        self.keep_away_mode = False
+
+        self.yolo_button = tkinter.Button(
+            self.rootWindow,
+            text="Yolo Tracker",
+            font=("Cascadia Code", 12),
+            command=self.toggle_yolo_mode
+        )
+        self.yolo_button.grid(row=3, column=6, padx=10)
+
+        self.media_pipe_pose_button = tkinter.Button(
+            self.rootWindow,
+            text="Media Pipe Pose Tracker",
+            font=("Cascadia Code", 12),
+            command=self.toggle_media_pipe_pose_mode
+        )
+        self.media_pipe_pose_button.grid(row=4, column=6, padx=10)
+
+        self.current_mode = "standard"
         
         # Flags for director loop
         self.is_director_running = False
@@ -322,13 +339,34 @@ class ManualInterface:
 
         while True:
             # if mode changed, tear down & rebuild
-            if self.keep_away_mode != last_mode:
-                last_mode = self.keep_away_mode
-                if last_mode:
+            if self.current_mode != last_mode:
+                last_mode = self.current_mode
+                if last_mode == "keepaway":
+                    print("Entering Keep Away")
+                    self.keepaway_button.config(text="Keep Away Mode")
+                    self.yolo_button.config(text="Standard Mode")
+                    self.media_pipe_pose_button.config(text="Standard Mode")
                     tracker  = KeepAwayTracker(source="", config_path="./config.yaml", video_label=self.video_label)
                     director = KeepAwayDirector(tracker, "./config.yaml")
+                elif last_mode == "yolo":
+                    print("Entering Yolo")
+                    self.yolo_button.config(text="Yolo Mode")
+                    self.media_pipe_pose_button.config(text="Standard Mode")
+                    self.keepaway_button.config(text="Standard Mode")
+                    tracker  = YOLOTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
+                    director = ContinuousDirector(tracker, "./config.yaml")
+                elif last_mode == "mediapipepose":
+                    self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
+                    self.yolo_button.config(text="Standard Mode")
+                    self.keepaway_button.config(text="Standard Mode")
+                    print("Entering Media Pipe Pose")
+                    tracker  = MediaPipePose(source="",    config_path="./config.yaml", video_label=self.video_label)
+                    director = ContinuousDirector(tracker, "./config.yaml")
                 else:
-                    #tracker  = YOLOTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
+                    print("Entering Media Pipe")
+                    self.yolo_button.config(text="Standard Mode")
+                    self.media_pipe_pose_button.config(text="Standard Mode")
+                    self.keepaway_button.config(text="Standard Mode")
                     tracker  = MediaPipeTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
                     director = ContinuousDirector(tracker, "./config.yaml")
 
@@ -353,14 +391,26 @@ class ManualInterface:
         else:
             self.cont_mode_label.config(text = self.DISCRETE_MODE_LABEL)
 
-    def toggle_game_mode(self):
+    def toggle_keep_away_mode(self):
         """Switch between normal tracking and Keep‑Away game mode."""
-        self.keep_away_mode = not self.keep_away_mode
-        if self.keep_away_mode:
-            self.keepaway_button.config(text="Standard Mode")
-            # (optionally disable manual buttons if game is auto‐driven)
-        else:
-            self.keepaway_button.config(text="Play Keep Away")
+        if self.current_mode == "keepaway":
+            self.current_mode = "standard"
+        else: 
+            self.current_mode = "keepaway"
+
+    def toggle_media_pipe_pose_mode(self):
+        """Switch between normal tracking and Media Pipe Pose mode."""
+        if self.current_mode == "mediapipepose":
+            self.current_mode = "standard"
+        else: 
+            self.current_mode = "mediapipepose"
+
+    def toggle_yolo_mode(self):
+        """Switch between normal tracking and yolo mode."""
+        if self.current_mode == "yolo":
+            self.current_mode = "standard"
+        else: 
+            self.current_mode = "yolo"
     
     
     def toggle_command_mode(self):
