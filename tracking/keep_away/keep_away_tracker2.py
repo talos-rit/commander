@@ -93,6 +93,11 @@ class KeepAwayTracker2(Tracker):
 
         self.change_video_frame(frame, is_interface_running)
 
+        if self.game_over:
+            self.countdown_start = time.time()
+            self.game_over = False
+            self.keep_away_mode = True
+
         return bboxes, frame
     
 
