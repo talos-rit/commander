@@ -48,6 +48,9 @@ class KeepAwayTracker(Tracker):
 
         self.keep_away_mode = False
         self.countdown_start = None
+
+        self.game_time_start = None
+
         self.game_over = True
 
     def load_config(self, config_path):
@@ -342,8 +345,13 @@ class KeepAwayTracker(Tracker):
             if elapsed < 5:
                 text, scale, thickness = str(5 - int(elapsed)), 5, 8
             elif self.game_over:
-                text, scale, thickness = "GAME OVER", 3, 6
+                final_time_outside_box = time.time() - self.game_time_start
+                game_over_message = "GAME OVER\n" + str(round(final_time_outside_box, 2))
+                text, scale, thickness = game_over_message, 3, 6
+
             else:
+                if self.game_time_start is None:
+                    self.game_time_start = time.time()
                 text = None
 
             if text:
