@@ -7,6 +7,7 @@ from PIL import Image, ImageTk
 from tracking.tracker import Tracker
 from directors.base_director import BaseDirector
 from publisher import Publisher
+from tracking.squid_game.squid_game_tracker import *
 
 
 class SquidGameDirector(BaseDirector):
@@ -30,6 +31,8 @@ class SquidGameDirector(BaseDirector):
         self.red_light_duration = 5 # Default duration for detection phase, will be randomized
         self.up_move_start_time = None # Timer for the upward movement
         self.up_move_duration = self.down_move_duration # Match upward movement duration to downward
+
+        self.tracker = SquidGameTracker(source="", config_path="./config.yaml", video_label="We Ball")
 
         print("[DEBUG] SquidGameDirector initialized. Starting in RED LIGHT phase (DETECTING state).")
 
@@ -91,11 +94,6 @@ class SquidGameDirector(BaseDirector):
                     print(f"[DEBUG] Green Light Phase: Wait duration ({self.green_light_wait_duration:.2f}s) ended.")
                     # --- Transition to Red Light ---
                     Publisher.polar_pan_continuous_stop() # Ensure stopped before capturing frame
-                    print("[DEBUG] Captured freeze frame.")
-                    # Convert freeze frame to grayscale once
-                    if self.freeze_frame is not None:
-                         self.gray_freeze_frame = cv2.cvtColor(self.freeze_frame, cv2.COLOR_BGR2GRAY)
-                         print("[DEBUG] Converted freeze frame to grayscale.")
 
                     print("[DEBUG] Transitioning to RED LIGHT phase. State -> MOVING_UP")
                     Publisher.polar_pan_continuous_start(0, 1) # Start moving the camera upwards
@@ -113,13 +111,20 @@ class SquidGameDirector(BaseDirector):
                 if current_time - self.up_move_start_time >= self.up_move_duration:
                     print(f"[DEBUG] Red Light Phase: Stopping upward movement ({self.up_move_duration}s). State -> DETECTING")
                     Publisher.polar_pan_continuous_stop() # Stop the upward movement
-                    #time.sleep(.1)
-                    self.freeze_frame = frame.copy() # Capture the current frame for red light phase
                     self.red_light_state = "DETECTING" # Transition to detection state
                     # Set random duration for the detection phase
                     self.red_light_duration = random.randint(4, 7) + random.random()
                     self.red_light_timer = current_time # Start the timer for the detection phase
                     print(f"[DEBUG] Red Light Phase (DETECTING): Started. Duration: {self.red_light_duration:.2f}s")
+                    #time.sleep(.5)
+
+                    bboxes, frame = self.tracker.capture_frame(True) # Capture the current frame for processing
+                    self.freeze_frame = frame.copy() # Capture the current frame for red light phase
+                    print("[DEBUG] Captured freeze frame.")
+                    # Convert freeze frame to grayscale once
+                    if self.freeze_frame is not None:
+                         self.gray_freeze_frame = cv2.cvtColor(self.freeze_frame, cv2.COLOR_BGR2GRAY)
+                         print("[DEBUG] Converted freeze frame to grayscale.")
                     # Process this frame immediately using detection logic below
                 else:
                     # Still moving up, display the freeze frame (without boxes)
