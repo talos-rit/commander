@@ -50,6 +50,7 @@ class KeepAwayTracker(Tracker):
         self.countdown_start = None
 
         self.game_time_start = None
+        self.final_time_outside_box = None
 
         self.game_over = True
 
@@ -345,8 +346,12 @@ class KeepAwayTracker(Tracker):
             if elapsed < 5:
                 text, scale, thickness = str(5 - int(elapsed)), 5, 8
             elif self.game_over:
-                final_time_outside_box = time.time() - self.game_time_start
-                game_over_message = "GAME OVER\n" + str(round(final_time_outside_box, 2))
+
+                if self.game_time_start is None: # player did not even leave the box
+                    self.final_time_outside_box = 0
+                elif self.final_time_outside_box is None: # game is over, but final tiem has not been calculated
+                    self.final_time_outside_box = time.time() - self.game_time_start
+                game_over_message = "GAME OVER"
                 text, scale, thickness = game_over_message, 3, 6
 
             else:
@@ -358,6 +363,12 @@ class KeepAwayTracker(Tracker):
                 (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
                 pos = ((w - tw)//2, (h + th)//2)
                 cv2.putText(frame, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (0,0,255), thickness, cv2.LINE_AA)
+
+                if self.game_over:
+                    final_time_str = "SCORE:" + str(self.final_time_outside_box)
+                    final_time_pos = (pos[0], pos[1] + th)
+                    cv2.putText(frame, final_time_str, final_time_pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (0,0,255), thickness, cv2.LINE_AA)
+
 
         # show
         if not is_interface_running:

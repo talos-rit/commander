@@ -36,6 +36,8 @@ class KeepAwayTracker2(Tracker):
 
         self.keep_away_mode = False
         self.countdown_start = None
+        self.game_time_start = None
+        self.final_time_outside_box = None
         self.game_over = True
 
     def load_config(self, config_path):
@@ -54,7 +56,7 @@ class KeepAwayTracker2(Tracker):
         frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
         frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
 
-        detection_result = object_detector(frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device)
+        detection_result = object_detector(frameRGB, classes=[0], verbose=False, imgsz=(576, 320), device=self.device)
         #print(detection_result)
         bboxes = []
         if detection_result:
@@ -163,14 +165,26 @@ class KeepAwayTracker2(Tracker):
             if elapsed < 5:
                 text, scale, thickness = str(5 - int(elapsed)), 5, 8
             elif self.game_over:
+                if self.game_time_start is None: # player did not even leave the box
+                    self.final_time_outside_box = 0
+                elif self.final_time_outside_box is None: # game is over, but final tiem has not been calculated
+                    self.final_time_outside_box = time.time() - self.game_time_start
+                
                 text, scale, thickness = "GAME OVER", 3, 6
             else:
+                if self.game_time_start is None:
+                    self.game_time_start = time.time()
                 text = None
 
             if text:
                 (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
                 pos = ((w - tw)//2, (h + th)//2)
                 cv2.putText(frame, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (0,0,255), thickness, cv2.LINE_AA)
+                if self.game_over:
+                    final_time_str = "SCORE:" + str(self.final_time_outside_box)
+                    final_time_pos = (pos[0], pos[1] + th)
+                    cv2.putText(frame, final_time_str, final_time_pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (0,0,255), thickness, cv2.LINE_AA)
+
 
         # show
         if not is_interface_running:
