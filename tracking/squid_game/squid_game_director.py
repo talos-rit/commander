@@ -31,6 +31,7 @@ class SquidGameDirector(BaseDirector):
         self.red_light_duration = 5 # Default duration for detection phase, will be randomized
         self.up_move_start_time = None # Timer for the upward movement
         self.up_move_duration = self.down_move_duration # Match upward movement duration to downward
+        self.skipped_frames = 0
 
         self.tracker = SquidGameTracker(source="", config_path="./config.yaml", video_label="We Ball")
 
@@ -107,6 +108,7 @@ class SquidGameDirector(BaseDirector):
         else:
             # --- Red Light State Machine ---
             if self.red_light_state == "MOVING_UP":
+                self.skipped_frames = 0
                 # Check if upward movement duration has passed
                 if current_time - self.up_move_start_time >= self.up_move_duration:
                     print(f"[DEBUG] Red Light Phase: Stopping upward movement ({self.up_move_duration}s). State -> DETECTING")
@@ -138,6 +140,8 @@ class SquidGameDirector(BaseDirector):
             if self.red_light_state == "DETECTING":
                 # Check if it's time to switch back to Green Light
                 # Ensure red_light_timer is set (won't be None after first MOVING_UP -> DETECTING transition)
+                self.skipped_frames += 1
+
                 if self.red_light_timer is not None and current_time - self.red_light_timer >= self.red_light_duration:
                     print(f"[DEBUG] Red Light Phase (DETECTING): Duration ({self.red_light_duration:.2f}s) ended.")
                     # --- Transition back to Green Light ---
@@ -198,9 +202,13 @@ class SquidGameDirector(BaseDirector):
 
                         if changed_ratio > movement_area_ratio_threshold:
                             if not movement_detected_in_frame:
-                                print(f"[DEBUG] Red Light Phase (DETECTING): Movement detected! Box: {(x1, y1, x2, y2)}, Change Ratio: {changed_ratio:.4f}")
-                                movement_detected_in_frame = True
-                            cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 0, 255), 2) # Red
+                                if self.skipped_frames > 1000:
+                                    print(f"[DEBUG] Red Light Phase (DETECTING): Movement detected! Box: {(x1, y1, x2, y2)}, Change Ratio: {changed_ratio:.4f}")
+                                    movement_detected_in_frame = True
+                                    cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 0, 255), 2) # Red
+                                else:
+                                    print("SKIPPING FRAME")
+                                    cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 255, 0), 2) # Green
                         else:
                             cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 255, 0), 2) # Green
 
