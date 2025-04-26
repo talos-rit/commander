@@ -366,7 +366,7 @@ class ManualInterface:
                     self.yolo_button.config(text="Yolo Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                     tracker  = SquidGameTracker(source="", config_path="./config.yaml", video_label=self.video_label)
-                    director = SquidGameDirector(tracker, "./config.yaml")
+                    director = SquidGameDirector(tracker, "./config.yaml", video_label=self.video_label)
                 elif last_mode == "yolo":
                     print("Entering Yolo")
                     self.yolo_button.config(text="Standard Mode")
