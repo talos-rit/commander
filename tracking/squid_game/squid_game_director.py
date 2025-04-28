@@ -10,6 +10,9 @@ from publisher import Publisher
 from tracking.squid_game.squid_game_tracker import *
 
 
+NUM_SKIP_FRAMES = 15
+
+
 class SquidGameDirector(BaseDirector):
     # The director class is responsible for processing the frames captured by the tracker
     def __init__(self, tracker : Tracker, config_path, video_label):
@@ -32,8 +35,6 @@ class SquidGameDirector(BaseDirector):
         self.up_move_start_time = None # Timer for the upward movement
         self.up_move_duration = self.down_move_duration # Match upward movement duration to downward
         self.skipped_frames = 0
-
-        self.tracker = SquidGameTracker(source="", config_path="./config.yaml", video_label="We Ball")
 
         print("[DEBUG] SquidGameDirector initialized. Starting in RED LIGHT phase (DETECTING state).")
 
@@ -84,7 +85,7 @@ class SquidGameDirector(BaseDirector):
                 if current_time - self.green_light_timer >= self.down_move_duration:
                     print(f"[DEBUG] Green Light Phase: Stopping downward movement ({self.down_move_duration}s). State -> WAITING")
                     Publisher.polar_pan_continuous_stop() # Stop the camera
-                    self.green_light_wait_duration = random.randint(1, 3) + random.random() # Set random wait time
+                    self.green_light_wait_duration = random.randint(1, 2) + random.random() # Set random wait time
                     print(f"[DEBUG] Green Light Phase: Set random wait duration: {self.green_light_wait_duration:.2f}s")
                     self.green_light_timer = current_time # Reset timer for waiting period
                     self.green_light_state = "WAITING"
@@ -115,12 +116,11 @@ class SquidGameDirector(BaseDirector):
                     Publisher.polar_pan_continuous_stop() # Stop the upward movement
                     self.red_light_state = "DETECTING" # Transition to detection state
                     # Set random duration for the detection phase
-                    self.red_light_duration = random.randint(4, 7) + random.random()
+                    self.red_light_duration = random.randint(4, 10) + random.random()
                     self.red_light_timer = current_time # Start the timer for the detection phase
                     print(f"[DEBUG] Red Light Phase (DETECTING): Started. Duration: {self.red_light_duration:.2f}s")
                     #time.sleep(.5)
 
-                    bboxes, frame = self.tracker.capture_frame(True) # Capture the current frame for processing
                     self.freeze_frame = frame.copy() # Capture the current frame for red light phase
                     print("[DEBUG] Captured freeze frame.")
                     # Convert freeze frame to grayscale once
@@ -141,6 +141,10 @@ class SquidGameDirector(BaseDirector):
                 # Check if it's time to switch back to Green Light
                 # Ensure red_light_timer is set (won't be None after first MOVING_UP -> DETECTING transition)
                 self.skipped_frames += 1
+
+                if self.skipped_frames == NUM_SKIP_FRAMES - 1:
+                    self.freeze_frame = frame.copy()
+                    self.gray_freeze_frame = cv2.cvtColor(self.freeze_frame, cv2.COLOR_BGR2GRAY)
 
                 if self.red_light_timer is not None and current_time - self.red_light_timer >= self.red_light_duration:
                     print(f"[DEBUG] Red Light Phase (DETECTING): Duration ({self.red_light_duration:.2f}s) ended.")
@@ -163,8 +167,8 @@ class SquidGameDirector(BaseDirector):
                     gray_current_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
                     # Parameters for movement detection
-                    pixel_diff_threshold = 30
-                    movement_area_ratio_threshold = 0.02
+                    pixel_diff_threshold = 40
+                    movement_area_ratio_threshold = 0.2
 
                     processed_frame = frame.copy() # Work on a copy to draw boxes
                     movement_detected_in_frame = False
@@ -202,7 +206,7 @@ class SquidGameDirector(BaseDirector):
 
                         if changed_ratio > movement_area_ratio_threshold:
                             if not movement_detected_in_frame:
-                                if self.skipped_frames > 1000:
+                                if self.skipped_frames > NUM_SKIP_FRAMES:
                                     print(f"[DEBUG] Red Light Phase (DETECTING): Movement detected! Box: {(x1, y1, x2, y2)}, Change Ratio: {changed_ratio:.4f}")
                                     movement_detected_in_frame = True
                                     cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 0, 255), 2) # Red
