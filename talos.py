@@ -13,9 +13,9 @@ import time
 
 def main():
 
-    while (not Publisher.connection.is_connected):
-        print("Waiting to connect...")
-        time.sleep(5)
+    # while (not Publisher.connection.is_connected):
+    #     print("Waiting to connect...")
+    #     time.sleep(5)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=str, default="", help="Path to video file or URL of stream")

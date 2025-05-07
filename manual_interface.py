@@ -347,7 +347,8 @@ class ManualInterface:
                     self.keepaway_button.config(text="Standard Mode")
                     self.yolo_button.config(text="Yolo Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                    tracker  = KeepAwayTracker2(source="", config_path="./config.yaml", video_label=self.video_label)
+                    # tracker  = KeepAwayTracker2(source="", config_path="./config.yaml", video_label=self.video_label)
+                    tracker  = KeepAwayTracker(source="", config_path="./config.yaml", video_label=self.video_label)
                     director = KeepAwayDirector(tracker, "./config.yaml")
                 elif last_mode == "yolo":
                     print("Entering Yolo")

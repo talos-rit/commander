@@ -41,7 +41,7 @@ class YOLOTracker(Tracker):
         frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
         frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
 
-        detection_result = object_detector(frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device)
+        detection_result = object_detector(frameRGB, classes=[0], verbose=False, imgsz=(576, 320), device=self.device)
         #print(detection_result)
         bboxes = []
         if detection_result:
