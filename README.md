@@ -13,11 +13,25 @@ brew install apache-activemq
 ```
 
 Create virtual environment and install required packages.
-
+Using python package manager: [uv](https://docs.astral.sh/uv/getting-started/installation/)
+```bash
+uv sync
+```
+or alternatively
 ```bash
 mkdir -p venv/py3.12
 python3.12 -m venv venv/py3.12
 pip install -r requirements.txt
+```
+
+## Known bugs with arm based macs
+If pybullet build fails set a flag during installation:
+```bash
+CFLAGS="-Dfdopen=fdopen" pip install -r requirements.txt
+```
+or with uv
+```bash
+CFLAGS="-Dfdopen=fdopen" uv sync
 ```
 
 ## Setup
@@ -33,7 +47,7 @@ brew services start activemq
 Then, navigate to the ActiveMQ dashboard hosted at
 [http://localhost:8161/admin](http://localhost:8161/admin)
 
-Activate your virtual environment
+Activate your virtual environment (update 2025: no longer needed with uv)
 
 ```bash
 source venv/py3.12/bin/activate
