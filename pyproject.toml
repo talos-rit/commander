@@ -1,7 +1,7 @@
 [project]
 authors = [{name = "Hiro", email = "hiroto125takeuchi@gmail.com"}]
 dependencies = [
-    "jax[cpu]; sys_platform == 'darwin'; platform_machine == 'x86_64'",
+    "jax[cpu];sys_platform=='darwin' and platform_machine=='x86_64'",
     "docopt==0.6.2",
     "websocket-client==1.8.0",
     "abcmeta==2.2.0",

@@ -25,6 +25,7 @@ pip install -r requirements.txt
 ```
 
 ## Known bugs with arm based macs
+1. **Installation fails to build pybullet**
 If pybullet build fails set a flag during installation:
 ```bash
 CFLAGS="-Dfdopen=fdopen" pip install -r requirements.txt
@@ -33,6 +34,10 @@ or with uv
 ```bash
 CFLAGS="-Dfdopen=fdopen" uv sync
 ```
+2. **Tcl wasn't installed properly**
+when running `uv run talos.py`, an error occurs:
+`This probably means that Tcl wasn't installed properly.`.
+Fix: `brew install tcl-tk`
 
 ## Setup
 
