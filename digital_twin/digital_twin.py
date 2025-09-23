@@ -5,6 +5,8 @@ import time
 import math
 import struct
 
+# DEPRECATED
+
 class MyListener(stomp.ConnectionListener):
 
     AZIMUTH_JOIN_INDEX = 0
