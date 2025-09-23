@@ -1,7 +1,7 @@
 [project]
 authors = [{name = "Hiro", email = "hiroto125takeuchi@gmail.com"}]
 dependencies = [
-    "jax[cpu];sys_platform=='darwin' and platform_machine=='x86_64'",
+    # --- Universal dependencies ---
     "docopt==0.6.2",
     "websocket-client==1.8.0",
     "abcmeta==2.2.0",
@@ -11,6 +11,15 @@ dependencies = [
     "pyyaml==6.0.2",
     "pybullet==3.2.6",
     "ultralytics==8.3.73",
+
+    # --- Platform-Specific Dependencies ---
+    # For x86_64 macOS: use specific versions due to compatibility issues
+    "jax[cpu]==0.4.38; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+
+    # For other platforms (ARM based Macs, Windows, Linux): use latest versions
+    "jax[cpu]; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torch; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 name = "commander"
 requires-python = "==3.12.*"
