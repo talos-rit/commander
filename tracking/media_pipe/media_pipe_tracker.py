@@ -1,30 +1,35 @@
 import cv2
-import yaml
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+
+from tracking.media_pipe.mp_utils import get_model_asset_path
 from tracking.tracker import Tracker
 
 
 class MediaPipeTracker(Tracker):
-
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source : str, config_path, video_label):
-        self.speaker_bbox = None  #Shared reference. Only here to avoid pylint errors.
+    def __init__(self, source: str, config_path, video_label):
+        self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
         super().__init__(source, config_path, video_label)
 
-        base_options = python.BaseOptions(model_asset_path="tracking/media_pipe/efficientdet_lite0.tflite")
-        options = vision.ObjectDetectorOptions(base_options=base_options, score_threshold=0.5, category_allowlist=["person"])
+        base_options = python.BaseOptions(
+            model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
+        )
+        options = vision.ObjectDetectorOptions(
+            base_options=base_options,
+            score_threshold=0.5,
+            category_allowlist=["person"],
+        )
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
         # Open the video source
         if self.source:
-            self.cap = cv2.VideoCapture(self.source)  
+            self.cap = cv2.VideoCapture(self.source)
         else:
             config = self.load_config(config_path)
-            camera_index = config['camera_index']
+            camera_index = config["camera_index"]
             self.cap = cv2.VideoCapture(camera_index)
-
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
@@ -46,7 +51,7 @@ class MediaPipeTracker(Tracker):
         bboxes = []
         if detection_result:
             for detection in detection_result.detections:
-                #print(detection)
+                # print(detection)
                 bboxC = detection.bounding_box
 
                 x1 = bboxC.origin_x
@@ -59,23 +64,22 @@ class MediaPipeTracker(Tracker):
                     int(x1 * scaleWidth),
                     int(y1 * scaleHeight),
                     int(x2 * scaleWidth),
-                    int(y2 * scaleHeight)
+                    int(y2 * scaleHeight),
                 ]
                 bboxes.append(cvRect)
         return bboxes
-    
+
     # Capture a frame from the source and detect faces in the frame
     def capture_frame(self, is_interface_running):
-
         hasFrame, frame = self.cap.read()
         if not hasFrame:
             return None, None
-        #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
         bboxes = self.detectPerson(self.object_detector, frame)
 
         self.draw_visuals(bboxes, frame, is_interface_running)
 
         self.change_video_frame(frame, is_interface_running)
-        
+
         return bboxes, frame

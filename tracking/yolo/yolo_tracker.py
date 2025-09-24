@@ -2,12 +2,8 @@ import math
 import os
 
 import cv2
-import mediapipe as mp
 import numpy as np
 import torch
-import yaml
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
 from ultralytics import YOLO
 
 from tracking.tracker import Tracker
@@ -21,6 +17,7 @@ def create_pt_file_path(file_name, _dir=DEFAULT_YOLO_MODEL_DIR):
 
 
 class YOLOTracker(Tracker):
+    speaker_color: int | None = None
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
     def __init__(
         self, source: str, config_path, video_label, _yolo_pt_dir=DEFAULT_YOLO_MODEL_DIR
@@ -44,13 +41,11 @@ class YOLOTracker(Tracker):
         self.color_threshold = 15
 
     # Detect people in the frame
-    def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
+    def detectPerson(self, object_detector, frame, inHeight=500, inWidth=None):
+        inWidth = inWidth or int((frame.shape[1] / frame.shape[0]) * inHeight)
         frameOpenCV = frame.copy()
         frameHeight = frameOpenCV.shape[0]
         frameWidth = frameOpenCV.shape[1]
-
-        if not inWidth:
-            inWidth = int((frameWidth / frameHeight) * inHeight)
 
         frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
         frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
@@ -108,11 +103,11 @@ class YOLOTracker(Tracker):
         x_ls = float(kp_xy[5, 0])
         y_ls = float(kp_xy[5, 1])
         x_rs = float(kp_xy[6, 0])
-        y_rs = float(kp_xy[6, 1])
+        # y_rs = float(kp_xy[6, 1])
         x_lw = float(kp_xy[10, 0])
         y_lw = float(kp_xy[10, 1])
         x_rw = float(kp_xy[11, 0])
-        y_rw = float(kp_xy[11, 1])
+        # y_rw = float(kp_xy[11, 1])
         # print("XLS" + str(x_ls))
 
         # 1) Check horizontal arrangement: left wrist < left shoulder AND right wrist > right shoulder
@@ -142,39 +137,37 @@ class YOLOTracker(Tracker):
         hasFrame, frame = self.cap.read()
         if not hasFrame:
             return None, None
-        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         bboxes = self.detectPerson(self.object_detector, frame)
 
         self.draw_visuals(bboxes, frame, is_interface_running)
-
         self.change_video_frame(frame, is_interface_running)
 
         if self.speaker_bbox is None:
             # If no speaker is locked in yet, look for the X pose.
             # We assume only one person is in frame when the X pose is made.
             for box in bboxes:
-                bbox = box
-                x1, y1, x2, y2 = bbox
+                x1, y1, x2, y2 = box
                 cropped = frame[y1:y2, x1:x2]
-                if cropped.size > 0:
-                    cropped = cropped.astype("uint8")
-                    # Run pose detection on the cropped image.
-                    pose_result = self.pose_detector(
-                        cropped, verbose=False, device=self.device
-                    )
-                    if len(pose_result) > 0:
-                        # "results[0]" is the prediction for this single image/crop
-                        result = pose_result[0]
-                        if result.keypoints is not None:
-                            if self.is_x_pose_yolo(result.keypoints):
-                                self.speaker_bbox = box
-                                smaller_box = self.getCroppedBox(box, frame)
-                                color = self.get_dominant_color(smaller_box)
-                                self.speaker_color = color
-                                print(
-                                    "Speaker detected with X pose:", self.speaker_bbox
-                                )
-                                return [self.speaker_bbox], frame
+                if cropped.size == 0:
+                    continue
+                cropped = cropped.astype("uint8")
+                # Run pose detection on the cropped image.
+                pose_result = self.pose_detector(
+                    cropped, verbose=False, device=self.device
+                )
+                if len(pose_result) == 0:
+                    continue
+                # "results[0]" is the prediction for this single image/crop
+                result = pose_result[0]
+                if result.keypoints is not None and self.is_x_pose_yolo(
+                    result.keypoints
+                ):
+                    self.speaker_bbox = box
+                    smaller_box = self.getCroppedBox(box, frame)
+                    color = self.get_dominant_color(smaller_box)
+                    self.speaker_color = color
+                    print("Speaker detected with X pose:", self.speaker_bbox)
+                    return [self.speaker_bbox], frame
 
             # While speaker not yet locked, return all detected bounding boxes.
             # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
@@ -194,7 +187,7 @@ class YOLOTracker(Tracker):
                 smaller_box = self.getCroppedBox(bbox, frame)
                 color = self.get_dominant_color(smaller_box)
                 # Compute the Euclidean distance between the candidate color and the stored speaker color.
-                color_diff = abs(self.speaker_color - color)
+                color_diff = abs((self.speaker_color or 0) - color)
 
                 if color_diff < self.color_threshold:
                     best_bbox = bbox

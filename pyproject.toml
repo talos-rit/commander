@@ -9,7 +9,6 @@ dependencies = [
     "mediapipe==0.10.14",
     "numpy==1.26.0",
     "pyyaml==6.0.2",
-    "pybullet==3.2.6",
     "ultralytics==8.3.73",
 
     # --- Platform-Specific Dependencies ---
@@ -18,8 +17,8 @@ dependencies = [
     "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 
     # For other platforms (ARM based Macs, Windows, Linux): use latest versions
-    "jax[cpu]; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "torch; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # "jax; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # "torch; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 name = "commander"
 requires-python = "==3.12.*"

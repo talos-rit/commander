@@ -1,7 +1,8 @@
-from icd_config import int_to_bytes, bytes_to_int
 import socket
-import time
 import threading
+import time
+
+from icd_config import bytes_to_int, int_to_bytes
 
 
 class Connection:
@@ -24,7 +25,7 @@ class Connection:
         self.socket.close()
         self.is_connected = False
 
-    def publish(self, command: int, payload: bytes = None):
+    def publish(self, command: int, payload: bytes | None = None):
         """
         Command ID      UINT32	Unique ID for individual commands
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,45 +42,50 @@ class Connection:
         command_id = self.command_count
         self.command_count += 2
 
-        if payload != None:
+        payload_length = 0
+        if payload is not None:
             payload_length = len(payload)
-        else:
-            payload_length = 0
 
         # TODO: Implement checksum. May get removed
         crc = int_to_bytes(0, num_bits=16, unsigned=True)
 
         command_id = int_to_bytes(command_id, num_bits=32, unsigned=True)
         reserved = int_to_bytes(0, num_bits=16, unsigned=True)
-        command = int_to_bytes(command, num_bits=16, unsigned=True)
+        command_byte = int_to_bytes(command, num_bits=16, unsigned=True)
         payload_length = int_to_bytes(payload_length, num_bits=16, unsigned=True)
 
         # Put header together
-        header = command_id + reserved + command + payload_length
+        header = command_id + reserved + command_byte + payload_length
 
-        # Put everything together 
+        # Put everything together
         body = header
 
-        if payload != None:
+        if payload is not None:
             body += payload
 
         body += crc
 
-        #self.socket.send(body)
-        #response = self.socket.recv(2048)
+        # self.socket.send(body)
+        # response = self.socket.recv(2048)
         return 1
 
 
 class OperatorConnection(Connection):
     def connect(self):
-        while(True):
+        while True:
             try:
-                #self.socket.connect((self.host, self.port))
+                # self.socket.connect((self.host, self.port))
                 self.is_connected = True
                 print("Connected to socket: " + self.host + ":" + str(self.port))
                 break
-            except ConnectionRefusedError: # catch refused connection for retry
-                print("Connection to " + self.host + ":" + str(self.port) + " failed, retrying in 5s")
+            except ConnectionRefusedError:  # catch refused connection for retry
+                print(
+                    "Connection to "
+                    + self.host
+                    + ":"
+                    + str(self.port)
+                    + " failed, retrying in 5s"
+                )
                 time.sleep(5)
 
 
@@ -88,13 +94,19 @@ class CommandConnection(Connection):
     def connect(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        while(True):
+        while True:
             try:
                 self.socket.bind((self.host, self.port))
                 print("Bind to socket: " + self.host + ":" + str(self.port))
                 break
-            except ConnectionRefusedError: # catch refused connection for retry
-                print("Connection to " + self.host + ":" + str(self.port) + " failed, retrying in 5s")
+            except ConnectionRefusedError:  # catch refused connection for retry
+                print(
+                    "Connection to "
+                    + self.host
+                    + ":"
+                    + str(self.port)
+                    + " failed, retrying in 5s"
+                )
                 time.sleep(5)
 
         self.accept_connections()
@@ -103,11 +115,11 @@ class CommandConnection(Connection):
         print("Starting to listen!")
         self.socket.listen()
 
-        while True: 
-            # Establish connection with client. 
+        while True:
+            # Establish connection with client.
             connection, address = self.socket.accept()
             self.is_connected = True
-            print ('Got connection from', address)
+            print("Got connection from", address)
             thread = threading.Thread(target=self.listen, args=(connection,))
             thread.start()
 
@@ -119,19 +131,21 @@ class CommandConnection(Connection):
                 continue
 
             print(f"RECEIVED MESSAGE: {message}")
-            command_id_bytes = message[0:4]
-            reserved_bytes = message[4:6]
+            # command_id_bytes = message[0:4]
+            # reserved_bytes = message[4:6]
             command_value_bytes = message[6:8]
-            payload_length_bytes = message[8:10]
-            
-            payload_length = bytes_to_int(payload_length_bytes)
+            # payload_length_bytes = message[8:10]
+
+            # payload_length = bytes_to_int(payload_length_bytes)
             command_value = bytes_to_int(command_value_bytes)
 
-            payload_end_index = 10 + payload_length
-            payload_bytes = message[10:payload_end_index]
-            checksum_bytes = message[-2:]
+            # payload_end_index = 10 + payload_length
+            # payload_bytes = message[10:payload_end_index]
+            # checksum_bytes = message[-2:]
 
             return_command_value = command_value + 0x8000
-            return_command_value_bytes = int_to_bytes(return_command_value, num_bits=16, unsigned=True)
+            return_command_value_bytes = int_to_bytes(
+                return_command_value, num_bits=16, unsigned=True
+            )
             print("Sending return")
             connection.send(return_command_value_bytes)

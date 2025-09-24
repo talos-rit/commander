@@ -1,5 +1,5 @@
-from enum import Enum
-from ctypes import c_int8, c_uint8, c_int16, c_uint16, c_int32, c_uint32
+from ctypes import c_int8, c_int16, c_int32, c_uint8, c_uint16, c_uint32
+from enum import IntEnum
 
 
 def int_to_bytes(num, num_bits=16, unsigned=True):
@@ -33,10 +33,10 @@ def int_to_bytes(num, num_bits=16, unsigned=True):
 
 
 def bytes_to_int(bytes):
-    return int.from_bytes(bytes, byteorder='big')
+    return int.from_bytes(bytes, byteorder="big")
 
 
-class Command(Enum):
+class Command(IntEnum):
     HANDSHAKE = 0x0000
     HANDSHAKE_RETURN = 0x8000
     POLAR_PAN_DISCRETE = 0x0001
@@ -74,7 +74,6 @@ class Command(Enum):
     GET_CARTESIAN_POSITION = 0x0011
     GET_CARTESIAN_POSITION_RETURN = 0x8011
 
-    
     def __int__(self):
         """
         Used for casting Enum object to integer

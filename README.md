@@ -37,7 +37,9 @@ CFLAGS="-Dfdopen=fdopen" uv sync
 2. **Tcl wasn't installed properly**
 when running `uv run talos.py`, an error occurs:
 `This probably means that Tcl wasn't installed properly.`.
-Fix: `brew install tcl-tk`
+Fix: `brew install tcl-tk` 
+if this doesn't work, reinstall python for uv
+`uv python uninstall 3.12 && uv python install 3.12`
 
 ## Setup
 
