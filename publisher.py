@@ -5,13 +5,13 @@ from connections import OperatorConnection
 from icd_config import Command, int_to_bytes
 
 
-def assert_normalized(num: int):
-    abs_num = abs(num)
-
-    if abs_num != 0 and abs_num != 1:
-        raise ValueError(
-            f"Invalid value provided. Value should be -1, 0, or 1. Got: {num}"
-        )
+def assert_normalized(*nums: int):
+    nums_abs = list(map(lambda x: abs(x), nums))
+    return map(lambda x: x in [0, 1], nums_abs)
+    # if abs_num != 0 and abs_num != 1:
+    #     raise ValueError(
+    #         f"Invalid value provided. Value should be -1, 0, or 1. Got: {num}"
+    #     )
 
 
 class Publisher:
@@ -32,11 +32,14 @@ class Publisher:
         # Handshake sends an empty payload
         payload = b""
 
-        Publisher.connection.publish(command=int(Command.HANDSHAKE), payload=payload)
+        Publisher.connection.publish(command=Command.HANDSHAKE, payload=payload)
 
     @staticmethod
     def polar_pan_discrete(
-        delta_azimuth: int, delta_altitude: int, delay: int, duration: int
+        delta_azimuth_int: int,
+        delta_altitude_int: int,
+        delay_int: int,
+        duration_int: int,
     ):
         """
         Delta Azimuth	INT32	Requested change in azimuth
@@ -44,20 +47,22 @@ class Publisher:
         Delay (ms)  	UINT32	How long to wait until executing pan
         Duration (ms)	UINT32	How long the pan should take to execute
         """
-        delta_azimuth = int_to_bytes(delta_azimuth, num_bits=32, unsigned=False)
-        delta_altitude = int_to_bytes(delta_altitude, num_bits=32, unsigned=False)
-        delay = int_to_bytes(delay, num_bits=32, unsigned=True)
-        duration = int_to_bytes(duration, num_bits=32, unsigned=True)
+        delta_azimuth = int_to_bytes(delta_azimuth_int, num_bits=32, unsigned=False)
+        delta_altitude = int_to_bytes(delta_altitude_int, num_bits=32, unsigned=False)
+        delay = int_to_bytes(delay_int, num_bits=32, unsigned=True)
+        duration = int_to_bytes(duration_int, num_bits=32, unsigned=True)
 
         # Put everything together
         payload = delta_azimuth + delta_altitude + delay + duration
 
         Publisher.connection.publish(
-            command=int(Command.POLAR_PAN_DISCRETE), payload=payload
+            command=Command.POLAR_PAN_DISCRETE, payload=payload
         )
 
     @staticmethod
-    def polar_pan_continuous_start(moving_azimuth: int = 0, moving_altitude: int = 0):
+    def polar_pan_continuous_start(
+        moving_azimuth_int: int = 0, moving_altitude_int: int = 0
+    ):
         """
         Starts/maintains a continuous polar pan rotation.
 
@@ -69,17 +74,16 @@ class Publisher:
         1 rotates counter-clockwise along the axis of movement, -1 rotates clockwise along the axis of
         movement and 0 means no rotation.
         """
-        assert_normalized(moving_azimuth)
-        assert_normalized(moving_altitude)
+        assert assert_normalized(moving_azimuth_int, moving_altitude_int)
 
-        moving_azimuth = int_to_bytes(moving_azimuth, num_bits=8, unsigned=False)
-        moving_altitude = int_to_bytes(moving_altitude, num_bits=8, unsigned=False)
+        moving_azimuth = int_to_bytes(moving_azimuth_int, num_bits=8, unsigned=False)
+        moving_altitude = int_to_bytes(moving_altitude_int, num_bits=8, unsigned=False)
 
         # Put everything together
         payload = moving_azimuth + moving_altitude
 
         Publisher.connection.publish(
-            command=int(Command.POLAR_PAN_CONTINUOUS_START), payload=payload
+            command=Command.POLAR_PAN_CONTINUOUS_START, payload=payload
         )
 
     @staticmethod
@@ -87,7 +91,7 @@ class Publisher:
         """
         Stops a continuous polar pan rotation.
         """
-        Publisher.connection.publish(command=int(Command.POLAR_PAN_CONTINUOUS_STOP))
+        Publisher.connection.publish(command=Command.POLAR_PAN_CONTINUOUS_STOP)
 
     @staticmethod
     def home(delay_ms: int):
@@ -96,7 +100,7 @@ class Publisher:
         """
         delay = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
 
-        Publisher.connection.publish(command=int(Command.HOME), payload=delay)
+        Publisher.connection.publish(command=Command.HOME, payload=delay)
 
     @staticmethod
     def set_speed(speed: int):
@@ -146,7 +150,7 @@ class Publisher:
         """
 
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.ENCODING)
+        name_bytes = name.encode(Publisher.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
         Publisher.connection.publish(command=Command.DELETE_POSITION, payload=payload)
@@ -159,7 +163,7 @@ class Publisher:
         Name    CHAR[]  Name descriptor for the position (non null terminated)
         """
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.ENCODING)
+        name_bytes = name.encode(Publisher.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
         Publisher.connection.publish(command=Command.GO_TO_POSITION, payload=payload)
@@ -176,7 +180,7 @@ class Publisher:
         """
 
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.ENCODING)
+        name_bytes = name.encode(Publisher.CHAR_ENCODING)
 
         delta_bytes = int_to_bytes(delta, num_bits=32, unsigned=False)
         azimuth_bytes = int_to_bytes(azimuth, num_bits=32, unsigned=False)

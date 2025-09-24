@@ -3,8 +3,8 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from tracking.media_pipe.mp_utils import get_model_asset_path
 from tracking.tracker import Tracker
-from utils import get_file_path
 
 
 class MediaPipeTracker(Tracker):
@@ -14,9 +14,7 @@ class MediaPipeTracker(Tracker):
         super().__init__(source, config_path, video_label)
 
         base_options = python.BaseOptions(
-            model_asset_path=get_file_path(
-                "tracking/media_pipe/efficientdet_lite0.tflite"
-            )
+            model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
         )
         options = vision.ObjectDetectorOptions(
             base_options=base_options,

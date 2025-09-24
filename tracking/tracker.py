@@ -7,6 +7,8 @@ from PIL import Image, ImageTk
 
 # Abstract class for tracking
 class Tracker(ABC):
+    speaker_bbox: list | None = None
+
     def __init__(self, source: str, config_path, video_label):
         self.source = source
 

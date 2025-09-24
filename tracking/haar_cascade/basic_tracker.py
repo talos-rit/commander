@@ -31,8 +31,7 @@ class BasicTracker(Tracker):
         frameOpenCVHaar = frame.copy()
         frameHeight = frameOpenCVHaar.shape[0]
         frameWidth = frameOpenCVHaar.shape[1]
-        if not inWidth:
-            inWidth = int((frameWidth / frameHeight) * inHeight)
+        inWidth = inWidth or int((frameWidth / frameHeight) * inHeight)
 
         scaleHeight = frameHeight / inHeight
         scaleWidth = frameWidth / inWidth
@@ -62,6 +61,4 @@ class BasicTracker(Tracker):
         if not hasFrame:
             return None, None
 
-        bboxes = self.detectFace(self.faceCascade, frame)
-
-        return bboxes, frame
+        return self.detectFace(self.faceCascade, frame), frame
