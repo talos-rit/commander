@@ -1,4 +1,4 @@
 # Description
 
 # Metrics
-- PR Confidence value: 
+- PR Confidence value(1 ~ 5):
