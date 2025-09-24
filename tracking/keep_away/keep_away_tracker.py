@@ -8,8 +8,8 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from PIL import Image, ImageTk
 
+from tracking.media_pipe.mp_utils import get_model_asset_path
 from tracking.tracker import Tracker
-from utils import get_file_path
 
 
 class KeepAwayTracker(Tracker):
@@ -31,9 +31,7 @@ class KeepAwayTracker(Tracker):
         self.video_label = video_label  # Label on the manual interface that shows the video feed with bounding boxes
 
         base_options = python.BaseOptions(
-            model_asset_path=get_file_path(
-                "tracking/media_pipe/efficientdet_lite0.tflite"
-            )
+            model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
         )
         options = vision.ObjectDetectorOptions(
             base_options=base_options,
@@ -43,9 +41,7 @@ class KeepAwayTracker(Tracker):
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
         pose_base_options = python.BaseOptions(
-            model_asset_path=get_file_path(
-                "tracking/media_pipe/pose_landmarker_lite.task"
-            )
+            model_asset_path=get_model_asset_path("pose_landmarker_lite.task")
         )
         pose_options = vision.PoseLandmarkerOptions(
             base_options=pose_base_options,
@@ -169,32 +165,36 @@ class KeepAwayTracker(Tracker):
                 bbox = box
                 x1, y1, x2, y2 = bbox
                 cropped = frame[y1:y2, x1:x2]
-                if cropped.size > 0:
-                    cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-                    mp_image = mp.Image(
-                        image_format=mp.ImageFormat.SRGB, data=cropped_rgb
-                    )
-                    # Run pose detection on the cropped image.
-                    pose_result = self.pose_detector.detect(mp_image)
-                    if pose_result and pose_result.pose_landmarks:
-                        landmarks = pose_result.pose_landmarks[0]
+                if cropped.size == 0:
+                    continue
+                cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cropped_rgb)
+                # Run pose detection on the cropped image.
+                pose_result = self.pose_detector.detect(mp_image)
+                if not pose_result or not pose_result.pose_landmarks:
+                    continue
 
-                        # Check for the X formation.
-                        if self.is_x_pose(landmarks):
-                            self.speaker_bbox = bbox
+                landmarks = pose_result.pose_landmarks[0]
 
-                            smaller_box = self.get_cropped_box(box, frame)
-                            color = self.get_dominant_color(smaller_box)
-                            self.speaker_color = color
-                            self.countdown_start = time.time()
-                            self.game_over = False
-                            self.keep_away_mode = True
-                            print("Speaker detected with X pose:", self.speaker_bbox)
-                            print("Game Started!")
-                            return [self.speaker_bbox], frame
+                # Check for the X formation.
+                if not self.is_x_pose(landmarks):
+                    continue
+
+                self.speaker_bbox = bbox
+
+                smaller_box = self.get_cropped_box(box, frame)
+                color = self.get_dominant_color(smaller_box)
+                self.speaker_color = color
+                self.countdown_start = time.time()
+                self.game_over = False
+                self.keep_away_mode = True
+                print("Speaker detected with X pose:", self.speaker_bbox)
+                print("Game Started!")
+                return [self.speaker_bbox], frame
 
             # While speaker not yet locked, return all detected bounding boxes.
-            # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
+            # This will just have the director track whichever it sees first.
+            # If there is only one person in frame this is fine
             return bboxes, frame
 
         # If frame is empty after detecting a speaker, increment the lost speaker counter
@@ -202,7 +202,8 @@ class KeepAwayTracker(Tracker):
             # No detections
             self.lost_counter += 1
         else:
-            # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox. Based solely on color.
+            # Speaker is already locked. Find the current detection that is
+            # closest to the stored speaker bbox. Based solely on color.
             best_bbox = None
             best_candidate_color = None
 

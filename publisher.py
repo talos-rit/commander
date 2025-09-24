@@ -32,7 +32,7 @@ class Publisher:
         # Handshake sends an empty payload
         payload = b""
 
-        Publisher.connection.publish(command=int(Command.HANDSHAKE), payload=payload)
+        Publisher.connection.publish(command=Command.HANDSHAKE, payload=payload)
 
     @staticmethod
     def polar_pan_discrete(
@@ -56,7 +56,7 @@ class Publisher:
         payload = delta_azimuth + delta_altitude + delay + duration
 
         Publisher.connection.publish(
-            command=int(Command.POLAR_PAN_DISCRETE), payload=payload
+            command=Command.POLAR_PAN_DISCRETE, payload=payload
         )
 
     @staticmethod
@@ -83,7 +83,7 @@ class Publisher:
         payload = moving_azimuth + moving_altitude
 
         Publisher.connection.publish(
-            command=int(Command.POLAR_PAN_CONTINUOUS_START), payload=payload
+            command=Command.POLAR_PAN_CONTINUOUS_START, payload=payload
         )
 
     @staticmethod
@@ -91,7 +91,7 @@ class Publisher:
         """
         Stops a continuous polar pan rotation.
         """
-        Publisher.connection.publish(command=int(Command.POLAR_PAN_CONTINUOUS_STOP))
+        Publisher.connection.publish(command=Command.POLAR_PAN_CONTINUOUS_STOP)
 
     @staticmethod
     def home(delay_ms: int):
@@ -100,7 +100,7 @@ class Publisher:
         """
         delay = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
 
-        Publisher.connection.publish(command=int(Command.HOME), payload=delay)
+        Publisher.connection.publish(command=Command.HOME, payload=delay)
 
     @staticmethod
     def set_speed(speed: int):
@@ -109,9 +109,7 @@ class Publisher:
         """
         speed_bytes = int_to_bytes(speed, num_bits=8, unsigned=True)
 
-        Publisher.connection.publish(
-            command=int(Command.SET_SPEED), payload=speed_bytes
-        )
+        Publisher.connection.publish(command=Command.SET_SPEED, payload=speed_bytes)
 
     @staticmethod
     def save_position(name: str, anchor: bool, parent: str):
@@ -141,9 +139,7 @@ class Publisher:
         payload = (
             name_len_bytes + name_bytes + anchor_bytes + parent_len_bytes + parent_bytes
         )
-        Publisher.connection.publish(
-            command=int(Command.SAVE_POSITION), payload=payload
-        )
+        Publisher.connection.publish(command=Command.SAVE_POSITION, payload=payload)
 
     @staticmethod
     def delete_position(name: str):
@@ -157,9 +153,7 @@ class Publisher:
         name_bytes = name.encode(Publisher.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
-        Publisher.connection.publish(
-            command=int(Command.DELETE_POSITION), payload=payload
-        )
+        Publisher.connection.publish(command=Command.DELETE_POSITION, payload=payload)
 
     @staticmethod
     def go_to_position(name: str):
@@ -172,9 +166,7 @@ class Publisher:
         name_bytes = name.encode(Publisher.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
-        Publisher.connection.publish(
-            command=int(Command.GO_TO_POSITION), payload=payload
-        )
+        Publisher.connection.publish(command=Command.GO_TO_POSITION, payload=payload)
 
     @staticmethod
     def set_polar_position(name: str, delta: int, azimuth: int, radius: int):
@@ -198,7 +190,7 @@ class Publisher:
             name_len_bytes + name_bytes + delta_bytes + azimuth_bytes + radius_bytes
         )
         Publisher.connection.publish(
-            command=int(Command.SET_POLAR_POSITION), payload=payload
+            command=Command.SET_POLAR_POSITION, payload=payload
         )
 
     @staticmethod
@@ -214,7 +206,7 @@ class Publisher:
         payload = name_len_bytes + name_bytes
 
         Publisher.connection.publish(
-            command=int(Command.GET_POLAR_POSITION), payload=payload
+            command=Command.GET_POLAR_POSITION, payload=payload
         )
 
     @staticmethod
@@ -245,7 +237,7 @@ class Publisher:
             + z_mm_tenths_bytes
         )
         Publisher.connection.publish(
-            command=int(Command.SET_CARTESIAN_POSITION), payload=payload
+            command=Command.SET_CARTESIAN_POSITION, payload=payload
         )
 
     @staticmethod
@@ -261,7 +253,7 @@ class Publisher:
         payload = name_len_bytes + name_bytes
 
         Publisher.connection.publish(
-            command=int(Command.GET_CARTESIAN_POSITION), payload=payload
+            command=Command.GET_CARTESIAN_POSITION, payload=payload
         )
 
     @staticmethod
@@ -272,7 +264,7 @@ class Publisher:
         # Sends an empty payload
         payload = b""
 
-        Publisher.connection.publish(command=int(Command.GET_SPEED), payload=payload)
+        Publisher.connection.publish(command=Command.GET_SPEED, payload=payload)
 
     @staticmethod
     def cartesian_move_discrete(delta_x, delta_y, delta_z, delay_ms, time):
@@ -294,7 +286,7 @@ class Publisher:
         )
 
         Publisher.connection.publish(
-            command=int(Command.CARTESIAN_MOVE_DISCRETE), payload=payload
+            command=Command.CARTESIAN_MOVE_DISCRETE, payload=payload
         )
 
     @staticmethod
@@ -318,7 +310,7 @@ class Publisher:
         payload = moving_x_bytes + moving_y_bytes + moving_z_bytes
 
         Publisher.connection.publish(
-            command=int(Command.CARTESIAN_MOVE_CONTINUOUS_START), payload=payload
+            command=Command.CARTESIAN_MOVE_CONTINUOUS_START, payload=payload
         )
 
     @staticmethod
@@ -330,7 +322,7 @@ class Publisher:
         payload = b""
 
         Publisher.connection.publish(
-            command=int(Command.CARTESIAN_MOVE_CONTINUOUS_STOP), payload=payload
+            command=Command.CARTESIAN_MOVE_CONTINUOUS_STOP, payload=payload
         )
 
     @staticmethod
@@ -354,7 +346,7 @@ class Publisher:
         payload = subcommand_value_bytes + reserved_bytes + operations_payload
 
         Publisher.connection.publish(
-            command=int(Command.EXECUTE_HARDWARE_OPERATION), payload=payload
+            command=Command.EXECUTE_HARDWARE_OPERATION, payload=payload
         )
 
 

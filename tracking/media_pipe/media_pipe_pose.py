@@ -4,8 +4,8 @@ import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from tracking.media_pipe.mp_utils import get_model_asset_path
 from tracking.tracker import Tracker
-from utils import get_file_path
 
 
 class MediaPipePose(Tracker):
@@ -15,9 +15,7 @@ class MediaPipePose(Tracker):
         super().__init__(source, config_path, video_label)
 
         base_options = python.BaseOptions(
-            model_asset_path=get_file_path(
-                "tracking/media_pipe/efficientdet_lite0.tflite"
-            )
+            model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
         )
         options = vision.ObjectDetectorOptions(
             base_options=base_options,
@@ -27,9 +25,7 @@ class MediaPipePose(Tracker):
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
         pose_base_options = python.BaseOptions(
-            model_asset_path=get_file_path(
-                "tracking/media_pipe/pose_landmarker_lite.task"
-            )
+            model_asset_path=get_model_asset_path("pose_landmarker_lite.task")
         )
         pose_options = vision.PoseLandmarkerOptions(
             base_options=pose_base_options,
@@ -64,25 +60,27 @@ class MediaPipePose(Tracker):
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
         detection_result = object_detector.detect(mp_image)
         bboxes = []
-        if detection_result:
-            for detection in detection_result.detections:
-                # print(detection)
-                bboxC = detection.bounding_box
-                # print(bboxC)
+        if not detection_result:
+            return bboxes
 
-                x1 = bboxC.origin_x
-                y1 = bboxC.origin_y
-                x2 = bboxC.origin_x + bboxC.width
-                y2 = bboxC.origin_y + bboxC.height
+        for detection in detection_result.detections:
+            # print(detection)
+            bboxC = detection.bounding_box
+            # print(bboxC)
 
-                # Scale bounding box back to original frame size
-                cvRect = [
-                    int(x1 * scaleWidth),
-                    int(y1 * scaleHeight),
-                    int(x2 * scaleWidth),
-                    int(y2 * scaleHeight),
-                ]
-                bboxes.append(cvRect)
+            x1 = bboxC.origin_x
+            y1 = bboxC.origin_y
+            x2 = bboxC.origin_x + bboxC.width
+            y2 = bboxC.origin_y + bboxC.height
+
+            # Scale bounding box back to original frame size
+            cvRect = [
+                int(x1 * scaleWidth),
+                int(y1 * scaleHeight),
+                int(x2 * scaleWidth),
+                int(y2 * scaleHeight),
+            ]
+            bboxes.append(cvRect)
         return bboxes
 
     def is_x_pose(self, pose_landmarks):
@@ -133,9 +131,7 @@ class MediaPipePose(Tracker):
         # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
         bboxes = self.detectPerson(self.object_detector, frame)
-
         self.draw_visuals(bboxes, frame, is_interface_running)
-
         self.change_video_frame(frame, is_interface_running)
 
         if self.speaker_bbox is None:
@@ -144,25 +140,27 @@ class MediaPipePose(Tracker):
                 bbox = box
                 x1, y1, x2, y2 = bbox
                 cropped = frame[y1:y2, x1:x2]
-                if cropped.size > 0:
-                    cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-                    mp_image = mp.Image(
-                        image_format=mp.ImageFormat.SRGB, data=cropped_rgb
-                    )
-                    # Run pose detection on the cropped image.
-                    pose_result = self.pose_detector.detect(mp_image)
-                    if pose_result and pose_result.pose_landmarks:
-                        landmarks = pose_result.pose_landmarks[0]
+                if cropped.size == 0:
+                    continue
 
-                        # Check for the X formation.
-                        if self.is_x_pose(landmarks):
-                            self.speaker_bbox = bbox
+                cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cropped_rgb)
+                # Run pose detection on the cropped image.
+                pose_result = self.pose_detector.detect(mp_image)
+                if not pose_result or not pose_result.pose_landmarks:
+                    continue
 
-                            smaller_box = self.get_cropped_box(box, frame)
-                            color = self.get_dominant_color(smaller_box)
-                            self.speaker_color = color
-                            print("Speaker detected with X pose:", self.speaker_bbox)
-                            return [self.speaker_bbox], frame
+                # Check for the X formation.
+                if not self.is_x_pose(pose_result.pose_landmarks[0]):
+                    continue
+
+                self.speaker_bbox = bbox
+
+                smaller_box = self.get_cropped_box(box, frame)
+                color = self.get_dominant_color(smaller_box)
+                self.speaker_color = color
+                print("Speaker detected with X pose:", self.speaker_bbox)
+                return [self.speaker_bbox], frame
 
             # While speaker not yet locked, return all detected bounding boxes.
             # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
