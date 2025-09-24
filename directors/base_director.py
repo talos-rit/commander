@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+
 import yaml
-import cv2
+
 
 class BaseDirector(ABC):
 

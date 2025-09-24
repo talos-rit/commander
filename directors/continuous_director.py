@@ -2,8 +2,6 @@ from tracking.tracker import Tracker
 from directors.base_director import BaseDirector
 from publisher import Publisher
 import time
-import yaml
-import cv2
 
 class ContinuousDirector(BaseDirector):
     # The director class is responsible for processing the frames captured by the tracker

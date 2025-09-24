@@ -1,7 +1,8 @@
-from icd_config import int_to_bytes, bytes_to_int
 import socket
-import time
 import threading
+import time
+
+from icd_config import bytes_to_int, int_to_bytes
 
 
 class Connection:

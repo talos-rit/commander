@@ -1,7 +1,8 @@
-from config import SOCKET_HOST, SOCKET_PORT
-from icd_config import int_to_bytes 
 import time
+
+from config import SOCKET_HOST, SOCKET_PORT
 from connections import CommandConnection
+from icd_config import int_to_bytes
 
 
 class MockOperator:

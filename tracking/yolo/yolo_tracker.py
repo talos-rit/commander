@@ -1,13 +1,11 @@
-from tracking.tracker import Tracker
-from ultralytics import YOLO
-import cv2
-import mediapipe as mp
-import numpy as np
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
 import math
-import yaml
+
+import cv2
+import numpy as np
 import torch
+from ultralytics import YOLO
+
+from tracking.tracker import Tracker
 
 
 class YOLOTracker(Tracker):

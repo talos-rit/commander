@@ -1,7 +1,8 @@
-from config import SOCKET_HOST, SOCKET_PORT
-from icd_config import Command, int_to_bytes
-from connections import OperatorConnection
 import time
+
+from config import SOCKET_HOST, SOCKET_PORT
+from connections import OperatorConnection
+from icd_config import Command, int_to_bytes
 
 
 def assert_normalized(num: int):

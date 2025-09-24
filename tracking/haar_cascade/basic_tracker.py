@@ -1,6 +1,9 @@
-from tracking.tracker import Tracker
 import cv2
 import yaml
+
+from tracking.tracker import Tracker
+from utils import get_file_path
+
 
 class BasicTracker(Tracker):
 
@@ -8,7 +11,7 @@ class BasicTracker(Tracker):
     def __init__(self, source : str, config_path):
         self.source = source
 
-        self.faceCascade = cv2.CascadeClassifier("tracking/haar_cascade/haarcascade_frontalface_default.xml")
+        self.faceCascade = cv2.CascadeClassifier(get_file_path("tracking/haar_cascade/haarcascade_frontalface_default.xml"))
 
         # Open the video source
         if self.source:

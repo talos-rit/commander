@@ -1,11 +1,11 @@
-import math
 import cv2
-import yaml
 import mediapipe as mp
 import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+
 from tracking.tracker import Tracker
+from utils import get_file_path
 
 
 class MediaPipePose(Tracker):
@@ -15,12 +15,12 @@ class MediaPipePose(Tracker):
         self.speaker_bbox = None  #Shared reference. Only here to avoid pylint errors.
         super().__init__(source, config_path, video_label)
 
-        base_options = python.BaseOptions(model_asset_path="tracking/media_pipe/efficientdet_lite0.tflite")
+        base_options = python.BaseOptions(model_asset_path=get_file_path("tracking/media_pipe/efficientdet_lite0.tflite"))
         options = vision.ObjectDetectorOptions(base_options=base_options, score_threshold=0.5, category_allowlist=["person"])
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
 
-        pose_base_options = python.BaseOptions(model_asset_path="tracking/media_pipe/pose_landmarker_lite.task")
+        pose_base_options = python.BaseOptions(model_asset_path=get_file_path("tracking/media_pipe/pose_landmarker_lite.task"))
         pose_options = vision.PoseLandmarkerOptions(
             base_options=pose_base_options,
             # Additional options (e.g., running on CPU) can be specified here.

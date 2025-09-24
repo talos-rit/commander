@@ -1,15 +1,12 @@
-from tracking.haar_cascade.basic_tracker import *
-from tracking.media_pipe.media_pipe_pose import *
-from tracking.media_pipe.media_pipe_tracker import *
-from tracking.yolo.yolo_tracker import *
-from directors.continuous_director import *
-from directors.discrete_director import *
 import argparse
+
 import cv2
-import tkinter
+
+from directors.continuous_director import ContinuousDirector
 from manual_interface import ManualInterface
-from publisher import Publisher
-import time
+from tracking.media_pipe.media_pipe_pose import MediaPipePose
+from utils import get_file_path
+
 
 def main():
 
@@ -23,11 +20,11 @@ def main():
     args = parser.parse_args()
 
     if args.no_interface == "true":
-        tracker = MediaPipePose(args.source, "./config.yaml", None)
-        #tracker = MediaPipeTracker(args.source, "./config.yaml")
-        #tracker = YOLOTracker(args.source, "./config.yaml")
-        #director = DiscreteDirector(tracker, "./config.yaml")
-        director = ContinuousDirector(tracker, "./config.yaml")
+        tracker = MediaPipePose(args.source, get_file_path("./config.yaml"), None)
+        #tracker = MediaPipeTracker(args.source, get_file_path("./config.yaml"))
+        #tracker = YOLOTracker(args.source, get_file_path("./config.yaml"))
+        #director = DiscreteDirector(tracker, get_file_path("./config.yaml"))
+        director = ContinuousDirector(tracker, get_file_path("./config.yaml"))
 
         while True:
             bounding_box, frame = tracker.capture_frame(False)

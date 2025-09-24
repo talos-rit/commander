@@ -1,5 +1,5 @@
+from ctypes import c_int8, c_int16, c_int32, c_uint8, c_uint16, c_uint32
 from enum import Enum
-from ctypes import c_int8, c_uint8, c_int16, c_uint16, c_int32, c_uint32
 
 
 def int_to_bytes(num, num_bits=16, unsigned=True):

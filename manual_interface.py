@@ -1,17 +1,16 @@
-from enum import Enum
-from publisher import Publisher
-from tracking.media_pipe.media_pipe_tracker import *
-from tracking.keep_away.keep_away_tracker import *
-from tracking.keep_away.keep_away_director import *
-from tracking.media_pipe.media_pipe_pose import *
-from tracking.yolo.yolo_tracker import *
-from directors.continuous_director import *
-from directors.discrete_director import *
-import tkinter
 import time
+import tkinter
+from enum import Enum
 from threading import Thread
-from PIL import Image, ImageTk
-from threading import Thread
+
+from directors.continuous_director import ContinuousDirector
+from publisher import Publisher
+from tracking.keep_away.keep_away_director import KeepAwayDirector
+from tracking.keep_away.keep_away_tracker import KeepAwayTracker
+from tracking.media_pipe.media_pipe_pose import MediaPipePose
+from tracking.media_pipe.media_pipe_tracker import MediaPipeTracker
+from tracking.yolo.yolo_tracker import YOLOTracker
+from utils import get_file_path
 
 
 class Direction(Enum):
@@ -346,29 +345,29 @@ class ManualInterface:
                     self.keepaway_button.config(text="Standard Mode")
                     self.yolo_button.config(text="Yolo Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                    tracker  = KeepAwayTracker(source="", config_path="./config.yaml", video_label=self.video_label)
-                    director = KeepAwayDirector(tracker, "./config.yaml")
+                    tracker  = KeepAwayTracker(source="", config_path=get_file_path("./config.yaml"), video_label=self.video_label)
+                    director = KeepAwayDirector(tracker, get_file_path("./config.yaml"))
                 elif last_mode == "yolo":
                     print("Entering Yolo")
                     self.yolo_button.config(text="Standard Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                     self.keepaway_button.config(text="Keep Away Mode")
-                    tracker  = YOLOTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
-                    director = ContinuousDirector(tracker, "./config.yaml")
+                    tracker  = YOLOTracker(source="",    config_path=get_file_path("./config.yaml"), video_label=self.video_label)
+                    director = ContinuousDirector(tracker, get_file_path("./config.yaml"))
                 elif last_mode == "mediapipepose":
                     self.media_pipe_pose_button.config(text="Standard Mode")
                     self.yolo_button.config(text="Yolo Mode")
                     self.keepaway_button.config(text="Keep Away Mode")
                     print("Entering Media Pipe Pose")
-                    tracker  = MediaPipePose(source="",    config_path="./config.yaml", video_label=self.video_label)
-                    director = ContinuousDirector(tracker, "./config.yaml")
+                    tracker  = MediaPipePose(source="",    config_path=get_file_path("./config.yaml"), video_label=self.video_label)
+                    director = ContinuousDirector(tracker, get_file_path("./config.yaml"))
                 else:
                     print("Entering Media Pipe")
                     self.yolo_button.config(text="Yolo Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                     self.keepaway_button.config(text="Keep Away Mode")
-                    tracker  = MediaPipeTracker(source="",    config_path="./config.yaml", video_label=self.video_label)
-                    director = ContinuousDirector(tracker, "./config.yaml")
+                    tracker  = MediaPipeTracker(source="",    config_path=get_file_path("./config.yaml"), video_label=self.video_label)
+                    director = ContinuousDirector(tracker, get_file_path("./config.yaml"))
 
             bbox, frame = tracker.capture_frame(True)
             if bbox is None or frame is None:
