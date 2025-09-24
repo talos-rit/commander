@@ -1,14 +1,15 @@
+import math
+import struct
+import time
+
 import pybullet as pyblt
 import stomp
 from stomp.utils import encode
-import time
-import math
-import struct
 
 # DEPRECATED
 
-class MyListener(stomp.ConnectionListener):
 
+class MyListener(stomp.ConnectionListener):
     AZIMUTH_JOIN_INDEX = 0
     ALTITUDE_JOIN_INDEX = 3
 
@@ -17,15 +18,19 @@ class MyListener(stomp.ConnectionListener):
 
     def on_message(self, frame):
         """
-        This method is called whenever the listener receives a message from active mq. 
-        Right now it only works for polar pan, it parses the message and calls 
+        This method is called whenever the listener receives a message from active mq.
+        Right now it only works for polar pan, it parses the message and calls
         delta azimuth or delta altitude.
         """
-        message = encode(frame.body, encoding='utf-8')
-        
-        command_id, reserved, command, payload_length = struct.unpack('>I H H H', message[:10])
-        
-        delta_azimuth, delta_altitude, delay, duration = struct.unpack('>iiII', message[10:26])
+        message = encode(frame.body, encoding="utf-8")
+
+        command_id, reserved, command, payload_length = struct.unpack(
+            ">I H H H", message[:10]
+        )
+
+        delta_azimuth, delta_altitude, delay, duration = struct.unpack(
+            ">iiII", message[10:26]
+        )
 
         print("Command ID:", command_id)
         print("Reserved:", reserved)
@@ -35,7 +40,6 @@ class MyListener(stomp.ConnectionListener):
         print("Delta Altitude:", delta_altitude)
         print("Delay:", delay)
         print("Duration:", duration)
-
 
         if delta_azimuth != 0:
             self.rotate_azimuth(delta_azimuth)
@@ -61,6 +65,7 @@ class MyListener(stomp.ConnectionListener):
         pyblt.stepSimulation()
         print(f"Rotated altitude by {deg} degrees.")
 
+
 def load_robot(urdf_path):
     """
     Load a URDF robot model into the PyBullet simulation environment.
@@ -71,17 +76,21 @@ def load_robot(urdf_path):
 
     return robot_id
 
+
 def setup_active_mq_listener(robot_id):
     """
     Set up the ActiveMQ connection and listener for receiving movement commands.
     """
     conn = stomp.Connection(auto_decode=False)  # [('localhost', 8161)]
     listener = MyListener(robot_id)
-    conn.set_listener('', listener)
-    conn.connect('admin', 'admin', wait=True)  # Replace with ActiveMQ username and password
-    conn.subscribe(destination='/queue/instructions', id=1, ack='auto')
+    conn.set_listener("", listener)
+    conn.connect(
+        "admin", "admin", wait=True
+    )  # Replace with ActiveMQ username and password
+    conn.subscribe(destination="/queue/instructions", id=1, ack="auto")
 
     return conn
+
 
 def main():
     # Start PyBullet in GUI mode
@@ -97,12 +106,11 @@ def main():
     num_joints = pyblt.getNumJoints(robot_id)
     for i in range(num_joints):
         joint_info = pyblt.getJointInfo(robot_id, i)
-        print(f"Joint {i}: {joint_info[1].decode('utf-8')}") 
+        print(f"Joint {i}: {joint_info[1].decode('utf-8')}")
 
     # Set gravity and enable real-time simulation
     pyblt.setGravity(0, 0, 0)
     pyblt.setRealTimeSimulation(1)
-
 
     BSEPRhome = [0.00000, -2.09925, 1.65843, 1.54994, 0.00000]
 
@@ -114,12 +122,10 @@ def main():
         pyblt.resetJointState(robot_id, joint_index, angle)
         pyblt.stepSimulation()
 
-        #This is to set the gripper to be pointing straight ahead
+        # This is to set the gripper to be pointing straight ahead
         new_angle = 1.54994 - math.radians(65)
         pyblt.resetJointState(robot_id, 3, new_angle)
         pyblt.stepSimulation()
-
-
 
     # Run the simulation and keep listening for ActiveMQ commands
     try:
@@ -131,6 +137,7 @@ def main():
     finally:
         pyblt.disconnect()
         conn.disconnect()
+
 
 # Run the main function when the script is executed
 if __name__ == "__main__":

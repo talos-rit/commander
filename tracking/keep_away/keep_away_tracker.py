@@ -1,39 +1,52 @@
-import math
-import cv2
-import yaml
 import time
+
+import cv2
 import mediapipe as mp
 import numpy as np
+import yaml
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from tracking.tracker import Tracker
 from PIL import Image, ImageTk
 
-class KeepAwayTracker(Tracker):
+from tracking.tracker import Tracker
+from utils import get_file_path
 
+
+class KeepAwayTracker(Tracker):
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source : str, config_path, video_label):
+    def __init__(self, source: str, config_path, video_label):
         self.source = source
 
         self.config = self.load_config(config_path)
         # Open the video source
         if self.source:
-            self.cap = cv2.VideoCapture(self.source)  
+            self.cap = cv2.VideoCapture(self.source)
         else:
-            camera_index = self.config['camera_index']
+            camera_index = self.config["camera_index"]
             self.cap = cv2.VideoCapture(camera_index)
-        self.acceptable_box_percent = self.config['acceptable_box_percent']
+        self.acceptable_box_percent = self.config["acceptable_box_percent"]
 
         self.speaker_bbox = None
 
-        self.video_label = video_label #Label on the manual interface that shows the video feed with bounding boxes
+        self.video_label = video_label  # Label on the manual interface that shows the video feed with bounding boxes
 
-        base_options = python.BaseOptions(model_asset_path="tracking/media_pipe/efficientdet_lite0.tflite")
-        options = vision.ObjectDetectorOptions(base_options=base_options, score_threshold=0.5, category_allowlist=["person"])
+        base_options = python.BaseOptions(
+            model_asset_path=get_file_path(
+                "tracking/media_pipe/efficientdet_lite0.tflite"
+            )
+        )
+        options = vision.ObjectDetectorOptions(
+            base_options=base_options,
+            score_threshold=0.5,
+            category_allowlist=["person"],
+        )
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
-
-        pose_base_options = python.BaseOptions(model_asset_path="tracking/media_pipe/pose_landmarker_lite.task")
+        pose_base_options = python.BaseOptions(
+            model_asset_path=get_file_path(
+                "tracking/media_pipe/pose_landmarker_lite.task"
+            )
+        )
         pose_options = vision.PoseLandmarkerOptions(
             base_options=pose_base_options,
             # Additional options (e.g., running on CPU) can be specified here.
@@ -51,9 +64,8 @@ class KeepAwayTracker(Tracker):
         self.game_over = True
 
     def load_config(self, config_path):
-        with open(config_path, 'r') as file:
+        with open(config_path, "r") as file:
             return yaml.safe_load(file)
-
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
@@ -78,9 +90,9 @@ class KeepAwayTracker(Tracker):
         bboxes = []
         if detection_result:
             for detection in detection_result.detections:
-                #print(detection)
+                # print(detection)
                 bboxC = detection.bounding_box
-                #print(bboxC)
+                # print(bboxC)
 
                 x1 = bboxC.origin_x
                 y1 = bboxC.origin_y
@@ -92,11 +104,11 @@ class KeepAwayTracker(Tracker):
                     int(x1 * scaleWidth),
                     int(y1 * scaleHeight),
                     int(x2 * scaleWidth),
-                    int(y2 * scaleHeight)
+                    int(y2 * scaleHeight),
                 ]
                 bboxes.append(cvRect)
         return bboxes
-    
+
     def is_x_pose(self, pose_landmarks):
         """
         Determine if the pose corresponds to an X formation.
@@ -127,24 +139,23 @@ class KeepAwayTracker(Tracker):
 
             if vertical_diff_left < 0.1 and vertical_diff_right < 0.1:
                 return True
-            
-        return False
 
+        return False
 
     def capture_frame(self, is_interface_running):
         """
         Finds all the people in the frame, and then decides what to send to the director.
         Looks for x pose to determine primary speaker.
         Uses color matching to maintain that primary speaker.
-        Sends primary speaker box to the director.    
+        Sends primary speaker box to the director.
         """
 
         hasFrame, frame = self.cap.read()
         if not hasFrame:
             return None, None
 
-        #Use this rotate if the mp4 is showing up incorrectly
-        #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        # Use this rotate if the mp4 is showing up incorrectly
+        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
         bboxes = self.detectPerson(self.object_detector, frame)
 
@@ -160,12 +171,14 @@ class KeepAwayTracker(Tracker):
                 cropped = frame[y1:y2, x1:x2]
                 if cropped.size > 0:
                     cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-                    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cropped_rgb)
+                    mp_image = mp.Image(
+                        image_format=mp.ImageFormat.SRGB, data=cropped_rgb
+                    )
                     # Run pose detection on the cropped image.
                     pose_result = self.pose_detector.detect(mp_image)
                     if pose_result and pose_result.pose_landmarks:
                         landmarks = pose_result.pose_landmarks[0]
-   
+
                         # Check for the X formation.
                         if self.is_x_pose(landmarks):
                             self.speaker_bbox = bbox
@@ -183,7 +196,6 @@ class KeepAwayTracker(Tracker):
             # While speaker not yet locked, return all detected bounding boxes.
             # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
             return bboxes, frame
-        
 
         # If frame is empty after detecting a speaker, increment the lost speaker counter
         if len(bboxes) == 0:
@@ -219,9 +231,7 @@ class KeepAwayTracker(Tracker):
             self.speaker_color = None
             self.lost_counter = 0
 
-
         return ([self.speaker_bbox] if self.speaker_bbox is not None else []), frame
-        
 
     def compute_center(self, bbox):
         """Compute the center of a bounding box."""
@@ -231,10 +241,10 @@ class KeepAwayTracker(Tracker):
     def get_cropped_box(self, bbox, frame):
         """
         Get cropped box for color tracking. Takes a much smaller portion of the bbox to get most dominant color.
-        
+
         Parameters:
         - bbox - Current bounding box we are looking at
-        - frame 
+        - frame
         """
         x1, y1, x2, y2 = bbox
 
@@ -249,23 +259,21 @@ class KeepAwayTracker(Tracker):
 
         return chest_crop
 
-
-
     def get_dominant_color(self, image, quantize_level=16):
         """
         Finds the most dominant color in an image using color quantization.
-        
+
         Parameters:
         - image: cropped region (H x W x 3)
         - quantize_level: smaller numbers = more grouping (e.g., 24, 32)
-        
+
         Returns:
         - Dominant color as (B, G, R)
         """
         # Resize to reduce noise and speed up
 
         image = cv2.resize(image, (50, 50), interpolation=cv2.INTER_AREA)
-        #image = cv2.GaussianBlur(image, (5, 5), 0)
+        # image = cv2.GaussianBlur(image, (5, 5), 0)
 
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         hue_channel = hsv[:, :, 0]  # Hue ranges from 0 to 179 in OpenCV
@@ -278,17 +286,16 @@ class KeepAwayTracker(Tracker):
         dominant_hue = unique_hues[np.argmax(counts)]
 
         return int(dominant_hue)
-    
-    
+
     def calculate_acceptable_box(self, frame_width, frame_height):
         """
         Get the values from the config to create the acceptable box of where the speaker can be without sending movements.
         Used in the drawing.
         Parameters:
         - bbox_width
-        - frame_height 
+        - frame_height
         """
-        #Use the frame height and width to calculate an acceptable box
+        # Use the frame height and width to calculate an acceptable box
         # Calculate the frame's center
         frame_center_x = frame_width // 2
         frame_center_y = frame_height // 2
@@ -301,7 +308,12 @@ class KeepAwayTracker(Tracker):
         acceptable_box_top = frame_center_y - (acceptable_height // 2)
         acceptable_box_right = frame_center_x + (acceptable_width // 2)
         acceptable_box_bottom = frame_center_y + (acceptable_height // 2)
-        return acceptable_box_left, acceptable_box_top, acceptable_box_right, acceptable_box_bottom
+        return (
+            acceptable_box_left,
+            acceptable_box_top,
+            acceptable_box_right,
+            acceptable_box_bottom,
+        )
 
     def draw_visuals(self, bounding_box, frame, is_interface_running):
         h, w = frame.shape[:2]
@@ -318,18 +330,28 @@ class KeepAwayTracker(Tracker):
 
         # Before drawing boxes, if we're past the countdown and not yet game_over,
         #    check for a “catch” and set game_over.
-        if self.keep_away_mode and elapsed is not None and elapsed >= 5 and not self.game_over:
+        if (
+            self.keep_away_mode
+            and elapsed is not None
+            and elapsed >= 5
+            and not self.game_over
+        ):
             for x1, y1, x2, y2 in bounding_box:
-                cx, cy = (x1 + x2)//2, (y1 + y2)//2
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
                 if left < cx < right and top < cy < bottom:
                     self.game_over = True
                     break
 
         # Draw every bbox + center dot (green until caught, red if game_over and caught)
         for x1, y1, x2, y2 in bounding_box:
-            cx, cy = (x1 + x2)//2, (y1 + y2)//2
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
-            if self.keep_away_mode and self.game_over and left < cx < right and top < cy < bottom:
+            if (
+                self.keep_away_mode
+                and self.game_over
+                and left < cx < right
+                and top < cy < bottom
+            ):
                 box_color = (0, 0, 255)
             else:
                 box_color = (0, 255, 0)
@@ -347,14 +369,24 @@ class KeepAwayTracker(Tracker):
                 text = None
 
             if text:
-                (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
-                pos = ((w - tw)//2, (h + th)//2)
-                cv2.putText(frame, text, pos, cv2.FONT_HERSHEY_SIMPLEX, scale, (0,0,255), thickness, cv2.LINE_AA)
+                (tw, th), _ = cv2.getTextSize(
+                    text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness
+                )
+                pos = ((w - tw) // 2, (h + th) // 2)
+                cv2.putText(
+                    frame,
+                    text,
+                    pos,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    scale,
+                    (0, 0, 255),
+                    thickness,
+                    cv2.LINE_AA,
+                )
 
         # show
         if not is_interface_running:
-            cv2.imshow('Object Detection', frame)
-
+            cv2.imshow("Object Detection", frame)
 
     def change_video_frame(self, frame, is_interface_running):
         if is_interface_running:
@@ -366,12 +398,16 @@ class KeepAwayTracker(Tracker):
             # Set desired dimensions (adjust these values as needed)
             desired_width = 640
             desired_height = 480
-            pil_image = pil_image.resize((desired_width, desired_height), Image.Resampling.LANCZOS)
+            pil_image = pil_image.resize(
+                (desired_width, desired_height), Image.Resampling.LANCZOS
+            )
 
             imgtk = ImageTk.PhotoImage(image=pil_image)
 
             # Update the label
-            self.video_label.after(0, lambda imgtk=imgtk: self.update_video_label(imgtk))
+            self.video_label.after(
+                0, lambda imgtk=imgtk: self.update_video_label(imgtk)
+            )
 
     def update_video_label(self, imgtk):
         self.video_label.config(image=imgtk)

@@ -1,0 +1,45 @@
+name: PyInstaller Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        # macos-latest is an ARM machine and macos-latest-large is an x86_64 machine
+        os: [windows-latest, ubuntu-latest, macos-latest, macos-latest-large]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      # Step 1: Check out the repository
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"  # Adjust the version as needed
+
+      # Step 3: Install dependencies
+      - name: Install Dependencies
+        run: |
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install pyinstaller
+
+      # Step 4: Build with PyInstaller
+      - name: Build Executable
+        run: |
+          pyinstaller --onefile --add-data "config.yaml:." --add-data "tracking/haar_cascade/haarcascade_frontalface_default.xml:tracking/haar_cascade" --add-data "tracking/media_pipe/efficientdet_lite0.tflite:tracking/media_pipe" --add-data "tracking/media_pipe/pose_landmarker_lite.task:tracking/media_pipe" talos.py
+
+      # Step 5: Archive the build artifacts
+      - name: Archive Build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-build
+          path: dist/
