@@ -1,5 +1,4 @@
 import cv2
-import yaml
 
 from tracking.tracker import Tracker
 from utils import get_file_path
@@ -7,24 +6,11 @@ from utils import get_file_path
 
 class BasicTracker(Tracker):
     # The tracker class is responsible for capturing frames from the source and detecting faces in the frames
-    def __init__(self, source: str, config_path):
-        self.source = source
-
+    def __init__(self, source: str, config_path: str, video_label, vide_buffer_size=1):
+        super().__init__(source, config_path, video_label, vide_buffer_size)
         self.faceCascade = cv2.CascadeClassifier(
             get_file_path("tracking/haar_cascade/haarcascade_frontalface_default.xml")
         )
-
-        # Open the video source
-        if self.source:
-            self.cap = cv2.VideoCapture(self.source)
-        else:
-            config = self.load_config(config_path)
-            camera_index = config["camera_index"]
-            self.cap = cv2.VideoCapture(camera_index)
-
-    def load_config(self, config_path):
-        with open(config_path, "r") as file:
-            return yaml.safe_load(file)
 
     # Detect faces in the frame
     def detectFace(self, faceCascade, frame, inHeight=500, inWidth=0):

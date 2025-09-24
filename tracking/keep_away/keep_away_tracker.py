@@ -3,7 +3,6 @@ import time
 import cv2
 import mediapipe as mp
 import numpy as np
-import yaml
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from PIL import Image, ImageTk
@@ -13,22 +12,19 @@ from tracking.tracker import Tracker
 
 
 class KeepAwayTracker(Tracker):
+    lost_counter = 0
+    lost_threshold = 100
+    speaker_color = None
+    color_threshold = 15
+    keep_away_mode = False
+    countdown_start = None
+    game_over = True
+
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source: str, config_path, video_label):
-        self.source = source
-
-        self.config = self.load_config(config_path)
-        # Open the video source
-        if self.source:
-            self.cap = cv2.VideoCapture(self.source)
-        else:
-            camera_index = self.config["camera_index"]
-            self.cap = cv2.VideoCapture(camera_index)
-        self.acceptable_box_percent = self.config["acceptable_box_percent"]
-
-        self.speaker_bbox = None
-
-        self.video_label = video_label  # Label on the manual interface that shows the video feed with bounding boxes
+    def __init__(
+        self, config_path, video_label, source: str | None = None, video_buffer_size=1
+    ):
+        super().__init__(config_path, video_label, source, video_buffer_size)
 
         base_options = python.BaseOptions(
             model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
@@ -48,20 +44,6 @@ class KeepAwayTracker(Tracker):
             # Additional options (e.g., running on CPU) can be specified here.
         )
         self.pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
-
-        self.lost_counter = 0
-        self.lost_threshold = 100
-
-        self.speaker_color = None
-        self.color_threshold = 15
-
-        self.keep_away_mode = False
-        self.countdown_start = None
-        self.game_over = True
-
-    def load_config(self, config_path):
-        with open(config_path, "r") as file:
-            return yaml.safe_load(file)
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):

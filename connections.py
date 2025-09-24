@@ -1,3 +1,4 @@
+import atexit
 import socket
 import threading
 import time
@@ -6,24 +7,55 @@ from icd_config import bytes_to_int, int_to_bytes
 
 
 class Connection:
-    def __init__(self, host, port):
+    """Base Connection Class, Creates Socket connection on initialization."""
+
+    is_running = False
+    command_count = 0
+
+    def __init__(self, host, port, connect_on_init=True):
         self.host = host
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.is_connected = False
-        self.async_connect()
-        self.command_count = 0
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if connect_on_init:
+            # Start connection on a separate thread so it doesn't block
+            self.connect_on_thread()
 
-    def async_connect(self):
+    def connect_on_thread(self):
         thread = threading.Thread(target=self.connect)
         thread.start()
+        atexit.register(self.close)  # Run close when the program is exiting
+        return thread
 
     def connect(self):
-        raise NotImplementedError("connect method is not implemented")
+        self.is_running = True
+        while self.is_running:
+            try:
+                self.socket.bind((self.host, self.port))
+                print(f"Bound to socket: {self.host}:{self.port}")
+                break
+            except OSError as e:
+                print(f"[Connection]: Bind failed, retrying in 5s {e}")
+                time.sleep(5)
+        else:
+            return  # Exit only if is_running was set to False
 
-    def close_socket(self):
+        print("Starting to listen!")
+        self.socket.listen()
+        while self.is_running:
+            try:
+                connection, address = self.socket.accept()
+                print("Got connection from", address)
+                self.listen(connection)
+            except OSError as e:
+                print("OS Error:", e)
+                break
+
+    def close(self):
+        """Cleanly close the socket port and stop listening to new connections."""
         self.socket.close()
-        self.is_connected = False
+        self.is_running = False
+        print("Socket closed cleanly")
 
     def publish(self, command: int, payload: bytes | None = None):
         """
@@ -41,10 +73,7 @@ class Connection:
         # have the same modulus of 2.
         command_id = self.command_count
         self.command_count += 2
-
-        payload_length = 0
-        if payload is not None:
-            payload_length = len(payload)
+        payload_length = 0 if payload is None else len(payload)
 
         # TODO: Implement checksum. May get removed
         crc = int_to_bytes(0, num_bits=16, unsigned=True)
@@ -58,94 +87,50 @@ class Connection:
         header = command_id + reserved + command_byte + payload_length
 
         # Put everything together
-        body = header
+        message = header
 
         if payload is not None:
-            body += payload
+            message += payload
+        message += crc
 
-        body += crc
+        try:
+            self.socket.sendall(message)  # safer than send()
+        except OSError as e:
+            print(f"Socket send failed: {e}")
+            return -1
 
-        # self.socket.send(body)
+        # TODO: Implement response handling if needed
         # response = self.socket.recv(2048)
-        return 1
+        return 0
 
-
-class OperatorConnection(Connection):
-    def connect(self):
-        while True:
-            try:
-                # self.socket.connect((self.host, self.port))
-                self.is_connected = True
-                print("Connected to socket: " + self.host + ":" + str(self.port))
-                break
-            except ConnectionRefusedError:  # catch refused connection for retry
-                print(
-                    "Connection to "
-                    + self.host
-                    + ":"
-                    + str(self.port)
-                    + " failed, retrying in 5s"
-                )
-                time.sleep(5)
-
-
-# The following code is used for the Mock Operator
-class CommandConnection(Connection):
-    def connect(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        while True:
-            try:
-                self.socket.bind((self.host, self.port))
-                print("Bind to socket: " + self.host + ":" + str(self.port))
-                break
-            except ConnectionRefusedError:  # catch refused connection for retry
-                print(
-                    "Connection to "
-                    + self.host
-                    + ":"
-                    + str(self.port)
-                    + " failed, retrying in 5s"
-                )
-                time.sleep(5)
-
-        self.accept_connections()
-
-    def accept_connections(self):
-        print("Starting to listen!")
-        self.socket.listen()
-
-        while True:
-            # Establish connection with client.
-            connection, address = self.socket.accept()
-            self.is_connected = True
-            print("Got connection from", address)
-            thread = threading.Thread(target=self.listen, args=(connection,))
-            thread.start()
-
-    def listen(self, connection):
-        while True:
+    def listen(self, connection: socket.socket):
+        while self.is_running:
             message = connection.recv(2048)
+            if not message:
+                break  # Connection closed by the other side
 
-            if len(message) == 0:
-                continue
+            self.on_message(connection, message)
 
-            print(f"RECEIVED MESSAGE: {message}")
-            # command_id_bytes = message[0:4]
-            # reserved_bytes = message[4:6]
-            command_value_bytes = message[6:8]
-            # payload_length_bytes = message[8:10]
+        connection.close()  # Closes this client's connection socket only
 
-            # payload_length = bytes_to_int(payload_length_bytes)
-            command_value = bytes_to_int(command_value_bytes)
+    def on_message(self, connection: socket.socket, message: bytes):
+        print(f"RECEIVED MESSAGE: {message.decode()}")
+        print("subclass must implement on_message method")
 
-            # payload_end_index = 10 + payload_length
-            # payload_bytes = message[10:payload_end_index]
-            # checksum_bytes = message[-2:]
 
-            return_command_value = command_value + 0x8000
-            return_command_value_bytes = int_to_bytes(
-                return_command_value, num_bits=16, unsigned=True
-            )
-            print("Sending return")
-            connection.send(return_command_value_bytes)
+class CommandConnection(Connection):
+    """Connection Class used for Mock Operator. This is a receiving socket class.
+
+    Args:
+        host: Host to bind the socket to usually localhost for dev
+        port: Port to bind the socket to usually 8000 for dev
+    """
+
+    def on_message(self, connection: socket.socket, message: bytes):
+        command_value_bytes = message[6:8]
+        command_value = bytes_to_int(command_value_bytes)
+        return_command_value = command_value + 0x8000
+        return_command_value_bytes = int_to_bytes(
+            return_command_value, num_bits=16, unsigned=True
+        )
+        connection.send(return_command_value_bytes)

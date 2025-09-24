@@ -9,9 +9,10 @@ from tracking.tracker import Tracker
 
 class MediaPipeTracker(Tracker):
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source: str, config_path, video_label):
-        self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
-        super().__init__(source, config_path, video_label)
+    def __init__(
+        self, config_path, video_label, source: str | None = None, video_buffer_size=1
+    ):
+        super().__init__(config_path, video_label, source, video_buffer_size)
 
         base_options = python.BaseOptions(
             model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
@@ -22,14 +23,6 @@ class MediaPipeTracker(Tracker):
             category_allowlist=["person"],
         )
         self.object_detector = vision.ObjectDetector.create_from_options(options)
-
-        # Open the video source
-        if self.source:
-            self.cap = cv2.VideoCapture(self.source)
-        else:
-            config = self.load_config(config_path)
-            camera_index = config["camera_index"]
-            self.cap = cv2.VideoCapture(camera_index)
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
@@ -74,12 +67,8 @@ class MediaPipeTracker(Tracker):
         hasFrame, frame = self.cap.read()
         if not hasFrame:
             return None, None
-        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
         bboxes = self.detectPerson(self.object_detector, frame)
-
         self.draw_visuals(bboxes, frame, is_interface_running)
-
         self.change_video_frame(frame, is_interface_running)
-
         return bboxes, frame

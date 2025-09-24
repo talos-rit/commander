@@ -10,9 +10,16 @@ from tracking.tracker import Tracker
 
 class MediaPipePose(Tracker):
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source: str, config_path, video_label):
-        self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
-        super().__init__(source, config_path, video_label)
+
+    lost_counter = 0
+    lost_threshold = 100
+    speaker_color = None
+    color_threshold = 15
+
+    def __init__(
+        self, config_path, video_label, source: str | None = None, video_buffer_size=1
+    ):
+        super().__init__(config_path, video_label, source, video_buffer_size)
 
         base_options = python.BaseOptions(
             model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
@@ -32,12 +39,6 @@ class MediaPipePose(Tracker):
             # Additional options (e.g., running on CPU) can be specified here.
         )
         self.pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
-
-        self.lost_counter = 0
-        self.lost_threshold = 100
-
-        self.speaker_color = None
-        self.color_threshold = 15
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):

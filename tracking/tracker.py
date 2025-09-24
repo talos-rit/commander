@@ -5,29 +5,31 @@ import yaml
 from PIL import Image, ImageTk
 
 
+def load_config(config_path):
+    with open(config_path, "r") as file:
+        return yaml.safe_load(file)
+
+
 # Abstract class for tracking
 class Tracker(ABC):
     speaker_bbox: list | None = None
 
-    def __init__(self, source: str, config_path, video_label):
-        self.source = source
-
-        self.config = self.load_config(config_path)
-        # Open the video source
-        if self.source:
-            self.cap = cv2.VideoCapture(self.source)
-        else:
-            camera_index = self.config["camera_index"]
-            self.cap = cv2.VideoCapture(camera_index)
+    def __init__(
+        self,
+        config_path: str,
+        video_label,
+        source: str | None = None,
+        video_buffer_size=1,
+    ):
+        self.config = load_config(config_path)
+        self.camera_index = self.config["camera_index"]
         self.acceptable_box_percent = self.config["acceptable_box_percent"]
 
-        self.speaker_bbox = None
+        self.config = load_config(config_path)
+        self.cap = cv2.VideoCapture(source or self.camera_index)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, video_buffer_size)  # Reduce buffer size
 
         self.video_label = video_label  # Label on the manual interface that shows the video feed with bounding boxes
-
-    def load_config(self, config_path):
-        with open(config_path, "r") as file:
-            return yaml.safe_load(file)
 
     # Capture a frame from the source
     @abstractmethod
@@ -106,57 +108,59 @@ class Tracker(ABC):
             cv2.circle(frame, (bbox_center_x, bbox_center_y), radius, color, thickness)
 
             # If speaker_bbox exists, draw line + distance
-            if self.speaker_bbox is not None:
-                # Draw where the tracker is taking the color from - t-shirt area
-                height = y2 - y1
-                width = x2 - x1
-                chest_start = y1 + int(height * 0.3)
-                chest_end = y1 + int(height * 0.5)
-                exclude_extra = x1 + int(width * 0.4)
-                exclude_extra2 = x1 + int(width * 0.6)
-                cv2.rectangle(
-                    frame,
-                    (exclude_extra, chest_start),
-                    (exclude_extra2, chest_end),
-                    (0, 150, 150),
-                    2,
-                )
+            if self.speaker_bbox is None:
+                continue
 
-                sx1, sy1, sx2, sy2 = self.speaker_bbox
-                speaker_center_x = (sx1 + sx2) // 2
-                speaker_center_y = (sy1 + sy2) // 2
-                # Red circle for speaker bbox
-                cv2.circle(
-                    frame,
-                    (speaker_center_x, speaker_center_y),
-                    radius,
-                    (0, 0, 255),
-                    thickness,
-                )
+            # Draw where the tracker is taking the color from - t-shirt area
+            height = y2 - y1
+            width = x2 - x1
+            chest_start = y1 + int(height * 0.3)
+            chest_end = y1 + int(height * 0.5)
+            exclude_extra = x1 + int(width * 0.4)
+            exclude_extra2 = x1 + int(width * 0.6)
+            cv2.rectangle(
+                frame,
+                (exclude_extra, chest_start),
+                (exclude_extra2, chest_end),
+                (0, 150, 150),
+                2,
+            )
+
+            sx1, sy1, sx2, sy2 = self.speaker_bbox
+            speaker_center_x = (sx1 + sx2) // 2
+            speaker_center_y = (sy1 + sy2) // 2
+            # Red circle for speaker bbox
+            cv2.circle(
+                frame,
+                (speaker_center_x, speaker_center_y),
+                radius,
+                (0, 0, 255),
+                thickness,
+            )
 
         if not is_interface_running:
             cv2.imshow("Object Detection", frame)
 
     def change_video_frame(self, frame, is_interface_running):
-        if is_interface_running:
-            # Once all drawings and processing are done, update the display.
-            # Convert from BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
+        if not is_interface_running:
+            return
 
-            # Set desired dimensions (adjust these values as needed)
-            desired_width = 640
-            desired_height = 480
-            pil_image = pil_image.resize(
-                (desired_width, desired_height), Image.Resampling.LANCZOS
-            )
+        # Once all drawings and processing are done, update the display.
+        # Convert from BGR to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(frame_rgb)
 
-            imgtk = ImageTk.PhotoImage(image=pil_image)
+        # Set desired dimensions (adjust these values as needed)
+        desired_width = 640
+        desired_height = 480
+        pil_image = pil_image.resize(
+            (desired_width, desired_height), Image.Resampling.LANCZOS
+        )
 
-            # Update the label
-            self.video_label.after(
-                0, lambda imgtk=imgtk: self.update_video_label(imgtk)
-            )
+        imgtk = ImageTk.PhotoImage(image=pil_image)
+
+        # Update the label
+        self.video_label.after(0, lambda imgtk=imgtk: self.update_video_label(imgtk))
 
     def update_video_label(self, imgtk):
         self.video_label.config(image=imgtk)

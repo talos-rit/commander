@@ -49,6 +49,9 @@ class ManualInterface:
     """
 
     pressed_keys: set = set()
+    move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
+    manual_mode = True  # True for manual, False for computer vision
+    continuous_mode = True
 
     def __init__(self):
         """Constructor sets up tkinter manual interface, including buttons and labels"""
@@ -57,11 +60,8 @@ class ManualInterface:
         self.rootWindow.title("Talos Manual Interface")
 
         self.pressed_keys = set()  # keeps track of keys which are pressed down
-        self.move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
 
         # setting up manual vs automatic control toggle
-
-        self.manual_mode = True  # True for manual, False for computer vision
 
         self.mode_label = tkinter.Label(
             self.rootWindow,
@@ -79,8 +79,6 @@ class ManualInterface:
         self.toggle_button.grid(row=2, column=5, padx=10)
 
         # Setup up continuous/discrete toggle
-
-        self.continuous_mode = True
 
         self.cont_mode_label = tkinter.Label(
             self.rootWindow,
@@ -247,7 +245,7 @@ class ManualInterface:
             direction (string): global variables for directional commands are provided at the top of this file
         """
         if self.manual_mode:
-            self.last_key_presses[int(direction)] = time.time()
+            self.last_key_presses[direction] = time.time()
 
             if direction not in self.pressed_keys:
                 self.pressed_keys.add(direction)
@@ -326,11 +324,9 @@ class ManualInterface:
             case Direction.RIGHT:
                 self.right_button.config(relief=depression)
 
-        if self.continuous_mode:
-            # Send a continuous polar pan STOP if no key is pressed
-            if len(self.pressed_keys) == 0:
-                Publisher.polar_pan_continuous_stop()
-                print("Polar pan cont STOP")
+        if self.continuous_mode and len(self.pressed_keys) == 0:
+            Publisher.polar_pan_continuous_stop()
+            print("Polar pan cont STOP")
 
     def keep_moving(self, direction: Direction):
         """Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
