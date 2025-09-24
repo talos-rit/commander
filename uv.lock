@@ -105,14 +105,11 @@ dependencies = [
     { name = "abcmeta" },
     { name = "docopt" },
     { name = "jax", version = "0.4.38", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "jax", version = "0.7.1", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "mediapipe" },
     { name = "numpy" },
     { name = "opencv-python" },
-    { name = "pybullet" },
     { name = "pyyaml" },
     { name = "torch", version = "2.2.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
-    { name = "torch", version = "2.8.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "ultralytics" },
     { name = "websocket-client" },
 ]
@@ -121,14 +118,11 @@ dependencies = [
 requires-dist = [
     { name = "abcmeta", specifier = "==2.2.0" },
     { name = "docopt", specifier = "==0.6.2" },
-    { name = "jax", extras = ["cpu"], marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "jax", extras = ["cpu"], marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "==0.4.38" },
     { name = "mediapipe", specifier = "==0.10.14" },
     { name = "numpy", specifier = "==1.26.0" },
     { name = "opencv-python", specifier = "==4.10.0.84" },
-    { name = "pybullet", specifier = "==3.2.6" },
     { name = "pyyaml", specifier = "==6.0.2" },
-    { name = "torch", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "==2.2.2" },
     { name = "ultralytics", specifier = "==8.3.73" },
     { name = "websocket-client", specifier = "==1.8.0" },
@@ -710,12 +704,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/37/a8/d832f7293ebb21690
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e0/a9/023730ba63db1e494a271cb018dcd361bd2c917ba7004c3e49d5daf795a2/py_cpuinfo-9.0.0-py3-none-any.whl", hash = "sha256:859625bc251f64e21f077d099d4162689c762b5d6a4c3c97553d56241c9674d5", size = 22335, upload-time = "2022-10-25T20:38:27.636Z" },
 ]
-
-[[package]]
-name = "pybullet"
-version = "3.2.6"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/39/a6/6d6a8c535b82460527edc04b5fbf0374541d041668515e35822e53d7f66f/pybullet-3.2.6.tar.gz", hash = "sha256:da27525433c88698dc9fd8bc20fa4ae4d07738b4656633659ebd82c2d2884e08", size = 80510020, upload-time = "2023-11-29T00:00:35.321Z" }
 
 [[package]]
 name = "pycparser"
