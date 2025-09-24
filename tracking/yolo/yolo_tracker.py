@@ -13,7 +13,7 @@ from ultralytics import YOLO
 from tracking.tracker import Tracker
 
 # TODO: Move this into a config file
-DEFAULT_YOLO_MODEL_DIR = "yolo-pt"
+DEFAULT_YOLO_MODEL_DIR = os.path.join(os.path.dirname(__file__), "yolo-pt")
 
 
 def create_pt_file_path(file_name, _dir=DEFAULT_YOLO_MODEL_DIR):
