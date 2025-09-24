@@ -58,7 +58,7 @@ class Connection:
         # Put header together
         header = command_id + reserved + command + payload_length
 
-        # Put everything together 
+        # Put everything together
         body = header
 
         if payload != None:
@@ -66,21 +66,27 @@ class Connection:
 
         body += crc
 
-        #self.socket.send(body)
-        #response = self.socket.recv(2048)
+        # self.socket.send(body)
+        # response = self.socket.recv(2048)
         return 1
 
 
 class OperatorConnection(Connection):
     def connect(self):
-        while(True):
+        while True:
             try:
-                #self.socket.connect((self.host, self.port))
+                # self.socket.connect((self.host, self.port))
                 self.is_connected = True
                 print("Connected to socket: " + self.host + ":" + str(self.port))
                 break
-            except ConnectionRefusedError: # catch refused connection for retry
-                print("Connection to " + self.host + ":" + str(self.port) + " failed, retrying in 5s")
+            except ConnectionRefusedError:  # catch refused connection for retry
+                print(
+                    "Connection to "
+                    + self.host
+                    + ":"
+                    + str(self.port)
+                    + " failed, retrying in 5s"
+                )
                 time.sleep(5)
 
 
@@ -89,13 +95,19 @@ class CommandConnection(Connection):
     def connect(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        while(True):
+        while True:
             try:
                 self.socket.bind((self.host, self.port))
                 print("Bind to socket: " + self.host + ":" + str(self.port))
                 break
-            except ConnectionRefusedError: # catch refused connection for retry
-                print("Connection to " + self.host + ":" + str(self.port) + " failed, retrying in 5s")
+            except ConnectionRefusedError:  # catch refused connection for retry
+                print(
+                    "Connection to "
+                    + self.host
+                    + ":"
+                    + str(self.port)
+                    + " failed, retrying in 5s"
+                )
                 time.sleep(5)
 
         self.accept_connections()
@@ -104,11 +116,11 @@ class CommandConnection(Connection):
         print("Starting to listen!")
         self.socket.listen()
 
-        while True: 
-            # Establish connection with client. 
+        while True:
+            # Establish connection with client.
             connection, address = self.socket.accept()
             self.is_connected = True
-            print ('Got connection from', address)
+            print("Got connection from", address)
             thread = threading.Thread(target=self.listen, args=(connection,))
             thread.start()
 
@@ -124,7 +136,7 @@ class CommandConnection(Connection):
             reserved_bytes = message[4:6]
             command_value_bytes = message[6:8]
             payload_length_bytes = message[8:10]
-            
+
             payload_length = bytes_to_int(payload_length_bytes)
             command_value = bytes_to_int(command_value_bytes)
 
@@ -133,6 +145,8 @@ class CommandConnection(Connection):
             checksum_bytes = message[-2:]
 
             return_command_value = command_value + 0x8000
-            return_command_value_bytes = int_to_bytes(return_command_value, num_bits=16, unsigned=True)
+            return_command_value_bytes = int_to_bytes(
+                return_command_value, num_bits=16, unsigned=True
+            )
             print("Sending return")
             connection.send(return_command_value_bytes)

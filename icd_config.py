@@ -33,7 +33,7 @@ def int_to_bytes(num, num_bits=16, unsigned=True):
 
 
 def bytes_to_int(bytes):
-    return int.from_bytes(bytes, byteorder='big')
+    return int.from_bytes(bytes, byteorder="big")
 
 
 class Command(Enum):
@@ -74,7 +74,6 @@ class Command(Enum):
     GET_CARTESIAN_POSITION = 0x0011
     GET_CARTESIAN_POSITION_RETURN = 0x8011
 
-    
     def __int__(self):
         """
         Used for casting Enum object to integer

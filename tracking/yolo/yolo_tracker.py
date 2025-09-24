@@ -9,17 +9,15 @@ from tracking.tracker import Tracker
 
 
 class YOLOTracker(Tracker):
-
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source : str, config_path, video_label):
-        self.speaker_bbox = None  #Shared reference. Only here to avoid pylint errors.
+    def __init__(self, source: str, config_path, video_label):
+        self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
         super().__init__(source, config_path, video_label)
 
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.object_detector = YOLO("yolo11m.pt")
 
         self.pose_detector = YOLO("yolo11m-pose.pt")
-
 
         self.lost_counter = 0
         self.lost_threshold = 300
@@ -39,11 +37,13 @@ class YOLOTracker(Tracker):
         frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
         frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
 
-        detection_result = object_detector(frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device)
-        #print(detection_result)
+        detection_result = object_detector(
+            frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device
+        )
+        # print(detection_result)
         bboxes = []
         if detection_result:
-            #print(detection_result[0].boxes.xyxyn)
+            # print(detection_result[0].boxes.xyxyn)
             for xyxy in detection_result[0].boxes.xyxyn:
                 x1 = int(xyxy[0] * frameWidth)
                 y1 = int(xyxy[1] * frameHeight)
@@ -58,10 +58,9 @@ class YOLOTracker(Tracker):
             #     y2 = int(xyxy[i][3] * frameHeight)
             #     bboxes.append((x1, y1, x2, y2))
             # print(bboxes)
-            
 
         return bboxes
-    
+
     def is_x_pose_yolo(self, person_keypoints, threshold=0.1):
         """
         Given the keypoints for one person from a YOLOv8 pose detection,
@@ -76,39 +75,38 @@ class YOLOTracker(Tracker):
         """
 
         # Ensure we have enough keypoints
-        #print(person_keypoints[0])
+        # print(person_keypoints[0])
 
         if person_keypoints.shape[1] < 11:
             print("shape")
             print(person_keypoints.shape[0])
             return False
 
-
         kp_xy = person_keypoints.xyn[0]
 
         # Now kp_xy[i, 0] is x, kp_xy[i, 1] is y for keypoint i
         # For example, let's get the left shoulder (index 5) and right shoulder (index 6).
 
-        x_ls  = float(kp_xy[5, 0])
-        y_ls  = float(kp_xy[5, 1])
+        x_ls = float(kp_xy[5, 0])
+        y_ls = float(kp_xy[5, 1])
         x_rs = float(kp_xy[6, 0])
         y_rs = float(kp_xy[6, 1])
-        x_lw  = float(kp_xy[10, 0])
-        y_lw  = float(kp_xy[10, 1])
+        x_lw = float(kp_xy[10, 0])
+        y_lw = float(kp_xy[10, 1])
         x_rw = float(kp_xy[11, 0])
         y_rw = float(kp_xy[11, 1])
-        #print("XLS" + str(x_ls))
+        # print("XLS" + str(x_ls))
 
         # 1) Check horizontal arrangement: left wrist < left shoulder AND right wrist > right shoulder
         if x_lw < x_ls and x_rw > x_rs:
             # 2) Check vertical difference
-            vertical_diff_left  = abs(y_lw - y_ls)
-            #print(vertical_diff_left)
+            vertical_diff_left = abs(y_lw - y_ls)
+            # print(vertical_diff_left)
 
-            if (vertical_diff_left < threshold):
+            if vertical_diff_left < threshold:
                 return True
 
-        return False    
+        return False
 
     def compute_center(self, bbox):
         """Compute the center of a bounding box."""
@@ -120,16 +118,15 @@ class YOLOTracker(Tracker):
         cx1, cy1 = self.compute_center(bbox1)
         cx2, cy2 = self.compute_center(bbox2)
         return math.sqrt((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2)
-    
+
     # Capture a frame from the source and detect faces in the frame
     def capture_frame(self, is_interface_running):
-
         hasFrame, frame = self.cap.read()
         if not hasFrame:
             return None, None
-        #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         bboxes = self.detectPerson(self.object_detector, frame)
-        
+
         self.draw_visuals(bboxes, frame, is_interface_running)
 
         self.change_video_frame(frame, is_interface_running)
@@ -144,7 +141,9 @@ class YOLOTracker(Tracker):
                 if cropped.size > 0:
                     cropped = cropped.astype("uint8")
                     # Run pose detection on the cropped image.
-                    pose_result = self.pose_detector(cropped, verbose=False, device=self.device)
+                    pose_result = self.pose_detector(
+                        cropped, verbose=False, device=self.device
+                    )
                     if len(pose_result) > 0:
                         # "results[0]" is the prediction for this single image/crop
                         result = pose_result[0]
@@ -154,13 +153,15 @@ class YOLOTracker(Tracker):
                                 smaller_box = self.getCroppedBox(box, frame)
                                 color = self.get_dominant_color(smaller_box)
                                 self.speaker_color = color
-                                print("Speaker detected with X pose:", self.speaker_bbox)
+                                print(
+                                    "Speaker detected with X pose:", self.speaker_bbox
+                                )
                                 return [self.speaker_bbox], frame
 
             # While speaker not yet locked, return all detected bounding boxes.
             # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
             return bboxes, frame
-        
+
         # If frame is empty after detecting a speaker, increment the lost speaker counter
         if len(bboxes) == 0:
             # No detections
@@ -193,11 +194,9 @@ class YOLOTracker(Tracker):
             print("Speaker lost for too many frames. Resetting single speaker.")
             self.speaker_bbox = None
             self.speaker_color = None
-            self.lost_counter = 0 
-
+            self.lost_counter = 0
 
         return ([self.speaker_bbox] if self.speaker_bbox is not None else []), frame
-
 
     def getCroppedBox(self, bbox, frame):
         x1, y1, x2, y2 = bbox
@@ -213,22 +212,21 @@ class YOLOTracker(Tracker):
 
         return chest_crop
 
-
     def get_dominant_color(self, image, quantize_level=16):
         """
         Finds the most dominant color in an image using color quantization.
-        
+
         Parameters:
         - image: cropped region (H x W x 3)
         - quantize_level: smaller numbers = more grouping (e.g., 24, 32)
-        
+
         Returns:
         - Dominant color as (B, G, R)
         """
         # Resize to reduce noise and speed up
 
         image = cv2.resize(image, (50, 50), interpolation=cv2.INTER_AREA)
-        #image = cv2.GaussianBlur(image, (5, 5), 0)
+        # image = cv2.GaussianBlur(image, (5, 5), 0)
 
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         hue_channel = hsv[:, :, 0]  # Hue ranges from 0 to 179 in OpenCV

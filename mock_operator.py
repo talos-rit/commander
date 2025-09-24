@@ -14,10 +14,7 @@ class MockOperator:
 
     @staticmethod
     def send_return_code(command_id, payload):
-        MockOperator.connection.publish(
-            command=command_id,
-            payload=payload
-        )
+        MockOperator.connection.publish(command=command_id, payload=payload)
 
 
 def create_return_payload(success):
@@ -25,7 +22,7 @@ def create_return_payload(success):
 
 
 def main():
-    while (not MockOperator.connection.is_connected):
+    while not MockOperator.connection.is_connected:
         time.sleep(1)
 
     print("Mock operator is connected!")
