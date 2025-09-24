@@ -25,7 +25,7 @@ class Connection:
         self.socket.close()
         self.is_connected = False
 
-    def publish(self, command: int, payload: bytes = None):
+    def publish(self, command: int, payload: bytes | None = None):
         """
         Command ID      UINT32	Unique ID for individual commands
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -42,26 +42,25 @@ class Connection:
         command_id = self.command_count
         self.command_count += 2
 
-        if payload != None:
+        payload_length = 0
+        if payload is not None:
             payload_length = len(payload)
-        else:
-            payload_length = 0
 
         # TODO: Implement checksum. May get removed
         crc = int_to_bytes(0, num_bits=16, unsigned=True)
 
         command_id = int_to_bytes(command_id, num_bits=32, unsigned=True)
         reserved = int_to_bytes(0, num_bits=16, unsigned=True)
-        command = int_to_bytes(command, num_bits=16, unsigned=True)
+        command_byte = int_to_bytes(command, num_bits=16, unsigned=True)
         payload_length = int_to_bytes(payload_length, num_bits=16, unsigned=True)
 
         # Put header together
-        header = command_id + reserved + command + payload_length
+        header = command_id + reserved + command_byte + payload_length
 
         # Put everything together
         body = header
 
-        if payload != None:
+        if payload is not None:
             body += payload
 
         body += crc
@@ -132,17 +131,17 @@ class CommandConnection(Connection):
                 continue
 
             print(f"RECEIVED MESSAGE: {message}")
-            command_id_bytes = message[0:4]
-            reserved_bytes = message[4:6]
+            # command_id_bytes = message[0:4]
+            # reserved_bytes = message[4:6]
             command_value_bytes = message[6:8]
-            payload_length_bytes = message[8:10]
+            # payload_length_bytes = message[8:10]
 
-            payload_length = bytes_to_int(payload_length_bytes)
+            # payload_length = bytes_to_int(payload_length_bytes)
             command_value = bytes_to_int(command_value_bytes)
 
-            payload_end_index = 10 + payload_length
-            payload_bytes = message[10:payload_end_index]
-            checksum_bytes = message[-2:]
+            # payload_end_index = 10 + payload_length
+            # payload_bytes = message[10:payload_end_index]
+            # checksum_bytes = message[-2:]
 
             return_command_value = command_value + 0x8000
             return_command_value_bytes = int_to_bytes(

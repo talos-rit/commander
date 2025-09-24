@@ -34,6 +34,8 @@ class ManualInterface:
     the robotic arm which holds the camera.
     """
 
+    pressed_keys: set = set()
+
     def __init__(self):
         """Constructor sets up tkinter manual interface, including buttons and labels"""
 
@@ -43,7 +45,7 @@ class ManualInterface:
         self.down_arrow = "\u2193"
         self.left_arrow = "\u2190"
         self.right_arrow = "\u2192"
-        self.home = "🏠"
+        self.home = "🏠 Home"
         self.switch = " ⤭ "
 
         # button labels
@@ -57,7 +59,7 @@ class ManualInterface:
         self.rootWindow = tkinter.Tk()
         self.rootWindow.title("Talos Manual Interface")
 
-        self.pressed_keys = {}  # keeps track of keys which are pressed down
+        self.pressed_keys = set()  # keeps track of keys which are pressed down
         self.move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
 
         # setting up manual vs automatic control toggle
@@ -247,7 +249,7 @@ class ManualInterface:
             self.last_key_presses[int(direction)] = time.time()
 
             if direction not in self.pressed_keys:
-                self.pressed_keys[direction] = True
+                self.pressed_keys.add(direction)
 
                 self.change_button_state(direction, "sunken")
 
@@ -295,14 +297,14 @@ class ManualInterface:
 
                         # Check if the key has been pressed or if the times are the same
                         if new_last_pressed_time == last_pressed_time:
-                            self.pressed_keys.pop(direction)
+                            self.pressed_keys.pop(direction)  # pyright: ignore[reportCallIssue]
                             self.change_button_state(direction, "raised")
 
                     # Start the thread
                     thread = Thread(target=stop_func)
                     thread.start()
                 else:
-                    self.pressed_keys.pop(direction)
+                    self.pressed_keys.remove(direction)
                     self.change_button_state(direction, "raised")
 
     def change_button_state(self, direction, depression):
@@ -355,7 +357,7 @@ class ManualInterface:
             )
 
             Publisher.polar_pan_continuous_start(
-                moving_azimuth=moving_azimuth, moving_altitude=moving_altitude
+                moving_azimuth_int=moving_azimuth, moving_altitude_int=moving_altitude
             )
 
         if self.continuous_mode:
@@ -433,8 +435,10 @@ class ManualInterface:
                         tracker, get_file_path("./config.yaml")
                     )
 
+            if tracker is None:
+                continue
             bbox, frame = tracker.capture_frame(True)
-            if bbox is None or frame is None:
+            if director is None or bbox is None or frame is None:
                 continue
 
             director.process_frame(bbox, frame, self.is_director_running)
@@ -490,7 +494,7 @@ class ManualInterface:
             self.home_button.config(state="normal")
 
             self.is_director_running = False
-            self.pressed_keys = {}
+            self.pressed_keys = set()
 
         else:
             self.mode_label.config(text=self.AUTOMATIC_MODE_LABEL)

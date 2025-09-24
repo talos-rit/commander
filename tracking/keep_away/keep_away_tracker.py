@@ -211,7 +211,7 @@ class KeepAwayTracker(Tracker):
                 smaller_box = self.get_cropped_box(bbox, frame)
                 color = self.get_dominant_color(smaller_box)
                 # Compute the Euclidean distance between the candidate color and the stored speaker color.
-                color_diff = abs(self.speaker_color - color)
+                color_diff = abs((self.speaker_color or 0) - color)
 
                 if color_diff < self.color_threshold:
                     best_bbox = bbox
@@ -320,7 +320,7 @@ class KeepAwayTracker(Tracker):
 
         # 1) Compute elapsed once
         if self.keep_away_mode:
-            elapsed = time.time() - self.countdown_start
+            elapsed = time.time() - (self.countdown_start or 0)
         else:
             elapsed = None
 
@@ -361,8 +361,8 @@ class KeepAwayTracker(Tracker):
 
         # Overlay countdown or Game Over text on top
         if self.keep_away_mode:
-            if elapsed < 5:
-                text, scale, thickness = str(5 - int(elapsed)), 5, 8
+            if (elapsed or 0) < 5:
+                text, scale, thickness = str(5 - int(elapsed or 0)), 5, 8
             elif self.game_over:
                 text, scale, thickness = "GAME OVER", 3, 6
             else:

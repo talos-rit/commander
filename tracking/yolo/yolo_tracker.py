@@ -9,6 +9,8 @@ from tracking.tracker import Tracker
 
 
 class YOLOTracker(Tracker):
+    speaker_color: int | None = None
+
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
     def __init__(self, source: str, config_path, video_label):
         self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
@@ -90,11 +92,11 @@ class YOLOTracker(Tracker):
         x_ls = float(kp_xy[5, 0])
         y_ls = float(kp_xy[5, 1])
         x_rs = float(kp_xy[6, 0])
-        y_rs = float(kp_xy[6, 1])
+        # y_rs = float(kp_xy[6, 1])
         x_lw = float(kp_xy[10, 0])
         y_lw = float(kp_xy[10, 1])
         x_rw = float(kp_xy[11, 0])
-        y_rw = float(kp_xy[11, 1])
+        # y_rw = float(kp_xy[11, 1])
         # print("XLS" + str(x_ls))
 
         # 1) Check horizontal arrangement: left wrist < left shoulder AND right wrist > right shoulder
@@ -176,7 +178,7 @@ class YOLOTracker(Tracker):
                 smaller_box = self.getCroppedBox(bbox, frame)
                 color = self.get_dominant_color(smaller_box)
                 # Compute the Euclidean distance between the candidate color and the stored speaker color.
-                color_diff = abs(self.speaker_color - color)
+                color_diff = abs((self.speaker_color or 0) - color)
 
                 if color_diff < self.color_threshold:
                     best_bbox = bbox

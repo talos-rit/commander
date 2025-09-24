@@ -182,7 +182,7 @@ class MediaPipePose(Tracker):
                 smaller_box = self.get_cropped_box(bbox, frame)
                 color = self.get_dominant_color(smaller_box)
                 # Compute the Euclidean distance between the candidate color and the stored speaker color.
-                color_diff = abs(self.speaker_color - color)
+                color_diff = abs((self.speaker_color or 0) - color)
 
                 if color_diff < self.color_threshold:
                     best_bbox = bbox
