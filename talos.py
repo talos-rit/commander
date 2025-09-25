@@ -26,7 +26,9 @@ def main():
     args = parser.parse_args()
 
     if args.no_interface == "true":
-        tracker = MediaPipePose(args.source, get_file_path("./config.yaml"), None)
+        tracker = MediaPipePose(
+            get_file_path("./config.yaml"), None, source=args.source
+        )
         # tracker = MediaPipeTracker(args.source, get_file_path("./config.yaml"))
         # tracker = YOLOTracker(args.source, get_file_path("./config.yaml"))
         # director = DiscreteDirector(tracker, get_file_path("./config.yaml"))

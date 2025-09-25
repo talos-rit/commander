@@ -371,6 +371,11 @@ class ManualInterface:
         """Launches user interface on demand."""
         self.rootWindow.mainloop()
 
+    def start_director_thread(self):
+        if self.director_thread is None or not self.director_thread.is_alive():
+            self.director_thread = Thread(target=self.director_loop, daemon=True)
+            self.director_thread.start()
+
     def director_loop(self):
         """Runs and starts the director loop"""
         last_mode = None
@@ -433,11 +438,6 @@ class ManualInterface:
                 continue
 
             director.process_frame(bbox, frame, self.is_director_running)
-
-    def start_director_thread(self):
-        if self.director_thread is None or not self.director_thread.is_alive():
-            self.director_thread = Thread(target=self.director_loop, daemon=True)
-            self.director_thread.start()
 
     def toggle_continuous_mode(self):
         self.continuous_mode = not self.continuous_mode
