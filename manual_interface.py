@@ -49,6 +49,11 @@ class ManualInterface:
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
     manual_mode = True  # True for manual, False for computer vision
     continuous_mode = True
+    current_mode = "standard"
+
+    # Flags for director loop
+    is_director_running = False
+    director_thread = None
 
     def __init__(self):
         """Constructor sets up tkinter manual interface, including buttons and labels"""
@@ -185,12 +190,6 @@ class ManualInterface:
             command=self.toggle_media_pipe_pose_mode,
         )
         self.media_pipe_pose_button.grid(row=4, column=6, padx=10)
-
-        self.current_mode = "standard"
-
-        # Flags for director loop
-        self.is_director_running = False
-        self.director_thread = None
 
         self.start_director_thread()
 
@@ -383,6 +382,9 @@ class ManualInterface:
             # if mode changed, tear down & rebuild
             if self.current_mode != last_mode:
                 last_mode = self.current_mode
+                if tracker is not None:
+                    tracker.stop_video()
+                    tracker = None
                 if last_mode == "keepaway":
                     print("Entering Keep Away")
                     self.keepaway_button.config(text="Standard Mode")
@@ -413,7 +415,7 @@ class ManualInterface:
                         video_label=self.video_label,
                     )
                     director = ContinuousDirector(tracker)
-                else:
+                else:  # "standard"
                     print("Entering Media Pipe")
                     self.yolo_button.config(text="Yolo Mode")
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
@@ -423,13 +425,13 @@ class ManualInterface:
                         video_label=self.video_label,
                     )
                     director = ContinuousDirector(tracker)
+                tracker.start_video()
 
             if tracker is None:
                 continue
             bbox, frame = tracker.capture_frame(True)
             if director is None or bbox is None or frame is None:
                 continue
-
             director.process_frame(bbox, frame, self.is_director_running)
 
     def toggle_continuous_mode(self):

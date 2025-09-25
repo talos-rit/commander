@@ -68,5 +68,6 @@ class MediaPipeTracker(Tracker):
 
         bboxes = self.detectPerson(self.object_detector, frame)
         self.draw_visuals(bboxes, frame, is_interface_running)
-        self.change_video_frame(frame, is_interface_running)
+        if is_interface_running:
+            self.change_video_frame(frame, is_interface_running)
         return bboxes, frame

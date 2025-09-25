@@ -1,3 +1,6 @@
+import threading
+import time
+import tkinter
 from abc import ABC, abstractmethod
 
 import cv2
@@ -9,12 +12,20 @@ from config import CAMERA_CONFIG
 # Abstract class for tracking
 class Tracker(ABC):
     speaker_bbox: list | None = None
+    fps = CAMERA_CONFIG.get("fps", 60)
     camera_index = CAMERA_CONFIG["camera_index"]
     acceptable_box_percent = CAMERA_CONFIG["acceptable_box_percent"]
+    desired_width = CAMERA_CONFIG.get("frame_width", None)
+    desired_height = CAMERA_CONFIG.get("frame_height", None)
+
+    is_video_running = False  # Controls the video update loop thread
+    frame_update = False
+    latest_frame = None  # Shared Resource: Store the latest frame captured
+    lock = threading.Lock()
 
     def __init__(
         self,
-        video_label,
+        video_label: tkinter.Label | None,
         source: str | None = None,
         video_buffer_size=1,
     ):
@@ -142,18 +153,45 @@ class Tracker(ABC):
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(frame_rgb)
 
-        # Set desired dimensions (adjust these values as needed)
-        desired_width = 640
-        desired_height = 480
-        pil_image = pil_image.resize(
-            (desired_width, desired_height), Image.Resampling.LANCZOS
-        )
+        dim = (self.desired_width, self.desired_height)
+        if self.desired_height is None:
+            # Set desired dimensions (adjust these values as needed)
+            new_width = self.desired_width or 500
+            aspect_ratio = float(frame.shape[1]) / float(frame.shape[0])
+            new_height = int(new_width / aspect_ratio)
 
-        imgtk = ImageTk.PhotoImage(image=pil_image)
+            # Create the new dimensions tuple (width, height)
+            dim = (new_width, new_height)
+        pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)
 
         # Update the label
-        self.video_label.after(1, lambda imgtk=imgtk: self.update_video_label(imgtk))
+        with self.lock:
+            self.frame_update = True
+            self.latest_frame = ImageTk.PhotoImage(image=pil_image)
 
-    def update_video_label(self, imgtk):
-        self.video_label.config(image=imgtk)
-        self.video_label.image = imgtk
+    def start_video(self):
+        if self.video_label is None or self.is_video_running:
+            return
+        threading.Thread(target=self.frame_loop, daemon=True).start()
+
+    def frame_loop(self):
+        # Isolated video update loop to run frame updates in a set fps
+        if self.video_label is None or self.is_video_running:
+            return
+        self.is_video_running = True
+        while self.is_video_running:
+            with self.lock:
+                if not self.frame_update:
+                    # print("No frame")
+                    continue
+                self.update()
+            time.sleep(1 / self.fps)
+
+    def stop_video(self):
+        self.is_video_running = False
+
+    def update(self):
+        if self.video_label is None or self.latest_frame is None:
+            return
+        self.frame_update = False
+        self.video_label.config(image=self.latest_frame)

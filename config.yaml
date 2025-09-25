@@ -5,3 +5,6 @@ confirmation_delay: 0.25 # Amount of time subject is outside of acceptable box b
 camera_index: 0 # Index of the camera device to be used for video capture
 
 command_delay: 0.25 # Wait time before another command can be sent
+fps: 30 # Frame rate to update the gui video
+frame_width: 1000 # Desired width of the video frame
+# frame_height: 600 # auto calculate if commented out
