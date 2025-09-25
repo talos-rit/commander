@@ -1,5 +1,4 @@
 import threading
-import time
 import tkinter
 from abc import ABC, abstractmethod
 
@@ -18,7 +17,7 @@ class Tracker(ABC):
     desired_width = CAMERA_CONFIG.get("frame_width", None)
     desired_height = CAMERA_CONFIG.get("frame_height", None)
 
-    is_video_running = False  # Controls the video update loop thread
+    is_video_running = False
     frame_update = False
     latest_frame = None  # Shared Resource: Store the latest frame captured
     lock = threading.Lock()
@@ -33,6 +32,7 @@ class Tracker(ABC):
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, video_buffer_size)  # Reduce buffer size
 
         self.video_label = video_label  # Label on the manual interface that shows the video feed with bounding boxes
+        self.frame_delay = 1000 / self.fps
 
     # Capture a frame from the source
     @abstractmethod
@@ -163,35 +163,36 @@ class Tracker(ABC):
             # Create the new dimensions tuple (width, height)
             dim = (new_width, new_height)
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)
-
+        image = ImageTk.PhotoImage(image=pil_image)
         # Update the label
-        with self.lock:
-            self.frame_update = True
-            self.latest_frame = ImageTk.PhotoImage(image=pil_image)
+        print("Changing video frame")
+        self.frame_update = True
+        self.latest_frame = image
 
     def start_video(self):
-        if self.video_label is None or self.is_video_running:
+        if self.video_label is None or Tracker.is_video_running:
             return
-        threading.Thread(target=self.frame_loop, daemon=True).start()
+        print("Starting video")
+        Tracker.is_video_running = True
+        thread = threading.Thread(target=self.frame_loop, daemon=True)
+        thread.start()
 
     def frame_loop(self):
-        # Isolated video update loop to run frame updates in a set fps
-        if self.video_label is None or self.is_video_running:
-            return
-        self.is_video_running = True
-        while self.is_video_running:
-            with self.lock:
-                if not self.frame_update:
-                    # print("No frame")
-                    continue
-                self.update()
-            time.sleep(1 / self.fps)
+        while Tracker.is_video_running:
+            print("frmae loop")
+            # time.sleep(self.frame_delay)
+            if self.video_label is not None:
+                self.video_label.after(int(self.frame_delay), self.update)
 
     def stop_video(self):
-        self.is_video_running = False
+        Tracker.is_video_running = False
 
     def update(self):
+        print("Updating frame")
         if self.video_label is None or self.latest_frame is None:
             return
         self.frame_update = False
         self.video_label.config(image=self.latest_frame)
+        # Keep a reference to prevent gc
+        # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
+        self.video_label.dumb_image_ref = self.latest_frame  # pyright: ignore[reportAttributeAccessIssue]
