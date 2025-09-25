@@ -10,9 +10,6 @@ from tracking.keep_away.keep_away_tracker import KeepAwayTracker
 from tracking.media_pipe.media_pipe_pose import MediaPipePose
 from tracking.media_pipe.media_pipe_tracker import MediaPipeTracker
 from tracking.yolo.yolo_tracker import YOLOTracker
-from utils import get_file_path
-
-CONFIG_PATH = get_file_path("./config.yaml")
 
 
 class Direction(IntEnum):
