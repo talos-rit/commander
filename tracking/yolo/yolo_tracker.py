@@ -10,20 +10,18 @@ from tracking.tracker import Tracker
 
 class YOLOTracker(Tracker):
     speaker_color: int | None = None
+    lost_counter = 0
+    lost_threshold = 300
+    speaker_color = None
+    color_threshold = 15
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source: str, config_path, video_label):
-        super().__init__(source, config_path, video_label)
+    def __init__(self, video_label, source: str, video_buffer_size=1):
+        super().__init__(video_label, source, video_buffer_size)
 
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.object_detector = YOLO("yolo11m.pt")
         self.pose_detector = YOLO("yolo11m-pose.pt")
-
-        self.lost_counter = 0
-        self.lost_threshold = 300
-
-        self.speaker_color = None
-        self.color_threshold = 15
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=None):

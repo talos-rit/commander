@@ -1,6 +1,8 @@
 import os.path as path
 import sys
 
+import yaml
+
 
 def get_file_path(relative_path: str) -> str:
     """
@@ -16,3 +18,8 @@ def get_file_path(relative_path: str) -> str:
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         return path.join(sys._MEIPASS, relative_path)  # pyright: ignore[reportAttributeAccessIssue]
     return relative_path
+
+
+def load_config(config_path):
+    with open(config_path, "r") as file:
+        return yaml.safe_load(file)

@@ -2,11 +2,11 @@ from abc import ABC, abstractmethod
 
 import yaml
 
+from config import CAMERA_CONFIG
+
 
 class BaseDirector(ABC):
-    def __init__(self, config_path):
-        self.config = self.load_config(config_path)
-        self.acceptable_box_percent = self.config["acceptable_box_percent"]
+    acceptable_box_percent = CAMERA_CONFIG["acceptable_box_percent"]
 
     def load_config(self, config_path):
         with open(config_path, "r") as file:

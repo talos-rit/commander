@@ -393,10 +393,9 @@ class ManualInterface:
                     self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                     tracker = KeepAwayTracker(
                         source="",
-                        config_path=CONFIG_PATH,
                         video_label=self.video_label,
                     )
-                    director = KeepAwayDirector(tracker, CONFIG_PATH)
+                    director = KeepAwayDirector(tracker)
                 elif last_mode == "yolo":
                     print("Entering Yolo")
                     self.yolo_button.config(text="Standard Mode")
@@ -404,10 +403,9 @@ class ManualInterface:
                     self.keepaway_button.config(text="Keep Away Mode")
                     tracker = YOLOTracker(
                         source="",
-                        config_path=CONFIG_PATH,
                         video_label=self.video_label,
                     )
-                    director = ContinuousDirector(tracker, CONFIG_PATH)
+                    director = ContinuousDirector(tracker)
                 elif last_mode == "mediapipepose":
                     self.media_pipe_pose_button.config(text="Standard Mode")
                     self.yolo_button.config(text="Yolo Mode")
@@ -415,10 +413,9 @@ class ManualInterface:
                     print("Entering Media Pipe Pose")
                     tracker = MediaPipePose(
                         source="",
-                        config_path=CONFIG_PATH,
                         video_label=self.video_label,
                     )
-                    director = ContinuousDirector(tracker, CONFIG_PATH)
+                    director = ContinuousDirector(tracker)
                 else:
                     print("Entering Media Pipe")
                     self.yolo_button.config(text="Yolo Mode")
@@ -426,10 +423,9 @@ class ManualInterface:
                     self.keepaway_button.config(text="Keep Away Mode")
                     tracker = MediaPipeTracker(
                         source="",
-                        config_path=CONFIG_PATH,
                         video_label=self.video_label,
                     )
-                    director = ContinuousDirector(tracker, CONFIG_PATH)
+                    director = ContinuousDirector(tracker)
 
             if tracker is None:
                 continue

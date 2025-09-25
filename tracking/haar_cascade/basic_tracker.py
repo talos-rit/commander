@@ -6,8 +6,8 @@ from utils import get_file_path
 
 class BasicTracker(Tracker):
     # The tracker class is responsible for capturing frames from the source and detecting faces in the frames
-    def __init__(self, source: str, config_path: str, video_label, vide_buffer_size=1):
-        super().__init__(source, config_path, video_label, vide_buffer_size)
+    def __init__(self, video_label, source: str, vide_buffer_size=1):
+        super().__init__(video_label, source, vide_buffer_size)
         self.faceCascade = cv2.CascadeClassifier(
             get_file_path("tracking/haar_cascade/haarcascade_frontalface_default.xml")
         )

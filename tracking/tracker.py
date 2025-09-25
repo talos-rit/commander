@@ -1,31 +1,23 @@
 from abc import ABC, abstractmethod
 
 import cv2
-import yaml
 from PIL import Image, ImageTk
 
-
-def load_config(config_path):
-    with open(config_path, "r") as file:
-        return yaml.safe_load(file)
+from config import CAMERA_CONFIG
 
 
 # Abstract class for tracking
 class Tracker(ABC):
     speaker_bbox: list | None = None
+    camera_index = CAMERA_CONFIG["camera_index"]
+    acceptable_box_percent = CAMERA_CONFIG["acceptable_box_percent"]
 
     def __init__(
         self,
-        config_path: str,
         video_label,
         source: str | None = None,
         video_buffer_size=1,
     ):
-        self.config = load_config(config_path)
-        self.camera_index = self.config["camera_index"]
-        self.acceptable_box_percent = self.config["acceptable_box_percent"]
-
-        self.config = load_config(config_path)
         self.cap = cv2.VideoCapture(source or self.camera_index)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, video_buffer_size)  # Reduce buffer size
 
@@ -160,7 +152,7 @@ class Tracker(ABC):
         imgtk = ImageTk.PhotoImage(image=pil_image)
 
         # Update the label
-        self.video_label.after(0, lambda imgtk=imgtk: self.update_video_label(imgtk))
+        self.video_label.after(1, lambda imgtk=imgtk: self.update_video_label(imgtk))
 
     def update_video_label(self, imgtk):
         self.video_label.config(image=imgtk)

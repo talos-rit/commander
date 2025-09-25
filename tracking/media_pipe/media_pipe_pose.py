@@ -16,10 +16,8 @@ class MediaPipePose(Tracker):
     speaker_color = None
     color_threshold = 15
 
-    def __init__(
-        self, config_path, video_label, source: str | None = None, video_buffer_size=1
-    ):
-        super().__init__(config_path, video_label, source, video_buffer_size)
+    def __init__(self, video_label, source: str | None = None, video_buffer_size=1):
+        super().__init__(video_label, source, video_buffer_size)
 
         base_options = python.BaseOptions(
             model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
