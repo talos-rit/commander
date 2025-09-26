@@ -33,7 +33,7 @@ pip install -r requirements.txt
     
     If using uv, then the dev dependencies should be installed by default by running:
     ```bash
-    uv sync
+    uv sync --group dev
     ```
     If not using uv:
     ```bash
