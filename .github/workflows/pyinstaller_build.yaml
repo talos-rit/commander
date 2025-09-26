@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         # macos-latest is an ARM machine and macos-latest-large is an x86_64 machine
-        os: [windows-latest, ubuntu-latest, macos-latest, macos-latest-large]
+        os: [windows-latest, macos-latest, macos-latest-large]
     runs-on: ${{ matrix.os }}
     
     steps:
