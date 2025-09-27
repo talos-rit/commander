@@ -10,20 +10,18 @@ from tracking.tracker import Tracker
 
 class YOLOTracker(Tracker):
     speaker_color: int | None = None
+    lost_counter = 0
+    lost_threshold = 300
+    speaker_color = None
+    color_threshold = 15
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source: str, config_path, video_label):
-        super().__init__(source, config_path, video_label)
+    def __init__(self, video_label, source: str, video_buffer_size=1):
+        super().__init__(video_label, source, video_buffer_size)
 
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.object_detector = YOLO("yolo11m.pt")
         self.pose_detector = YOLO("yolo11m-pose.pt")
-
-        self.lost_counter = 0
-        self.lost_threshold = 300
-
-        self.speaker_color = None
-        self.color_threshold = 15
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=None):
@@ -39,23 +37,24 @@ class YOLOTracker(Tracker):
             frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device
         )
         # print(detection_result)
+        if not detection_result:
+            return []
+
         bboxes = []
-        if detection_result:
-            # print(detection_result[0].boxes.xyxyn)
-            for xyxy in detection_result[0].boxes.xyxyn:
-                x1 = int(xyxy[0] * frameWidth)
-                y1 = int(xyxy[1] * frameHeight)
-                x2 = int(xyxy[2] * frameWidth)
-                y2 = int(xyxy[3] * frameHeight)
-                bboxes.append((x1, y1, x2, y2))
-            # for i, detection in enumerate(detection_result):
-            #     xyxy = detection.boxes.xyxyn
-            #     x1 = int(xyxy[i][0] * frameWidth)
-            #     y1 = int(xyxy[i][1] * frameHeight)
-            #     x2 = int(xyxy[i][2] * frameWidth)
-            #     y2 = int(xyxy[i][3] * frameHeight)
-            #     bboxes.append((x1, y1, x2, y2))
-            # print(bboxes)
+        for xyxy in detection_result[0].boxes.xyxyn:
+            x1 = int(xyxy[0] * frameWidth)
+            y1 = int(xyxy[1] * frameHeight)
+            x2 = int(xyxy[2] * frameWidth)
+            y2 = int(xyxy[3] * frameHeight)
+            bboxes.append((x1, y1, x2, y2))
+        # for i, detection in enumerate(detection_result):
+        #     xyxy = detection.boxes.xyxyn
+        #     x1 = int(xyxy[i][0] * frameWidth)
+        #     y1 = int(xyxy[i][1] * frameHeight)
+        #     x2 = int(xyxy[i][2] * frameWidth)
+        #     y2 = int(xyxy[i][3] * frameHeight)
+        #     bboxes.append((x1, y1, x2, y2))
+        # print(bboxes)
 
         return bboxes
 
@@ -95,16 +94,11 @@ class YOLOTracker(Tracker):
         # y_rw = float(kp_xy[11, 1])
         # print("XLS" + str(x_ls))
 
-        # 1) Check horizontal arrangement: left wrist < left shoulder AND right wrist > right shoulder
-        if x_lw < x_ls and x_rw > x_rs:
-            # 2) Check vertical difference
-            vertical_diff_left = abs(y_lw - y_ls)
-            # print(vertical_diff_left)
-
-            if vertical_diff_left < threshold:
-                return True
-
-        return False
+        # 1) Check horizontal arrangement:
+        # left wrist < left shoulder AND right wrist > right shoulder
+        # 2) Check vertical difference:
+        # |left wrist y - left shoulder y| < threshold
+        return x_lw < x_ls and x_rw > x_rs and abs(y_lw - y_ls) < threshold
 
     def compute_center(self, bbox):
         """Compute the center of a bounding box."""

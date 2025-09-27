@@ -1,23 +1,25 @@
 import time
 
-from directors.base_director import BaseDirector
+from config import CAMERA_CONFIG
+from directors.base_director import BaseDirector, calculate_center_bounding_box
 from publisher import Publisher
 from tracking.tracker import Tracker
 
 
 class DiscreteDirector(BaseDirector):
+    horizontal_field_of_view = CAMERA_CONFIG["horizontal_field_of_view"]
+    vertical_field_of_view = CAMERA_CONFIG["vertical_field_of_view"]
+    confirmation_delay = CAMERA_CONFIG["confirmation_delay"]
+    command_delay = CAMERA_CONFIG["command_delay"]
+    last_command_time = 0  # Track the time of the last command
+
+    # Time when the person first moved outside the box
+    movement_detection_start_time = None
+
     # The director class is responsible for processing the frames captured by the tracker
-    def __init__(self, tracker: Tracker, config_path):
-        super().__init__(config_path)
+    def __init__(self, tracker: Tracker):
+        super().__init__()
         self.tracker = tracker
-        self.horizontal_field_of_view = self.config["horizontal_field_of_view"]
-        self.vertical_field_of_view = self.config["vertical_field_of_view"]
-        self.confirmation_delay = self.config["confirmation_delay"]
-        self.command_delay = self.config["command_delay"]
-        self.last_command_time = 0  # Track the time of the last command
-        self.movement_detection_start_time = (
-            None  # Time when the person first moved outside the box
-        )
 
     # This method is called to process each frame
     def process_frame(self, bounding_box: list, frame, is_director_running):
@@ -42,9 +44,7 @@ class DiscreteDirector(BaseDirector):
             x, y, w, h = first_face
 
             # Calculate the center of the bounding box
-            bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(
-                x, y, w, h
-            )
+            bbox_center_x, bbox_center_y = calculate_center_bounding_box(x, y, w, h)
 
             if is_director_running:
                 # Are we inside the acceptable box

@@ -1,33 +1,41 @@
+import threading
+import time
+import tkinter
 from abc import ABC, abstractmethod
 
 import cv2
-import yaml
 from PIL import Image, ImageTk
+
+from config import CAMERA_CONFIG
+from utils import add_termination_handler
 
 
 # Abstract class for tracking
 class Tracker(ABC):
     speaker_bbox: list | None = None
+    fps = CAMERA_CONFIG.get("fps", 60)
+    camera_index = CAMERA_CONFIG["camera_index"]
+    acceptable_box_percent = CAMERA_CONFIG["acceptable_box_percent"]
+    desired_width = CAMERA_CONFIG.get("frame_width", None)
+    desired_height = CAMERA_CONFIG.get("frame_height", None)
 
-    def __init__(self, source: str, config_path, video_label):
-        self.source = source
+    is_video_running = False
+    frame_update = False
+    latest_frame = None  # Shared Resource: Store the latest frame captured
+    lock = threading.Lock()
+    thread: threading.Thread | None = None
 
-        self.config = self.load_config(config_path)
-        # Open the video source
-        if self.source:
-            self.cap = cv2.VideoCapture(self.source)
-        else:
-            camera_index = self.config["camera_index"]
-            self.cap = cv2.VideoCapture(camera_index)
-        self.acceptable_box_percent = self.config["acceptable_box_percent"]
-
-        self.speaker_bbox = None
+    def __init__(
+        self,
+        video_label: tkinter.Label | None,
+        source: str | None = None,
+        video_buffer_size=1,
+    ):
+        self.cap = cv2.VideoCapture(source or self.camera_index)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, video_buffer_size)  # Reduce buffer size
 
         self.video_label = video_label  # Label on the manual interface that shows the video feed with bounding boxes
-
-    def load_config(self, config_path):
-        with open(config_path, "r") as file:
-            return yaml.safe_load(file)
+        self.frame_delay = 1000 / self.fps
 
     # Capture a frame from the source
     @abstractmethod
@@ -106,58 +114,94 @@ class Tracker(ABC):
             cv2.circle(frame, (bbox_center_x, bbox_center_y), radius, color, thickness)
 
             # If speaker_bbox exists, draw line + distance
-            if self.speaker_bbox is not None:
-                # Draw where the tracker is taking the color from - t-shirt area
-                height = y2 - y1
-                width = x2 - x1
-                chest_start = y1 + int(height * 0.3)
-                chest_end = y1 + int(height * 0.5)
-                exclude_extra = x1 + int(width * 0.4)
-                exclude_extra2 = x1 + int(width * 0.6)
-                cv2.rectangle(
-                    frame,
-                    (exclude_extra, chest_start),
-                    (exclude_extra2, chest_end),
-                    (0, 150, 150),
-                    2,
-                )
+            if self.speaker_bbox is None:
+                continue
 
-                sx1, sy1, sx2, sy2 = self.speaker_bbox
-                speaker_center_x = (sx1 + sx2) // 2
-                speaker_center_y = (sy1 + sy2) // 2
-                # Red circle for speaker bbox
-                cv2.circle(
-                    frame,
-                    (speaker_center_x, speaker_center_y),
-                    radius,
-                    (0, 0, 255),
-                    thickness,
-                )
+            # Draw where the tracker is taking the color from - t-shirt area
+            height = y2 - y1
+            width = x2 - x1
+            chest_start = y1 + int(height * 0.3)
+            chest_end = y1 + int(height * 0.5)
+            exclude_extra = x1 + int(width * 0.4)
+            exclude_extra2 = x1 + int(width * 0.6)
+            cv2.rectangle(
+                frame,
+                (exclude_extra, chest_start),
+                (exclude_extra2, chest_end),
+                (0, 150, 150),
+                2,
+            )
+
+            sx1, sy1, sx2, sy2 = self.speaker_bbox
+            speaker_center_x = (sx1 + sx2) // 2
+            speaker_center_y = (sy1 + sy2) // 2
+            # Red circle for speaker bbox
+            cv2.circle(
+                frame,
+                (speaker_center_x, speaker_center_y),
+                radius,
+                (0, 0, 255),
+                thickness,
+            )
 
         if not is_interface_running:
             cv2.imshow("Object Detection", frame)
 
     def change_video_frame(self, frame, is_interface_running):
-        if is_interface_running:
-            # Once all drawings and processing are done, update the display.
-            # Convert from BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
+        if not is_interface_running:
+            return
 
+        # Once all drawings and processing are done, update the display.
+        # Convert from BGR to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(frame_rgb)
+
+        dim = (self.desired_width, self.desired_height)
+        if self.desired_height is None:
             # Set desired dimensions (adjust these values as needed)
-            desired_width = 640
-            desired_height = 480
-            pil_image = pil_image.resize(
-                (desired_width, desired_height), Image.Resampling.LANCZOS
-            )
+            new_width = self.desired_width or 500
+            aspect_ratio = float(frame.shape[1]) / float(frame.shape[0])
+            new_height = int(new_width / aspect_ratio)
 
-            imgtk = ImageTk.PhotoImage(image=pil_image)
+            # Create the new dimensions tuple (width, height)
+            dim = (new_width, new_height)
+        pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)
+        image = ImageTk.PhotoImage(image=pil_image)
+        # Update the label
+        with self.lock:
+            self.frame_update = True
+            self.latest_frame = image
 
-            # Update the label
-            self.video_label.after(
-                0, lambda imgtk=imgtk: self.update_video_label(imgtk)
-            )
+    def start_video(self):
+        if self.video_label is None or Tracker.is_video_running:
+            return
+        print("Starting video")
+        Tracker.is_video_running = True
+        thread = threading.Thread(target=self.frame_loop, daemon=True)
+        thread.start()
+        Tracker.thread = thread
+        add_termination_handler(self.stop_video)
+        print("Video started")
 
-    def update_video_label(self, imgtk):
-        self.video_label.config(image=imgtk)
-        self.video_label.image = imgtk
+    def frame_loop(self):
+        while Tracker.is_video_running:
+            if self.video_label is not None:
+                self.video_label.after(int(self.frame_delay), self.update)
+                time.sleep(1 / 120)
+
+    def stop_video(self):
+        print("Stopping video")
+        Tracker.is_video_running = False
+        if Tracker.thread is not None:
+            Tracker.thread.join()
+
+    def update(self):
+        if self.video_label is None or self.latest_frame is None:
+            print("No video label or latest frame")
+            return
+        with self.lock:
+            self.frame_update = False
+            self.video_label.config(image=self.latest_frame)
+            # Keep a reference to prevent gc
+            # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
+            self.video_label.dumb_image_ref = self.latest_frame  # pyright: ignore[reportAttributeAccessIssue]
