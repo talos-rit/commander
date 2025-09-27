@@ -37,23 +37,24 @@ class YOLOTracker(Tracker):
             frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device
         )
         # print(detection_result)
+        if not detection_result:
+            return []
+
         bboxes = []
-        if detection_result:
-            # print(detection_result[0].boxes.xyxyn)
-            for xyxy in detection_result[0].boxes.xyxyn:
-                x1 = int(xyxy[0] * frameWidth)
-                y1 = int(xyxy[1] * frameHeight)
-                x2 = int(xyxy[2] * frameWidth)
-                y2 = int(xyxy[3] * frameHeight)
-                bboxes.append((x1, y1, x2, y2))
-            # for i, detection in enumerate(detection_result):
-            #     xyxy = detection.boxes.xyxyn
-            #     x1 = int(xyxy[i][0] * frameWidth)
-            #     y1 = int(xyxy[i][1] * frameHeight)
-            #     x2 = int(xyxy[i][2] * frameWidth)
-            #     y2 = int(xyxy[i][3] * frameHeight)
-            #     bboxes.append((x1, y1, x2, y2))
-            # print(bboxes)
+        for xyxy in detection_result[0].boxes.xyxyn:
+            x1 = int(xyxy[0] * frameWidth)
+            y1 = int(xyxy[1] * frameHeight)
+            x2 = int(xyxy[2] * frameWidth)
+            y2 = int(xyxy[3] * frameHeight)
+            bboxes.append((x1, y1, x2, y2))
+        # for i, detection in enumerate(detection_result):
+        #     xyxy = detection.boxes.xyxyn
+        #     x1 = int(xyxy[i][0] * frameWidth)
+        #     y1 = int(xyxy[i][1] * frameHeight)
+        #     x2 = int(xyxy[i][2] * frameWidth)
+        #     y2 = int(xyxy[i][3] * frameHeight)
+        #     bboxes.append((x1, y1, x2, y2))
+        # print(bboxes)
 
         return bboxes
 
@@ -93,16 +94,11 @@ class YOLOTracker(Tracker):
         # y_rw = float(kp_xy[11, 1])
         # print("XLS" + str(x_ls))
 
-        # 1) Check horizontal arrangement: left wrist < left shoulder AND right wrist > right shoulder
-        if x_lw < x_ls and x_rw > x_rs:
-            # 2) Check vertical difference
-            vertical_diff_left = abs(y_lw - y_ls)
-            # print(vertical_diff_left)
-
-            if vertical_diff_left < threshold:
-                return True
-
-        return False
+        # 1) Check horizontal arrangement:
+        # left wrist < left shoulder AND right wrist > right shoulder
+        # 2) Check vertical difference:
+        # |left wrist y - left shoulder y| < threshold
+        return x_lw < x_ls and x_rw > x_rs and abs(y_lw - y_ls) < threshold
 
     def compute_center(self, bbox):
         """Compute the center of a bounding box."""

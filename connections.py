@@ -1,9 +1,9 @@
-import atexit
 import socket
 import threading
 import time
 
 from icd_config import bytes_to_int, int_to_bytes
+from utils import add_termination_handler
 
 
 class Connection:
@@ -11,6 +11,7 @@ class Connection:
 
     is_running = False
     command_count = 0
+    thread: threading.Thread | None = None
 
     def __init__(self, host, port, connect_on_init=True):
         self.host = host
@@ -22,10 +23,9 @@ class Connection:
             self.connect_on_thread()
 
     def connect_on_thread(self):
-        thread = threading.Thread(target=self.connect)
-        thread.start()
-        atexit.register(self.close)  # Run close when the program is exiting
-        return thread
+        self.thread = threading.Thread(target=self.connect, daemon=True)
+        self.thread.start()
+        add_termination_handler(self.close)
 
     def connect(self):
         self.is_running = True
@@ -53,8 +53,11 @@ class Connection:
 
     def close(self):
         """Cleanly close the socket port and stop listening to new connections."""
-        self.socket.close()
+        print("Closing socket")
         self.is_running = False
+        if self.thread is not None:
+            self.thread.join()
+        self.socket.close()
         print("Socket closed cleanly")
 
     def publish(self, command: int, payload: bytes | None = None):

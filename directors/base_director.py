@@ -1,23 +1,17 @@
 from abc import ABC, abstractmethod
 
-import yaml
-
 from config import CAMERA_CONFIG
+
+
+def calculate_center_bounding_box(x, y, w, h):
+    """
+    Simple method to calculate the center of a bounding box
+    """
+    return (x + w) // 2, (y + h) // 2
 
 
 class BaseDirector(ABC):
     acceptable_box_percent = CAMERA_CONFIG["acceptable_box_percent"]
-
-    def load_config(self, config_path):
-        with open(config_path, "r") as file:
-            return yaml.safe_load(file)
-
-    # Calculates the center of the bounding box (our subject)
-    def calculate_center_bounding_box(self, x, y, w, h):
-        """
-        Simple method to calculate the center of a bounding box
-        """
-        return (x + w) // 2, (y + h) // 2
 
     # Function used to calculate the box we are trying to keep the subject in
     def calculate_acceptable_box(self, frame_width, frame_height):
@@ -44,4 +38,4 @@ class BaseDirector(ABC):
     # Processes the bounding box and sends commands
     @abstractmethod
     def process_frame(self):
-        pass
+        raise NotImplementedError("Subclasses must implement this method.")

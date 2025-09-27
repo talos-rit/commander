@@ -1,5 +1,7 @@
 import os.path as path
+import signal
 import sys
+import threading
 
 import yaml
 
@@ -23,3 +25,27 @@ def get_file_path(relative_path: str) -> str:
 def load_config(config_path):
     with open(config_path, "r") as file:
         return yaml.safe_load(file)
+
+
+TERMINATION_HANDLERS = []
+TERMINATION_THREAD_LOCK = threading.Lock()
+
+
+def add_termination_handler(handler):
+    global TERMINATION_HANDLERS
+    with TERMINATION_THREAD_LOCK:
+        TERMINATION_HANDLERS.append(handler)
+
+
+def terminate(signum, frame):
+    global TERMINATION_HANDLERS
+    print(f"\nSignal {signum} received! Executing handler.")
+    print("Performing cleanup or specific action...")
+
+    for handler in TERMINATION_HANDLERS:
+        handler()
+
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, terminate)

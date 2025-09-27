@@ -42,9 +42,8 @@ def main():
                 break
             director.process_frame(bounding_box, frame, True)
 
-    else:
-        interface = ManualInterface()
-        interface.launch_user_interface()
+    interface = ManualInterface()
+    interface.mainloop()
 
 
 if __name__ == "__main__":

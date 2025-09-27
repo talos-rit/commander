@@ -1,7 +1,7 @@
 import time
 
 from config import CAMERA_CONFIG
-from directors.base_director import BaseDirector
+from directors.base_director import BaseDirector, calculate_center_bounding_box
 from publisher import Publisher
 from tracking.tracker import Tracker
 
@@ -51,9 +51,7 @@ class ContinuousDirector(BaseDirector):
             average = (top + bottom) // 2
 
             # Calculate the center of the bounding box
-            bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(
-                x, y, w, h
-            )
+            bbox_center_x, bbox_center_y = calculate_center_bounding_box(x, y, w, h)
 
             if is_director_running:
                 # Are we inside the acceptable box
@@ -123,10 +121,9 @@ class ContinuousDirector(BaseDirector):
                             Publisher.polar_pan_continuous_start(0, -1)
                             # print("start")
                             self.last_command_stop = False
-                        else:
-                            if not self.last_command_stop:
-                                Publisher.polar_pan_continuous_stop()
-                                self.last_command_stop = True
+                        elif not self.last_command_stop:
+                            Publisher.polar_pan_continuous_stop()
+                            self.last_command_stop = True
 
                 else:
                     if not self.last_command_stop:

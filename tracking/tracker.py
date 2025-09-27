@@ -1,4 +1,3 @@
-import atexit
 import threading
 import time
 import tkinter
@@ -8,6 +7,7 @@ import cv2
 from PIL import Image, ImageTk
 
 from config import CAMERA_CONFIG
+from utils import add_termination_handler
 
 
 # Abstract class for tracking
@@ -23,6 +23,7 @@ class Tracker(ABC):
     frame_update = False
     latest_frame = None  # Shared Resource: Store the latest frame captured
     lock = threading.Lock()
+    thread: threading.Thread | None = None
 
     def __init__(
         self,
@@ -167,7 +168,6 @@ class Tracker(ABC):
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)
         image = ImageTk.PhotoImage(image=pil_image)
         # Update the label
-        print("Changing video frame")
         with self.lock:
             self.frame_update = True
             self.latest_frame = image
@@ -179,7 +179,9 @@ class Tracker(ABC):
         Tracker.is_video_running = True
         thread = threading.Thread(target=self.frame_loop, daemon=True)
         thread.start()
-        atexit.register(self.stop_video)
+        Tracker.thread = thread
+        add_termination_handler(self.stop_video)
+        print("Video started")
 
     def frame_loop(self):
         while Tracker.is_video_running:
@@ -188,13 +190,15 @@ class Tracker(ABC):
                 time.sleep(1 / 120)
 
     def stop_video(self):
+        print("Stopping video")
         Tracker.is_video_running = False
+        if Tracker.thread is not None:
+            Tracker.thread.join()
 
     def update(self):
         if self.video_label is None or self.latest_frame is None:
             print("No video label or latest frame")
             return
-        print("Updating frame")
         with self.lock:
             self.frame_update = False
             self.video_label.config(image=self.latest_frame)

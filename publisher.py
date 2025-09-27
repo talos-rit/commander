@@ -19,9 +19,13 @@ class Publisher:
     A static class that is used to publish instructions to the operator.
     """
 
-    connection = Connection(host=SOCKET_HOST, port=SOCKET_PORT)
+    connection = Connection(host=SOCKET_HOST, port=SOCKET_PORT, connect_on_init=False)
     command_count = 0
     CHAR_ENCODING = "utf-8"
+
+    @staticmethod
+    def start_socket_connection():
+        Publisher.connection.connect_on_thread()
 
     @staticmethod
     def close_connection():

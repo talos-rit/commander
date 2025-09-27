@@ -1,7 +1,7 @@
 import time
 
 from config import CAMERA_CONFIG
-from directors.base_director import BaseDirector
+from directors.base_director import BaseDirector, calculate_center_bounding_box
 from publisher import Publisher
 from tracking.tracker import Tracker
 
@@ -44,9 +44,7 @@ class DiscreteDirector(BaseDirector):
             x, y, w, h = first_face
 
             # Calculate the center of the bounding box
-            bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(
-                x, y, w, h
-            )
+            bbox_center_x, bbox_center_y = calculate_center_bounding_box(x, y, w, h)
 
             if is_director_running:
                 # Are we inside the acceptable box
