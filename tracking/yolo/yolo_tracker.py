@@ -1,4 +1,5 @@
 import math
+import os
 
 import cv2
 import numpy as np
@@ -7,21 +8,31 @@ from ultralytics import YOLO
 
 from tracking.tracker import Tracker
 
+# TODO: Move this into a config file
+DEFAULT_YOLO_MODEL_DIR = os.path.join(os.path.dirname(__file__), "yolo-pt")
+
+
+def create_pt_file_path(file_name, _dir=DEFAULT_YOLO_MODEL_DIR):
+    return os.path.join(_dir, file_name)
+
 
 class YOLOTracker(Tracker):
     speaker_color: int | None = None
-    lost_counter = 0
-    lost_threshold = 300
-    speaker_color = None
-    color_threshold = 15
-
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, video_label, source: str, video_buffer_size=1):
-        super().__init__(video_label, source, video_buffer_size)
+    def __init__(
+        self, source: str, config_path, video_label, _yolo_pt_dir=DEFAULT_YOLO_MODEL_DIR
+    ):
+        self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
+        super().__init__(source, config_path, video_label)
 
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.object_detector = YOLO("yolo11m.pt")
-        self.pose_detector = YOLO("yolo11m-pose.pt")
+        self.object_detector = YOLO(
+            create_pt_file_path("yolo11m.pt", _dir=_yolo_pt_dir)
+        )
+
+        self.pose_detector = YOLO(
+            create_pt_file_path("yolo11m-pose.pt", _dir=_yolo_pt_dir)
+        )
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=None):
