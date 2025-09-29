@@ -1,3 +1,5 @@
+import tkinter
+
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -9,7 +11,12 @@ from tracking.tracker import Tracker
 
 class MediaPipeTracker(Tracker):
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, video_label, source: str | None = None, video_buffer_size=1):
+    def __init__(
+        self,
+        video_label: tkinter.Label | None = None,
+        source: str | None = None,
+        video_buffer_size=1,
+    ):
         super().__init__(video_label, source, video_buffer_size)
 
         base_options = python.BaseOptions(

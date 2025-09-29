@@ -1,5 +1,6 @@
 import math
 import os
+import tkinter
 
 import cv2
 import numpy as np
@@ -18,12 +19,19 @@ def create_pt_file_path(file_name, _dir=DEFAULT_YOLO_MODEL_DIR):
 
 class YOLOTracker(Tracker):
     speaker_color: int | None = None
+    color_threshold: int = 15
+    lost_threshold: int = 300
+
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
     def __init__(
-        self, source: str, config_path, video_label, _yolo_pt_dir=DEFAULT_YOLO_MODEL_DIR
+        self,
+        source: str,
+        video_label: tkinter.Label | None = None,
+        video_buffer_size=1,
+        _yolo_pt_dir=DEFAULT_YOLO_MODEL_DIR,
     ):
         self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
-        super().__init__(source, config_path, video_label)
+        super().__init__(video_label, source, video_buffer_size)
 
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.object_detector = YOLO(
@@ -33,6 +41,7 @@ class YOLOTracker(Tracker):
         self.pose_detector = YOLO(
             create_pt_file_path("yolo11m-pose.pt", _dir=_yolo_pt_dir)
         )
+        self.lost_counter = 0
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=None):

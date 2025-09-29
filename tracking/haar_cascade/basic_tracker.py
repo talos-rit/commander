@@ -1,3 +1,5 @@
+import tkinter
+
 import cv2
 
 from tracking.tracker import Tracker
@@ -6,7 +8,12 @@ from utils import get_file_path
 
 class BasicTracker(Tracker):
     # The tracker class is responsible for capturing frames from the source and detecting faces in the frames
-    def __init__(self, video_label, source: str, vide_buffer_size=1):
+    def __init__(
+        self,
+        video_label: tkinter.Label | None = None,
+        source: str | None = None,
+        vide_buffer_size=1,
+    ):
         super().__init__(video_label, source, vide_buffer_size)
         self.faceCascade = cv2.CascadeClassifier(
             get_file_path("tracking/haar_cascade/haarcascade_frontalface_default.xml")
