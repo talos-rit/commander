@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from config import CAMERA_CONFIG
+from config.config import CAMERA_CONFIG
 
 
 def calculate_center_bounding_box(x, y, w, h):

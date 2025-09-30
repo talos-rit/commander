@@ -1,6 +1,6 @@
 import time
 
-from config import CAMERA_CONFIG
+from config.config import CAMERA_CONFIG
 from directors.base_director import BaseDirector, calculate_center_bounding_box
 from publisher import Publisher
 from tracking.tracker import Tracker

@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 import cv2
 from PIL import Image, ImageTk
 
-from config import CAMERA_CONFIG
+from config.config import CAMERA_CONFIG
 from utils import add_termination_handler
 
 
