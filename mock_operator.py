@@ -10,7 +10,7 @@ class MockOperator:
 
     @staticmethod
     def close_connection():
-        MockOperator.connection.close_socket()
+        MockOperator.connection.close()
 
     @staticmethod
     def send_return_code(command_id, payload):
@@ -22,7 +22,7 @@ def create_return_payload(success):
 
 
 def main():
-    while not MockOperator.connection.is_connected:
+    while not MockOperator.connection.is_running:
         time.sleep(1)
 
     print("Mock operator is connected!")

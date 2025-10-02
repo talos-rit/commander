@@ -1,8 +1,12 @@
 import time
 
+from config import CAMERA_CONFIG
 from directors.base_director import BaseDirector
 from publisher import Publisher
-from tracking.tracker import Tracker
+from utils import (
+    calculate_acceptable_box,
+    calculate_center_bbox,
+)
 
 
 class KeepAwayDirector(BaseDirector):
@@ -13,12 +17,8 @@ class KeepAwayDirector(BaseDirector):
     # bool to ensure only one polar_pan_continuous_stop command is sent at a time
     last_command_stop = False
 
-    # The director class is responsible for processing the frames captured by the tracker
-    def __init__(self, tracker: Tracker, config_path):
-        super().__init__(config_path)
-        self.tracker = tracker
-        self.confirmation_delay = self.config["confirmation_delay"]
-        self.command_delay = self.config["command_delay"]
+    confirmation_delay = CAMERA_CONFIG["confirmation_delay"]
+    command_delay = CAMERA_CONFIG["command_delay"]
 
     # This method is called to process each frame
     def process_frame(self, bounding_box: list, frame, is_director_running):
@@ -38,7 +38,7 @@ class KeepAwayDirector(BaseDirector):
             acceptable_box_top,
             acceptable_box_right,
             acceptable_box_bottom,
-        ) = self.calculate_acceptable_box(frame_width, frame_height)
+        ) = calculate_acceptable_box(frame_width, frame_height)
 
         # C alculate where the middle point of the bounding box lies in relation to the box
         # Unpack bounding box
@@ -52,7 +52,7 @@ class KeepAwayDirector(BaseDirector):
         average = (top + bottom) // 2
 
         # Calculate the center of the bounding box
-        bbox_center_x, bbox_center_y = self.calculate_center_bounding_box(x, y, w, h)
+        bbox_center_x, bbox_center_y = calculate_center_bbox(first_face)
 
         if not is_director_running:
             return

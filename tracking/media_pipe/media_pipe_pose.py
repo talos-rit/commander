@@ -5,15 +5,20 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 from tracking.media_pipe.mp_utils import get_model_asset_path
-from tracking.tracker import Tracker
+from tracking.tracker import ObjectModel
 
 
-class MediaPipePose(Tracker):
+class MediaPipePoseModel(ObjectModel):
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(self, source: str, config_path, video_label):
-        self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
-        super().__init__(source, config_path, video_label)
 
+    lost_counter = 0
+    lost_threshold = 100
+    speaker_color = None
+    color_threshold = 15
+
+    def __init__(
+        self,
+    ):
         base_options = python.BaseOptions(
             model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
         )
@@ -32,12 +37,6 @@ class MediaPipePose(Tracker):
             # Additional options (e.g., running on CPU) can be specified here.
         )
         self.pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
-
-        self.lost_counter = 0
-        self.lost_threshold = 100
-
-        self.speaker_color = None
-        self.color_threshold = 15
 
     # Detect people in the frame
     def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
@@ -59,10 +58,10 @@ class MediaPipePose(Tracker):
 
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
         detection_result = object_detector.detect(mp_image)
-        bboxes = []
         if not detection_result:
-            return bboxes
+            return []
 
+        bboxes = []
         for detection in detection_result.detections:
             # print(detection)
             bboxC = detection.bounding_box
@@ -116,23 +115,14 @@ class MediaPipePose(Tracker):
 
         return False
 
-    def capture_frame(self, is_interface_running):
+    def detect_person(self, frame):
         """
         Finds all the people in the frame, and then decides what to send to the director.
         Looks for x pose to determine primary speaker.
         Uses color matching to maintain that primary speaker.
         Sends primary speaker box to the director.
         """
-        hasFrame, frame = self.cap.read()
-        if not hasFrame:
-            return None, None
-
-        # Use this rotate if the mp4 is showing up incorrectly
-        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-
         bboxes = self.detectPerson(self.object_detector, frame)
-        self.draw_visuals(bboxes, frame, is_interface_running)
-        self.change_video_frame(frame, is_interface_running)
 
         if self.speaker_bbox is None:
             # If no speaker is locked in yet, look for the X pose.
@@ -160,17 +150,15 @@ class MediaPipePose(Tracker):
                 color = self.get_dominant_color(smaller_box)
                 self.speaker_color = color
                 print("Speaker detected with X pose:", self.speaker_bbox)
-                return [self.speaker_bbox], frame
+                return self.speaker_bbox
 
             # While speaker not yet locked, return all detected bounding boxes.
             # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
-            return bboxes, frame
+            return bboxes
 
         # If frame is empty after detecting a speaker, increment the lost speaker counter
-        if len(bboxes) == 0:
-            # No detections
-            self.lost_counter += 1
-        else:
+        self.lost_counter += 1
+        if len(bboxes) != 0:
             # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox. Based solely on color.
             best_bbox = None
             best_candidate_color = None
@@ -187,25 +175,17 @@ class MediaPipePose(Tracker):
                     best_candidate_color = color
 
             if best_bbox is not None:
-                # Found a candidate that has similar color.
+                # Found a candidate that has similar color reset the counter
                 self.speaker_bbox = best_bbox
                 self.speaker_color = best_candidate_color
                 self.lost_counter = 0
-            else:
-                self.lost_counter += 1
 
         if self.lost_counter >= self.lost_threshold:
             print("Speaker lost for too many frames. Resetting single speaker.")
             self.speaker_bbox = None
             self.speaker_color = None
             self.lost_counter = 0
-
-        return ([self.speaker_bbox] if self.speaker_bbox is not None else []), frame
-
-    def compute_center(self, bbox):
-        """Compute the center of a bounding box."""
-        x1, y1, x2, y2 = bbox
-        return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+        return self.speaker_bbox
 
     def get_cropped_box(self, bbox, frame):
         """

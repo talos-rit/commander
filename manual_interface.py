@@ -3,16 +3,17 @@ import tkinter
 from enum import IntEnum, StrEnum
 from threading import Thread
 
-from directors.continuous_director import ContinuousDirector
-from publisher import Publisher
-from tracking.keep_away.keep_away_director import KeepAwayDirector
-from tracking.keep_away.keep_away_tracker import KeepAwayTracker
-from tracking.media_pipe.media_pipe_pose import MediaPipePose
-from tracking.media_pipe.media_pipe_tracker import MediaPipeTracker
-from tracking.yolo.yolo_tracker import YOLOTracker
-from utils import get_file_path
+from PIL import ImageTk
 
-CONFIG_PATH = get_file_path("./config.yaml")
+from directors import BaseDirector, ContinuousDirector
+from publisher import Publisher
+from tkscheduler import Scheduler
+from tracking.keep_away.keep_away_director import KeepAwayDirector
+from tracking.keep_away.keep_away_tracker import KeepAwayModel
+from tracking.media_pipe.media_pipe_pose import MediaPipePoseModel
+from tracking.media_pipe.media_pipe_tracker import MediaPipeModel
+from tracking.tracker import Tracker
+from tracking.yolo.yolo_tracker import YOLOModel
 
 
 class Direction(IntEnum):
@@ -42,36 +43,46 @@ class ButtonText(StrEnum):
     AUTOMATIC_MODE_LABEL = "Control Mode: Automatic"
 
 
-class ManualInterface:
+class ManualInterface(tkinter.Tk):
     """
     Representation of a manual interface used to control
     the robotic arm which holds the camera.
     """
 
+    scheduler: Scheduler
+
     pressed_keys: set = set()
+    move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
+    manual_mode = True  # True for manual, False for computer vision
+    continuous_mode = True
+    current_mode = "standard"
+
+    # Flags for director loop
+    is_frame_loop_running = False
+    director_thread = None
+    director: BaseDirector | None = None
 
     def __init__(self):
         """Constructor sets up tkinter manual interface, including buttons and labels"""
-
-        self.rootWindow = tkinter.Tk()
-        self.rootWindow.title("Talos Manual Interface")
-
+        super().__init__()
+        self.scheduler = Scheduler(self)
+        self.title("Talos Manual Interface")
         self.pressed_keys = set()  # keeps track of keys which are pressed down
-        self.move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
+        self.last_key_presses = {}
+        self.tracker = Tracker(scheduler=self.scheduler)
+        Publisher.start_socket_connection(self.scheduler)
+        self.after("idle", self.start_director_loop)
 
         # setting up manual vs automatic control toggle
-
-        self.manual_mode = True  # True for manual, False for computer vision
-
         self.mode_label = tkinter.Label(
-            self.rootWindow,
+            self,
             text=ButtonText.MANUAL_MODE_LABEL,
             font=("Cascadia Code", 12),
         )
         self.mode_label.grid(row=2, column=4)
 
         self.toggle_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text=ButtonText.SWITCH,
             font=("Cascadia Code", 16, "bold"),
             command=self.toggle_command_mode,
@@ -80,17 +91,15 @@ class ManualInterface:
 
         # Setup up continuous/discrete toggle
 
-        self.continuous_mode = True
-
         self.cont_mode_label = tkinter.Label(
-            self.rootWindow,
+            self,
             text=ButtonText.CONTINUOUS_MODE_LABEL,
             font=("Cascadia Code", 12),
         )
         self.cont_mode_label.grid(row=1, column=4)
 
         self.cont_toggle_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text=ButtonText.SWITCH,
             font=("Cascadia Code", 16, "bold"),
             command=self.toggle_continuous_mode,
@@ -100,7 +109,7 @@ class ManualInterface:
         # setting up home button
 
         self.home_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text=ButtonText.HOME,
             font=("Cascadia Code", 16),
             command=self.move_home,
@@ -110,7 +119,7 @@ class ManualInterface:
         # setting up directional buttons
 
         self.up_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text=ButtonText.UP,
             height=2,
             width=10,
@@ -121,7 +130,7 @@ class ManualInterface:
         self.bind_button(self.up_button, Direction.UP)
 
         self.down_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text=ButtonText.DOWN,
             height=2,
             width=10,
@@ -132,7 +141,7 @@ class ManualInterface:
         self.bind_button(self.down_button, Direction.DOWN)
 
         self.left_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text=ButtonText.LEFT,
             height=2,
             width=10,
@@ -143,7 +152,7 @@ class ManualInterface:
         self.bind_button(self.left_button, Direction.LEFT)
 
         self.right_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text=ButtonText.RIGHT,
             height=2,
             width=10,
@@ -155,11 +164,9 @@ class ManualInterface:
 
         self.setup_keyboard_controls()
 
-        self.last_key_presses = {}
-
         # Setting up integrated video
         # Create a label that will display video frames.
-        self.video_label = tkinter.Label(self.rootWindow)
+        self.video_label = tkinter.Label(self)
         # This line ensures it stays on the top of the manual interface and centers it in the  middle
         self.video_label.grid(
             row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew"
@@ -168,7 +175,7 @@ class ManualInterface:
         # Set up keep away button
         # Keep‐Away mode toggle button
         self.keepaway_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text="Play Keep Away",
             font=("Cascadia Code", 12),
             command=self.toggle_keep_away_mode,
@@ -176,7 +183,7 @@ class ManualInterface:
         self.keepaway_button.grid(row=2, column=6, padx=10)
 
         self.yolo_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text="Yolo Tracker",
             font=("Cascadia Code", 12),
             command=self.toggle_yolo_mode,
@@ -184,50 +191,26 @@ class ManualInterface:
         self.yolo_button.grid(row=3, column=6, padx=10)
 
         self.media_pipe_pose_button = tkinter.Button(
-            self.rootWindow,
+            self,
             text="Media Pipe Pose Tracker",
             font=("Cascadia Code", 12),
             command=self.toggle_media_pipe_pose_mode,
         )
         self.media_pipe_pose_button.grid(row=4, column=6, padx=10)
 
-        self.current_mode = "standard"
-
-        # Flags for director loop
-        self.is_director_running = False
-        self.director_thread = None
-
-        self.start_director_thread()
-
     def setup_keyboard_controls(self):
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
-        self.rootWindow.bind(
-            "<KeyPress-Up>", lambda event: self.start_move(Direction.UP)
-        )
-        self.rootWindow.bind(
-            "<KeyRelease-Up>", lambda event: self.stop_move(Direction.UP)
-        )
+        self.bind("<KeyPress-Up>", lambda event: self.start_move(Direction.UP))
+        self.bind("<KeyRelease-Up>", lambda event: self.stop_move(Direction.UP))
 
-        self.rootWindow.bind(
-            "<KeyPress-Down>", lambda event: self.start_move(Direction.DOWN)
-        )
-        self.rootWindow.bind(
-            "<KeyRelease-Down>", lambda event: self.stop_move(Direction.DOWN)
-        )
+        self.bind("<KeyPress-Down>", lambda event: self.start_move(Direction.DOWN))
+        self.bind("<KeyRelease-Down>", lambda event: self.stop_move(Direction.DOWN))
 
-        self.rootWindow.bind(
-            "<KeyPress-Left>", lambda event: self.start_move(Direction.LEFT)
-        )
-        self.rootWindow.bind(
-            "<KeyRelease-Left>", lambda event: self.stop_move(Direction.LEFT)
-        )
+        self.bind("<KeyPress-Left>", lambda event: self.start_move(Direction.LEFT))
+        self.bind("<KeyRelease-Left>", lambda event: self.stop_move(Direction.LEFT))
 
-        self.rootWindow.bind(
-            "<KeyPress-Right>", lambda event: self.start_move(Direction.RIGHT)
-        )
-        self.rootWindow.bind(
-            "<KeyRelease-Right>", lambda event: self.stop_move(Direction.RIGHT)
-        )
+        self.bind("<KeyPress-Right>", lambda event: self.start_move(Direction.RIGHT))
+        self.bind("<KeyRelease-Right>", lambda event: self.stop_move(Direction.RIGHT))
 
     def bind_button(self, button, direction: Direction):
         """Shortens the constructor by binding button up/down presses.
@@ -246,31 +229,33 @@ class ManualInterface:
         Args:
             direction (string): global variables for directional commands are provided at the top of this file
         """
-        if self.manual_mode:
-            self.last_key_presses[int(direction)] = time.time()
+        if not self.manual_mode:
+            return
+        self.last_key_presses[direction] = time.time()
 
-            if direction not in self.pressed_keys:
-                self.pressed_keys.add(direction)
+        if direction in self.pressed_keys:
+            return
+        self.pressed_keys.add(direction)
 
-                self.change_button_state(direction, "sunken")
+        self.change_button_state(direction, "sunken")
 
-                if not self.continuous_mode:
-                    # moves toward input direction by delta 10 (degrees)
-                    match direction:
-                        case Direction.UP:
-                            Publisher.polar_pan_discrete(0, 10, 1000, 3000)
-                            print("Polar pan discrete up")
-                        case Direction.DOWN:
-                            Publisher.polar_pan_discrete(0, -10, 1000, 3000)
-                            print("Polar pan discrete down")
-                        case Direction.LEFT:
-                            Publisher.polar_pan_discrete(-10, 0, 1000, 3000)
-                            print("Polar pan discrete left")
-                        case Direction.RIGHT:
-                            Publisher.polar_pan_discrete(10, 0, 1000, 3000)
-                            print("Polar pan discrete right")
-                else:
-                    self.keep_moving(direction)
+        if self.continuous_mode:
+            self.keep_moving(direction)
+            return
+        # moves toward input direction by delta 10 (degrees)
+        match direction:
+            case Direction.UP:
+                Publisher.polar_pan_discrete(0, 10, 1000, 3000)
+                print("Polar pan discrete up")
+            case Direction.DOWN:
+                Publisher.polar_pan_discrete(0, -10, 1000, 3000)
+                print("Polar pan discrete down")
+            case Direction.LEFT:
+                Publisher.polar_pan_discrete(-10, 0, 1000, 3000)
+                print("Polar pan discrete left")
+            case Direction.RIGHT:
+                Publisher.polar_pan_discrete(10, 0, 1000, 3000)
+                print("Polar pan discrete right")
 
     def stop_move(self, direction: Direction):
         """Stops a movement going the current direction.
@@ -302,7 +287,7 @@ class ManualInterface:
                     self.change_button_state(direction, "raised")
 
             # Start the thread
-            thread = Thread(target=stop_func)
+            thread = Thread(target=stop_func, daemon=True)
             thread.start()
             return
         self.pressed_keys.remove(direction)
@@ -326,11 +311,9 @@ class ManualInterface:
             case Direction.RIGHT:
                 self.right_button.config(relief=depression)
 
-        if self.continuous_mode:
-            # Send a continuous polar pan STOP if no key is pressed
-            if len(self.pressed_keys) == 0:
-                Publisher.polar_pan_continuous_stop()
-                print("Polar pan cont STOP")
+        if self.continuous_mode and len(self.pressed_keys) == 0:
+            Publisher.polar_pan_continuous_stop()
+            print("Polar pan cont STOP")
 
     def keep_moving(self, direction: Direction):
         """Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
@@ -362,7 +345,7 @@ class ManualInterface:
             )
 
         if self.continuous_mode:
-            self.rootWindow.after(
+            self.after(
                 self.move_delay_ms, lambda: self.keep_moving(direction)
             )  # lambda used as function reference to execute when required
 
@@ -371,77 +354,63 @@ class ManualInterface:
         print("Moving home")
         Publisher.home(1000)  # sends a command to move to home via the publisher
 
-    def launch_user_interface(self):
-        """Launches user interface on demand."""
-        self.rootWindow.mainloop()
+    def start_director_loop(self):
+        self.is_frame_loop_running = True
+        self.last_mode = None
+        self.after(0, self.frame_loop)
 
-    def director_loop(self):
-        """Runs and starts the director loop"""
-        last_mode = None
-        tracker = None
-        director = None
+    def frame_loop(self):
+        """the director loop"""
+        if not self.is_frame_loop_running:
+            print("Ending director loop")
+            return
+        # if mode changed, tear down & rebuild
+        if self.current_mode != self.last_mode:
+            self.last_mode = self.current_mode
+            if self.director is not None:
+                self.director.stop_auto_control()
+                self.director = None
+            new_model = None
+            if self.last_mode == "keepaway":
+                print("Entering Keep Away")
+                self.keepaway_button.config(text="Standard Mode")
+                self.yolo_button.config(text="Yolo Mode")
+                self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
+                new_model = KeepAwayModel
+                self.director = KeepAwayDirector(self.tracker, self.scheduler)
+            elif self.last_mode == "yolo":
+                print("Entering Yolo")
+                self.yolo_button.config(text="Standard Mode")
+                self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
+                self.keepaway_button.config(text="Keep Away Mode")
+                new_model = YOLOModel
+                self.director = ContinuousDirector(self.tracker, self.scheduler)
+            elif self.last_mode == "mediapipepose":
+                print("Entering Media Pipe Pose")
+                self.media_pipe_pose_button.config(text="Standard Mode")
+                self.yolo_button.config(text="Yolo Mode")
+                self.keepaway_button.config(text="Keep Away Mode")
+                new_model = MediaPipePoseModel
+                self.director = ContinuousDirector(self.tracker, self.scheduler)
+            else:  # "standard"
+                print("Entering Media Pipe")
+                self.yolo_button.config(text="Yolo Mode")
+                self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
+                self.keepaway_button.config(text="Keep Away Mode")
+                new_model = MediaPipeModel
+                self.director = ContinuousDirector(self.tracker, self.scheduler)
+            self.tracker.swap_model(new_model)
 
-        while True:
-            # if mode changed, tear down & rebuild
-            if self.current_mode != last_mode:
-                last_mode = self.current_mode
-                if last_mode == "keepaway":
-                    print("Entering Keep Away")
-                    self.keepaway_button.config(text="Standard Mode")
-                    self.yolo_button.config(text="Yolo Mode")
-                    self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                    tracker = KeepAwayTracker(
-                        source="",
-                        config_path=CONFIG_PATH,
-                        video_label=self.video_label,
-                    )
-                    director = KeepAwayDirector(tracker, CONFIG_PATH)
-                elif last_mode == "yolo":
-                    print("Entering Yolo")
-                    self.yolo_button.config(text="Standard Mode")
-                    self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                    self.keepaway_button.config(text="Keep Away Mode")
-                    tracker = YOLOTracker(
-                        source="",
-                        config_path=CONFIG_PATH,
-                        video_label=self.video_label,
-                    )
-                    director = ContinuousDirector(tracker, CONFIG_PATH)
-                elif last_mode == "mediapipepose":
-                    self.media_pipe_pose_button.config(text="Standard Mode")
-                    self.yolo_button.config(text="Yolo Mode")
-                    self.keepaway_button.config(text="Keep Away Mode")
-                    print("Entering Media Pipe Pose")
-                    tracker = MediaPipePose(
-                        source="",
-                        config_path=CONFIG_PATH,
-                        video_label=self.video_label,
-                    )
-                    director = ContinuousDirector(tracker, CONFIG_PATH)
-                else:
-                    print("Entering Media Pipe")
-                    self.yolo_button.config(text="Yolo Mode")
-                    self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                    self.keepaway_button.config(text="Keep Away Mode")
-                    tracker = MediaPipeTracker(
-                        source="",
-                        config_path=CONFIG_PATH,
-                        video_label=self.video_label,
-                    )
-                    director = ContinuousDirector(tracker, CONFIG_PATH)
+        img = self.tracker.create_imagetk()
+        if img is not None:
+            self.update_video_frame(img)
+        self.after(10, self.frame_loop)
 
-            if tracker is None:
-                continue
-            bbox, frame = tracker.capture_frame(True)
-            if director is None or bbox is None or frame is None:
-                continue
-
-            director.process_frame(bbox, frame, self.is_director_running)
-
-    def start_director_thread(self):
-        if self.director_thread is None or not self.director_thread.is_alive():
-            self.director_thread = Thread(target=self.director_loop, daemon=True)
-            self.director_thread.start()
+    def update_video_frame(self, img: ImageTk.PhotoImage):
+        self.video_label.config(image=img)
+        # Keep a reference to prevent gc
+        # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
+        self.video_label.dumb_image_ref = img  # pyright: ignore[reportAttributeAccessIssue]
 
     def toggle_continuous_mode(self):
         self.continuous_mode = not self.continuous_mode
@@ -480,6 +449,8 @@ class ManualInterface:
 
         if self.manual_mode:
             self.mode_label.config(text=ButtonText.MANUAL_MODE_LABEL)
+            if self.director is not None:
+                self.director.stop_auto_control()
 
             self.up_button.config(state="normal")
             self.down_button.config(state="normal")
@@ -488,11 +459,15 @@ class ManualInterface:
 
             self.home_button.config(state="normal")
 
-            self.is_director_running = False
+            self.is_frame_loop_running = False
             self.pressed_keys = set()
             return
 
         self.mode_label.config(text=ButtonText.AUTOMATIC_MODE_LABEL)
+        if self.director is not None:
+            self.director.start_auto_control()
+        else:
+            print("director not found")
 
         self.up_button.config(state="disabled")
         self.down_button.config(state="disabled")
@@ -507,4 +482,3 @@ class ManualInterface:
             Direction.LEFT,
             Direction.RIGHT,
         }
-        self.is_director_running = True

@@ -1,8 +1,9 @@
 import time
 
 from config import SOCKET_HOST, SOCKET_PORT
-from connections import OperatorConnection
+from connections import Connection
 from icd_config import Command, int_to_bytes
+from tkscheduler import Scheduler
 
 
 def assert_normalized(*nums: int):
@@ -19,13 +20,18 @@ class Publisher:
     A static class that is used to publish instructions to the operator.
     """
 
-    connection = OperatorConnection(host=SOCKET_HOST, port=SOCKET_PORT)
+    connection = Connection(host=SOCKET_HOST, port=SOCKET_PORT, connect_on_init=False)
     command_count = 0
     CHAR_ENCODING = "utf-8"
 
     @staticmethod
+    def start_socket_connection(schedule: Scheduler | None = None):
+        Publisher.connection.schedule = schedule
+        Publisher.connection.connect_on_thread()
+
+    @staticmethod
     def close_connection():
-        Publisher.connection.close_socket()
+        Publisher.connection.close()
 
     @staticmethod
     def handshake():
@@ -351,7 +357,7 @@ class Publisher:
 
 
 def main():
-    while not Publisher.connection.is_connected:
+    while not Publisher.connection.is_running:
         time.sleep(1)
 
     Publisher.home(0)

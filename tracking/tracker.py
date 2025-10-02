@@ -1,69 +1,152 @@
+import multiprocessing
 from abc import ABC, abstractmethod
+from queue import Empty
 
 import cv2
-import yaml
 from PIL import Image, ImageTk
 
+from config import CAMERA_CONFIG
+from tkscheduler import IterativeTask, Scheduler
+from utils import (
+    add_termination_handler,
+    calculate_acceptable_box,
+    calculate_center_bbox,
+)
 
-# Abstract class for tracking
-class Tracker(ABC):
-    speaker_bbox: list | None = None
 
-    def __init__(self, source: str, config_path, video_label):
-        self.source = source
+class ObjectModel(ABC):
+    """
+    This is a model class where it can handle turning image frame into bounding box
+    The reason why this is separated is due to the fact that this will be running in a separate process.
+    """
 
-        self.config = self.load_config(config_path)
-        # Open the video source
-        if self.source:
-            self.cap = cv2.VideoCapture(self.source)
-        else:
-            camera_index = self.config["camera_index"]
-            self.cap = cv2.VideoCapture(camera_index)
-        self.acceptable_box_percent = self.config["acceptable_box_percent"]
-
-        self.speaker_bbox = None
-
-        self.video_label = video_label  # Label on the manual interface that shows the video feed with bounding boxes
-
-    def load_config(self, config_path):
-        with open(config_path, "r") as file:
-            return yaml.safe_load(file)
+    speaker_bbox: tuple[int, int, int, int] | None = None
+    fps = CAMERA_CONFIG.get("fps", 60)
+    camera_index = CAMERA_CONFIG["camera_index"]
+    acceptable_box_percent = CAMERA_CONFIG["acceptable_box_percent"]
+    desired_width = CAMERA_CONFIG.get("frame_width", None)
+    desired_height = CAMERA_CONFIG.get("frame_height", None)
 
     # Capture a frame from the source
     @abstractmethod
-    def capture_frame(self):
-        pass
+    def detect_person(self, frame) -> list:  # bboxes
+        raise NotImplementedError()
 
-    def calculate_acceptable_box(self, frame_width, frame_height):
-        """
-        Get the values from the config to create the acceptable box of where the speaker can be without sending movements.
-        Used in the drawing.
-        Parameters:
-        - bbox_width
-        - frame_height
-        """
-        # Use the frame height and width to calculate an acceptable box
-        # Calculate the frame's center
-        frame_center_x = frame_width // 2
-        frame_center_y = frame_height // 2
 
-        # Define the acceptable box (50% of width and height around the center)
-        acceptable_width = int(frame_width * self.acceptable_box_percent)
-        acceptable_height = int(frame_height * self.acceptable_box_percent)
+def _detect_person_worker(
+    model_class, frame_queue: multiprocessing.Queue, bbox_queue: multiprocessing.Queue
+):
+    model: ObjectModel = model_class()
+    frame = True
+    while frame is not None:
+        try:
+            frame = frame_queue.get(block=False)
+            if frame is None:
+                continue
+            bboxes = model.detect_person(frame=frame)
+            bbox_queue.put(bboxes)
+        except Empty:
+            continue
 
-        acceptable_box_left = frame_center_x - (acceptable_width // 2)
-        acceptable_box_top = frame_center_y - (acceptable_height // 2)
-        acceptable_box_right = frame_center_x + (acceptable_width // 2)
-        acceptable_box_bottom = frame_center_y + (acceptable_height // 2)
-        return (
-            acceptable_box_left,
-            acceptable_box_top,
-            acceptable_box_right,
-            acceptable_box_bottom,
+
+# Abstract class for tracking
+class Tracker:
+    task: IterativeTask | None = None
+    speaker_bbox: tuple[int, int, int, int] | None = None
+    fps = CAMERA_CONFIG.get("fps", 60)
+    camera_index = CAMERA_CONFIG["camera_index"]
+    acceptable_box_percent = CAMERA_CONFIG["acceptable_box_percent"]
+    desired_width = CAMERA_CONFIG.get("frame_width", None)
+    desired_height = CAMERA_CONFIG.get("frame_height", None)
+    model = None
+    _bboxes: list | None = None
+    _frame = None
+
+    def __init__(
+        self,
+        model=None,
+        scheduler: Scheduler | None = None,
+        source: str | None = None,
+        video_buffer_size=1,
+    ):
+        self.cap = cv2.VideoCapture(source or self.camera_index)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, video_buffer_size)  # Reduce buffer size
+        self.frame_delay = 1000 / self.fps
+        self.scheduler = scheduler
+        self.model = model
+        self.start_video()
+
+    def start_detection_process(self):
+        if hasattr(self, "_detection_process") and self._detection_process is not None:
+            return  # Already running
+
+        self._frame_queue = multiprocessing.Queue(maxsize=1)
+        self._bbox_queue = multiprocessing.Queue(maxsize=1)
+        self._detection_process = multiprocessing.Process(
+            target=_detect_person_worker,
+            args=(self.model, self._frame_queue, self._bbox_queue),
+            daemon=True,
         )
+        self._detection_process.start()
+        add_termination_handler(self.stop)
+        if self.scheduler:
+            self.scheduler.set_timeout(10, self.poll_bboxes)
+            self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
 
-    # Draws acceptable box, bounding box, and center dot onto the video
-    def draw_visuals(self, bounding_box, frame, is_interface_running):
+    def poll_bboxes(self):
+        try:
+            self._bboxes = self._bbox_queue.get(block=False)
+        except Empty:
+            pass
+        if (
+            self._detection_process is not None
+            and self._detection_process.is_alive()
+            and self.scheduler
+        ):
+            self.scheduler.set_timeout(10, self.poll_bboxes)
+
+    def send_latest_frame(self):
+        if hasattr(self, "_frame") and self._frame is not None:
+            try:
+                self._frame_queue.put_nowait(self._frame)
+            except Exception:
+                pass
+        if (
+            self._detection_process is not None
+            and self._detection_process.is_alive()
+            and self.scheduler
+        ):
+            self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
+
+    def stop_detection_process(self):
+        if hasattr(self, "_detection_process") and self._detection_process is not None:
+            try:
+                if hasattr(self, "_frame_queue"):
+                    self._frame_queue.put_nowait(None)
+                self._detection_process.join()
+                self._bbox_queue.join_thread()
+                self._frame_queue.join_thread()
+            except Exception:
+                pass
+            self._detection_process = None
+
+    def save_frame(self):
+        hasFrame, frame = self.cap.read()
+        if not hasFrame:
+            return None
+        self._frame = frame
+        self.hasNewFrame = True
+        return self.hasNewFrame, self._frame
+
+    def get_frame(self):
+        res = (self.hasNewFrame, self._frame)
+        self.hasNewFrame = False
+        return res
+
+    def get_bbox(self):
+        return self._bboxes
+
+    def draw_visuals(self, bounding_box, frame):
         """
         Draws all the visuals we need on the frame. Rectangles around bounding boxes, circles in the middle, acceptable box for director, red dot for speaker.
 
@@ -79,7 +162,7 @@ class Tracker(ABC):
             acceptable_box_top,
             acceptable_box_right,
             acceptable_box_bottom,
-        ) = self.calculate_acceptable_box(frame_width, frame_height)
+        ) = calculate_acceptable_box(frame_width, frame_height)
         color = (0, 0, 255)  # Green color for the rectangle
         thickness = 2  # Thickness of the rectangle lines
         cv2.rectangle(
@@ -99,65 +182,102 @@ class Tracker(ABC):
             radius = 10  # Radius of the circle
             thickness = -1  # -1 fills the circle
 
-            bbox_center_x = (x1 + x2) // 2
-            bbox_center_y = (y1 + y2) // 2
+            bbox_center_x, bbox_center_y = calculate_center_bbox(box)
 
             # Draw center of bounding box dot, this the value the commander is using
             cv2.circle(frame, (bbox_center_x, bbox_center_y), radius, color, thickness)
 
             # If speaker_bbox exists, draw line + distance
-            if self.speaker_bbox is not None:
-                # Draw where the tracker is taking the color from - t-shirt area
-                height = y2 - y1
-                width = x2 - x1
-                chest_start = y1 + int(height * 0.3)
-                chest_end = y1 + int(height * 0.5)
-                exclude_extra = x1 + int(width * 0.4)
-                exclude_extra2 = x1 + int(width * 0.6)
-                cv2.rectangle(
-                    frame,
-                    (exclude_extra, chest_start),
-                    (exclude_extra2, chest_end),
-                    (0, 150, 150),
-                    2,
-                )
+            if self.speaker_bbox is None:
+                continue
 
-                sx1, sy1, sx2, sy2 = self.speaker_bbox
-                speaker_center_x = (sx1 + sx2) // 2
-                speaker_center_y = (sy1 + sy2) // 2
-                # Red circle for speaker bbox
-                cv2.circle(
-                    frame,
-                    (speaker_center_x, speaker_center_y),
-                    radius,
-                    (0, 0, 255),
-                    thickness,
-                )
+            # Draw where the tracker is taking the color from - t-shirt area
+            height = y2 - y1
+            width = x2 - x1
+            chest_start = y1 + int(height * 0.3)
+            chest_end = y1 + int(height * 0.5)
+            exclude_extra = x1 + int(width * 0.4)
+            exclude_extra2 = x1 + int(width * 0.6)
+            cv2.rectangle(
+                frame,
+                (exclude_extra, chest_start),
+                (exclude_extra2, chest_end),
+                (0, 150, 150),
+                2,
+            )
 
-        if not is_interface_running:
-            cv2.imshow("Object Detection", frame)
+            # Red circle for speaker bbox
+            cv2.circle(
+                frame,
+                calculate_center_bbox(self.speaker_bbox),
+                radius,
+                (0, 0, 255),
+                thickness,
+            )
+        return frame
 
-    def change_video_frame(self, frame, is_interface_running):
-        if is_interface_running:
-            # Once all drawings and processing are done, update the display.
-            # Convert from BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
+    def conv_cv2_frame_to_tkimage(self, frame):
+        # Convert frame to tkinter image
+        # Convert from BGR to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(frame_rgb)
 
+        dim = (self.desired_width, self.desired_height)
+        if self.desired_height is None:
             # Set desired dimensions (adjust these values as needed)
-            desired_width = 640
-            desired_height = 480
-            pil_image = pil_image.resize(
-                (desired_width, desired_height), Image.Resampling.LANCZOS
-            )
+            new_width = self.desired_width or 500
+            aspect_ratio = float(frame.shape[1]) / float(frame.shape[0])
+            new_height = int(new_width / aspect_ratio)
 
-            imgtk = ImageTk.PhotoImage(image=pil_image)
+            # Create the new dimensions tuple (width, height)
+            dim = (new_width, new_height)
+        pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(image=pil_image)
 
-            # Update the label
-            self.video_label.after(
-                0, lambda imgtk=imgtk: self.update_video_label(imgtk)
-            )
+    def create_imagetk(self, bboxes=None, frame=None):
+        """This adds bounding box to the frame
+        and returns the tkimage created.
+        If the frame is supplied that frame will be used,
+        else its latest internal frames will be used.
+        If the bbox is not supplied the last stored frame will be used
 
-    def update_video_label(self, imgtk):
-        self.video_label.config(image=imgtk)
-        self.video_label.image = imgtk
+        Returns:
+            - bboxes
+            - ImageTk.PhotoImage
+        """
+        frame = frame or self._frame
+        bboxes = bboxes or self._bboxes
+        if frame is None:
+            return None
+        if bboxes is not None:
+            self.draw_visuals(bboxes, frame)
+        return self.conv_cv2_frame_to_tkimage(frame)
+
+    def start_video(self):
+        assert self.scheduler is not None
+        assert Tracker.task is None or not Tracker.task.running
+        Tracker.task = self.scheduler.set_interval(self.frame_delay, self.save_frame)
+        print("Video started")
+        return Tracker.task
+
+    def stop_video(self):
+        """Stops the save frame capturing process"""
+        print("Stopping video")
+        if Tracker.task is not None:
+            Tracker.task.cancel()
+
+    def start(self):
+        print("Starting Tracker")
+        self.start_video()
+        self.start_detection_process()
+
+    def stop(self):
+        print("Stopping Tracker")
+        self.stop_video()
+        self.stop_detection_process()
+
+    def swap_model(self, new_model):
+        """This will stop the current detection process and start a new process on the new model"""
+        self.stop_detection_process()
+        self.model = new_model
+        self.start_detection_process()
