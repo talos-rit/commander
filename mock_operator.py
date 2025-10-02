@@ -1,12 +1,12 @@
 import time
 
-from config import SOCKET_HOST, SOCKET_PORT
+from config.config import NETWORK_CONFIG
 from connections import CommandConnection
 from icd_config import int_to_bytes
 
 
 class MockOperator:
-    connection = CommandConnection(host=SOCKET_HOST, port=SOCKET_PORT)
+    connection = CommandConnection(host=NETWORK_CONFIG["socket_host"], port=NETWORK_CONFIG["socket_port"])
 
     @staticmethod
     def close_connection():

@@ -1,0 +1,3 @@
+socket_host: "operator.talos"
+# socket_host: "localhost"
+socket_port: 61616

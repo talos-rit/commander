@@ -1,6 +1,6 @@
 import time
 
-from config import CAMERA_CONFIG
+from config.config import CAMERA_CONFIG
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import calculate_acceptable_box, calculate_center_bbox
