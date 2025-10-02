@@ -1,6 +1,8 @@
 import os
 import yaml
 
+# remember to add a .local version to .gitignore when creating new config directories
+
 CAMERA_BASE_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "camera_config.yaml")
 CAMERA_LOCAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "camera_config.local.yaml")
 

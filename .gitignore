@@ -165,3 +165,7 @@ cython_debug/
 
 # Yolo models
 *.pt
+
+# Config
+# config/camera_config.local.yaml
+# config/network_config.local.yaml
