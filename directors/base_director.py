@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
-from config.tkscheduler import IterativeTask, Scheduler
-
+from tkscheduler import IterativeTask, Scheduler
 from tracking.tracker import Tracker
 from utils import add_termination_handler
 

@@ -37,9 +37,9 @@ def calculate_acceptable_box(
     - bbox_width
     - frame_height
     """
-    from config.config import CAMERA_CONFIG
-
     if acceptable_box_percent is None:
+        from config.config import CAMERA_CONFIG
+
         acceptable_box_percent = (
             acceptable_box_percent or CAMERA_CONFIG["acceptable_box_percent"]
         )
