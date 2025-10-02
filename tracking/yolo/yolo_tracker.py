@@ -89,8 +89,6 @@ class YOLOModel(ObjectModel):
         # print(person_keypoints[0])
 
         if person_keypoints.shape[1] < 11:
-            print("shape")
-            print(person_keypoints.shape[0])
             return False
 
         kp_xy = person_keypoints.xyn[0]

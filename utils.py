@@ -94,7 +94,5 @@ def terminate(signum, frame):
     for handler in TERMINATION_HANDLERS:
         handler()
 
-    sys.exit(0)
-
 
 signal.signal(signal.SIGINT, terminate)

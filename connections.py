@@ -3,6 +3,7 @@ import threading
 import time
 
 from icd_config import bytes_to_int, int_to_bytes
+from tkscheduler import Scheduler
 from utils import add_termination_handler
 
 
@@ -12,12 +13,16 @@ class Connection:
     is_running = False
     command_count = 0
     thread: threading.Thread | None = None
+    schedule: Scheduler | None = None
 
-    def __init__(self, host, port, connect_on_init=True):
+    def __init__(
+        self, host, port, schedule: Scheduler | None = None, connect_on_init=True
+    ):
         self.host = host
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.schedule = schedule
         if connect_on_init:
             # Start connection on a separate thread so it doesn't block
             self.connect_on_thread()
@@ -36,6 +41,9 @@ class Connection:
                 break
             except OSError as e:
                 print(f"[Connection]: Bind failed, retrying in 5s {e}")
+                if self.schedule is not None:
+                    self.schedule.set_timeout(5000, self.connect)
+                    return
                 time.sleep(5)
         else:
             return  # Exit only if is_running was set to False
