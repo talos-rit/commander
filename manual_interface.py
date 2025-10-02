@@ -70,7 +70,7 @@ class ManualInterface(tkinter.Tk):
         self.pressed_keys = set()  # keeps track of keys which are pressed down
         self.last_key_presses = {}
         self.tracker = Tracker(scheduler=self.scheduler)
-        Publisher.start_socket_connection()
+        Publisher.start_socket_connection(self.scheduler)
         self.after("idle", self.start_director_loop)
 
         # setting up manual vs automatic control toggle

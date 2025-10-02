@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from config.tkscheduler import IterativeTask, Scheduler
 
 from tracking.tracker import Tracker
+from utils import add_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
 
@@ -32,6 +33,7 @@ class BaseDirector(ABC):
             self.control_task = self.scheduler.set_interval(
                 1000 / DIRECTOR_CONTROL_RATE, self.track_obj
             )
+            add_termination_handler(self.stop_auto_control)
         else:
             raise NotImplementedError("No GUI mode not implemented")
 

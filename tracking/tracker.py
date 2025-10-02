@@ -7,7 +7,11 @@ from PIL import Image, ImageTk
 
 from config.config import CAMERA_CONFIG
 from tkscheduler import IterativeTask, Scheduler
-from utils import calculate_acceptable_box, calculate_center_bbox
+from utils import (
+    add_termination_handler,
+    calculate_acceptable_box,
+    calculate_center_bbox,
+)
 
 
 class ObjectModel(ABC):
@@ -84,7 +88,7 @@ class Tracker:
             daemon=True,
         )
         self._detection_process.start()
-
+        add_termination_handler(self.stop)
         if self.scheduler:
             self.scheduler.set_timeout(10, self.poll_bboxes)
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
@@ -120,6 +124,8 @@ class Tracker:
                 if hasattr(self, "_frame_queue"):
                     self._frame_queue.put_nowait(None)
                 self._detection_process.join()
+                self._bbox_queue.join_thread()
+                self._frame_queue.join_thread()
             except Exception:
                 pass
             self._detection_process = None
@@ -255,16 +261,18 @@ class Tracker:
         return Tracker.task
 
     def stop_video(self):
-        """Stops the frame_loop iterative process"""
+        """Stops the save frame capturing process"""
         print("Stopping video")
         if Tracker.task is not None:
             Tracker.task.cancel()
 
     def start(self):
+        print("Starting Tracker")
         self.start_video()
         self.start_detection_process()
 
     def stop(self):
+        print("Stopping Tracker")
         self.stop_video()
         self.stop_detection_process()
 

@@ -3,6 +3,7 @@ import time
 from config.config import NETWORK_CONFIG
 from connections import Connection
 from icd_config import Command, int_to_bytes
+from tkscheduler import Scheduler
 
 
 def assert_normalized(*nums: int):
@@ -24,7 +25,8 @@ class Publisher:
     CHAR_ENCODING = "utf-8"
 
     @staticmethod
-    def start_socket_connection():
+    def start_socket_connection(schedule: Scheduler | None = None):
+        Publisher.connection.schedule = schedule
         Publisher.connection.connect_on_thread()
 
     @staticmethod
