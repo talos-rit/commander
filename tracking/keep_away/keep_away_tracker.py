@@ -1,5 +1,4 @@
 import time
-import tkinter
 
 import cv2
 import mediapipe as mp
@@ -8,10 +7,11 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 from tracking.media_pipe.mp_utils import get_model_asset_path
-from tracking.tracker import Tracker
+from tracking.tracker import ObjectModel
+from utils import calculate_acceptable_box
 
 
-class KeepAwayTracker(Tracker):
+class KeepAwayModel(ObjectModel):
     lost_counter = 0
     lost_threshold = 100
     speaker_color = None
@@ -21,14 +21,7 @@ class KeepAwayTracker(Tracker):
     game_over = True
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-    def __init__(
-        self,
-        video_label: tkinter.Label | None = None,
-        source: str | None = None,
-        video_buffer_size=1,
-    ):
-        super().__init__(video_label, source, video_buffer_size)
-
+    def __init__(self):
         base_options = python.BaseOptions(
             model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
         )
@@ -68,26 +61,27 @@ class KeepAwayTracker(Tracker):
 
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
         detection_result = object_detector.detect(mp_image)
+        if not detection_result:
+            return []
         bboxes = []
-        if detection_result:
-            for detection in detection_result.detections:
-                # print(detection)
-                bboxC = detection.bounding_box
-                # print(bboxC)
+        for detection in detection_result.detections:
+            # print(detection)
+            bboxC = detection.bounding_box
+            # print(bboxC)
 
-                x1 = bboxC.origin_x
-                y1 = bboxC.origin_y
-                x2 = bboxC.origin_x + bboxC.width
-                y2 = bboxC.origin_y + bboxC.height
+            x1 = bboxC.origin_x
+            y1 = bboxC.origin_y
+            x2 = bboxC.origin_x + bboxC.width
+            y2 = bboxC.origin_y + bboxC.height
 
-                # Scale bounding box back to original frame size
-                cvRect = [
-                    int(x1 * scaleWidth),
-                    int(y1 * scaleHeight),
-                    int(x2 * scaleWidth),
-                    int(y2 * scaleHeight),
-                ]
-                bboxes.append(cvRect)
+            # Scale bounding box back to original frame size
+            cvRect = [
+                int(x1 * scaleWidth),
+                int(y1 * scaleHeight),
+                int(x2 * scaleWidth),
+                int(y2 * scaleHeight),
+            ]
+            bboxes.append(cvRect)
         return bboxes
 
     def is_x_pose(self, pose_landmarks):
@@ -118,31 +112,17 @@ class KeepAwayTracker(Tracker):
             vertical_diff_left = abs(left_wrist.y - left_shoulder.y)
             vertical_diff_right = abs(right_wrist.y - right_shoulder.y)
 
-            if vertical_diff_left < 0.1 and vertical_diff_right < 0.1:
-                return True
-
+            return vertical_diff_left < 0.1 and vertical_diff_right < 0.1
         return False
 
-    def capture_frame(self, is_interface_running):
+    def detect_person(self, frame):
         """
         Finds all the people in the frame, and then decides what to send to the director.
         Looks for x pose to determine primary speaker.
         Uses color matching to maintain that primary speaker.
         Sends primary speaker box to the director.
         """
-
-        hasFrame, frame = self.cap.read()
-        if not hasFrame:
-            return None, None
-
-        # Use this rotate if the mp4 is showing up incorrectly
-        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-
         bboxes = self.detectPerson(self.object_detector, frame)
-
-        self.draw_visuals(bboxes, frame, is_interface_running)
-
-        self.change_video_frame(frame, is_interface_running)
 
         if self.speaker_bbox is None or self.game_over is True:
             # If no speaker is locked in yet, look for the X pose.
@@ -175,25 +155,23 @@ class KeepAwayTracker(Tracker):
                 self.keep_away_mode = True
                 print("Speaker detected with X pose:", self.speaker_bbox)
                 print("Game Started!")
-                return [self.speaker_bbox], frame
+                return [self.speaker_bbox]
 
             # While speaker not yet locked, return all detected bounding boxes.
             # This will just have the director track whichever it sees first.
             # If there is only one person in frame this is fine
-            return bboxes, frame
+            return bboxes
 
         # If frame is empty after detecting a speaker, increment the lost speaker counter
-        if len(bboxes) == 0:
-            # No detections
-            self.lost_counter += 1
-        else:
+        # No detections
+        self.lost_counter += 1
+        if len(bboxes) > 0:
             # Speaker is already locked. Find the current detection that is
             # closest to the stored speaker bbox. Based solely on color.
             best_bbox = None
             best_candidate_color = None
 
             for bbox in bboxes:
-                x1, y1, x2, y2 = bbox
                 smaller_box = self.get_cropped_box(bbox, frame)
                 color = self.get_dominant_color(smaller_box)
                 # Compute the Euclidean distance between the candidate color and the stored speaker color.
@@ -203,13 +181,12 @@ class KeepAwayTracker(Tracker):
                     best_bbox = bbox
                     best_candidate_color = color
 
+            self.lost_counter += 1
             if best_bbox is not None:
                 # Found a candidate that has similar color.
                 self.speaker_bbox = best_bbox
                 self.speaker_color = best_candidate_color
                 self.lost_counter = 0
-            else:
-                self.lost_counter += 1
 
         if self.lost_counter >= self.lost_threshold:
             print("Speaker lost for too many frames. Resetting single speaker.")
@@ -217,12 +194,7 @@ class KeepAwayTracker(Tracker):
             self.speaker_color = None
             self.lost_counter = 0
 
-        return ([self.speaker_bbox] if self.speaker_bbox is not None else []), frame
-
-    def compute_center(self, bbox):
-        """Compute the center of a bounding box."""
-        x1, y1, x2, y2 = bbox
-        return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+        return [self.speaker_bbox] if self.speaker_bbox is not None else []
 
     def get_cropped_box(self, bbox, frame):
         """
@@ -273,7 +245,7 @@ class KeepAwayTracker(Tracker):
 
         return int(dominant_hue)
 
-    def draw_visuals(self, bounding_box, frame, is_interface_running):
+    def draw_visuals(self, bounding_box, frame):
         h, w = frame.shape[:2]
 
         # 1) Compute elapsed once
@@ -282,7 +254,7 @@ class KeepAwayTracker(Tracker):
         )
 
         # Draw acceptable box
-        left, top, right, bottom = self.calculate_acceptable_box(w, h)
+        left, top, right, bottom = calculate_acceptable_box(w, h)
         cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
 
         # Before drawing boxes, if we're past the countdown and not yet game_over,
@@ -317,30 +289,27 @@ class KeepAwayTracker(Tracker):
             cv2.circle(frame, (cx, cy), 5, box_color, -1)
 
         # Overlay countdown or Game Over text on top
-        if self.keep_away_mode:
-            if (elapsed or 0) < 5:
-                text, scale, thickness = str(5 - int(elapsed or 0)), 5, 8
-            elif self.game_over:
-                text, scale, thickness = "GAME OVER", 3, 6
-            else:
-                text = None
+        if not self.keep_away_mode:
+            return
 
-            if text:
-                (tw, th), _ = cv2.getTextSize(
-                    text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness
-                )
-                pos = ((w - tw) // 2, (h + th) // 2)
-                cv2.putText(
-                    frame,
-                    text,
-                    pos,
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    scale,
-                    (0, 0, 255),
-                    thickness,
-                    cv2.LINE_AA,
-                )
+        text = None
+        if (elapsed or 0) < 5:
+            text, scale, thickness = str(5 - int(elapsed or 0)), 5, 8
+        elif self.game_over:
+            text, scale, thickness = "GAME OVER", 3, 6
 
-        # show
-        if not is_interface_running:
-            cv2.imshow("Object Detection", frame)
+        if text is not None:
+            (tw, th), _ = cv2.getTextSize(
+                text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness
+            )
+            pos = ((w - tw) // 2, (h + th) // 2)
+            cv2.putText(
+                frame,
+                text,
+                pos,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                scale,
+                (0, 0, 255),
+                thickness,
+                cv2.LINE_AA,
+            )

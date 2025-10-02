@@ -3,13 +3,17 @@ import tkinter
 from enum import IntEnum, StrEnum
 from threading import Thread
 
-from directors.continuous_director import ContinuousDirector
+from PIL import ImageTk
+
+from directors import BaseDirector, ContinuousDirector
 from publisher import Publisher
+from tkscheduler import Scheduler
 from tracking.keep_away.keep_away_director import KeepAwayDirector
-from tracking.keep_away.keep_away_tracker import KeepAwayTracker
-from tracking.media_pipe.media_pipe_pose import MediaPipePose
-from tracking.media_pipe.media_pipe_tracker import MediaPipeTracker
-from tracking.yolo.yolo_tracker import YOLOTracker
+from tracking.keep_away.keep_away_tracker import KeepAwayModel
+from tracking.media_pipe.media_pipe_pose import MediaPipePoseModel
+from tracking.media_pipe.media_pipe_tracker import MediaPipeModel
+from tracking.tracker import Tracker
+from tracking.yolo.yolo_tracker import YOLOModel
 
 
 class Direction(IntEnum):
@@ -45,6 +49,8 @@ class ManualInterface(tkinter.Tk):
     the robotic arm which holds the camera.
     """
 
+    scheduler: Scheduler
+
     pressed_keys: set = set()
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
     manual_mode = True  # True for manual, False for computer vision
@@ -52,18 +58,22 @@ class ManualInterface(tkinter.Tk):
     current_mode = "standard"
 
     # Flags for director loop
-    is_director_running = False
+    is_frame_loop_running = False
     director_thread = None
+    director: BaseDirector | None = None
 
     def __init__(self):
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
+        self.scheduler = Scheduler(self)
         self.title("Talos Manual Interface")
-
         self.pressed_keys = set()  # keeps track of keys which are pressed down
+        self.last_key_presses = {}
+        self.tracker = Tracker(scheduler=self.scheduler)
+        Publisher.start_socket_connection()
+        self.after("idle", self.start_director_loop)
 
         # setting up manual vs automatic control toggle
-
         self.mode_label = tkinter.Label(
             self,
             text=ButtonText.MANUAL_MODE_LABEL,
@@ -154,8 +164,6 @@ class ManualInterface(tkinter.Tk):
 
         self.setup_keyboard_controls()
 
-        self.last_key_presses = {}
-
         # Setting up integrated video
         # Create a label that will display video frames.
         self.video_label = tkinter.Label(self)
@@ -189,10 +197,6 @@ class ManualInterface(tkinter.Tk):
             command=self.toggle_media_pipe_pose_mode,
         )
         self.media_pipe_pose_button.grid(row=4, column=6, padx=10)
-
-        Publisher.start_socket_connection()
-        self.after("idle", self.start_director_loop)
-        # self.start_director_thread()
 
     def setup_keyboard_controls(self):
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
@@ -351,72 +355,62 @@ class ManualInterface(tkinter.Tk):
         Publisher.home(1000)  # sends a command to move to home via the publisher
 
     def start_director_loop(self):
-        self.is_director_running = True
+        self.is_frame_loop_running = True
         self.last_mode = None
-        self.tracker = None
-        self.director = None
-        self.after(0, self.director_loop)
+        self.after(0, self.frame_loop)
 
-    def director_loop(self):
+    def frame_loop(self):
         """the director loop"""
-        if not self.is_director_running:
+        if not self.is_frame_loop_running:
+            print("Ending director loop")
             return
         # if mode changed, tear down & rebuild
         if self.current_mode != self.last_mode:
             self.last_mode = self.current_mode
-            if self.tracker is not None:
-                self.tracker.stop_video()
-                self.tracker = None
+            if self.director is not None:
+                self.director.stop_auto_control()
+                self.director = None
+            new_model = None
             if self.last_mode == "keepaway":
                 print("Entering Keep Away")
                 self.keepaway_button.config(text="Standard Mode")
                 self.yolo_button.config(text="Yolo Mode")
                 self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                self.tracker = KeepAwayTracker(
-                    source="",
-                    video_label=self.video_label,
-                )
-                self.director = KeepAwayDirector(self.tracker)
+                new_model = KeepAwayModel
+                self.director = KeepAwayDirector(self.tracker, self.scheduler)
             elif self.last_mode == "yolo":
                 print("Entering Yolo")
                 self.yolo_button.config(text="Standard Mode")
                 self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                 self.keepaway_button.config(text="Keep Away Mode")
-                self.tracker = YOLOTracker(
-                    source="",
-                    video_label=self.video_label,
-                )
-                self.director = ContinuousDirector(self.tracker)
+                new_model = YOLOModel
+                self.director = ContinuousDirector(self.tracker, self.scheduler)
             elif self.last_mode == "mediapipepose":
+                print("Entering Media Pipe Pose")
                 self.media_pipe_pose_button.config(text="Standard Mode")
                 self.yolo_button.config(text="Yolo Mode")
                 self.keepaway_button.config(text="Keep Away Mode")
-                print("Entering Media Pipe Pose")
-                self.tracker = MediaPipePose(
-                    source="",
-                    video_label=self.video_label,
-                )
-                self.director = ContinuousDirector(self.tracker)
+                new_model = MediaPipePoseModel
+                self.director = ContinuousDirector(self.tracker, self.scheduler)
             else:  # "standard"
                 print("Entering Media Pipe")
                 self.yolo_button.config(text="Yolo Mode")
                 self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
                 self.keepaway_button.config(text="Keep Away Mode")
-                self.tracker = MediaPipeTracker(
-                    source="",
-                    video_label=self.video_label,
-                )
-                self.director = ContinuousDirector(self.tracker)
-            self.tracker.start_video()
+                new_model = MediaPipeModel
+                self.director = ContinuousDirector(self.tracker, self.scheduler)
+            self.tracker.swap_model(new_model)
 
-        if self.tracker is None:
-            return self.after(0, self.director_loop)
-        bbox, frame = self.tracker.capture_frame(True)
-        if self.director is None or bbox is None or frame is None:
-            return self.after(0, self.director_loop)
+        img = self.tracker.create_imagetk()
+        if img is not None:
+            self.update_video_frame(img)
+        self.after(10, self.frame_loop)
 
-        self.director.process_frame(bbox, frame, self.is_director_running)
-        self.after(10, self.director_loop)
+    def update_video_frame(self, img: ImageTk.PhotoImage):
+        self.video_label.config(image=img)
+        # Keep a reference to prevent gc
+        # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
+        self.video_label.dumb_image_ref = img  # pyright: ignore[reportAttributeAccessIssue]
 
     def toggle_continuous_mode(self):
         self.continuous_mode = not self.continuous_mode
@@ -455,6 +449,8 @@ class ManualInterface(tkinter.Tk):
 
         if self.manual_mode:
             self.mode_label.config(text=ButtonText.MANUAL_MODE_LABEL)
+            if self.director is not None:
+                self.director.stop_auto_control()
 
             self.up_button.config(state="normal")
             self.down_button.config(state="normal")
@@ -463,11 +459,15 @@ class ManualInterface(tkinter.Tk):
 
             self.home_button.config(state="normal")
 
-            self.is_director_running = False
+            self.is_frame_loop_running = False
             self.pressed_keys = set()
             return
 
         self.mode_label.config(text=ButtonText.AUTOMATIC_MODE_LABEL)
+        if self.director is not None:
+            self.director.start_auto_control()
+        else:
+            print("director not found")
 
         self.up_button.config(state="disabled")
         self.down_button.config(state="disabled")
@@ -482,4 +482,3 @@ class ManualInterface(tkinter.Tk):
             Direction.LEFT,
             Direction.RIGHT,
         }
-        self.is_director_running = True

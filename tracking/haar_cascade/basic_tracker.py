@@ -1,26 +1,18 @@
-import tkinter
-
 import cv2
 
-from tracking.tracker import Tracker
+from tracking.tracker import ObjectModel
 from utils import get_file_path
 
 
-class BasicTracker(Tracker):
+class BasicModel(ObjectModel):
     # The tracker class is responsible for capturing frames from the source and detecting faces in the frames
-    def __init__(
-        self,
-        video_label: tkinter.Label | None = None,
-        source: str | None = None,
-        vide_buffer_size=1,
-    ):
-        super().__init__(video_label, source, vide_buffer_size)
+    def __init__(self):
         self.faceCascade = cv2.CascadeClassifier(
             get_file_path("tracking/haar_cascade/haarcascade_frontalface_default.xml")
         )
 
     # Detect faces in the frame
-    def detectFace(self, faceCascade, frame, inHeight=500, inWidth=0):
+    def detect_person(self, frame, inHeight=500, inWidth=0):
         frameOpenCVHaar = frame.copy()
         frameHeight = frameOpenCVHaar.shape[0]
         frameWidth = frameOpenCVHaar.shape[1]
@@ -32,7 +24,7 @@ class BasicTracker(Tracker):
         frameOpenCVHaarSmall = cv2.resize(frameOpenCVHaar, (inWidth, inHeight))
         frameGray = cv2.cvtColor(frameOpenCVHaarSmall, cv2.COLOR_BGR2GRAY)
 
-        faces = faceCascade.detectMultiScale(frameGray)
+        faces = self.faceCascade.detectMultiScale(frameGray)
         bboxes = []
         for x, y, w, h in faces:
             x1 = x
@@ -47,11 +39,3 @@ class BasicTracker(Tracker):
             ]
             bboxes.append(cvRect)
         return bboxes
-
-    # Capture a frame from the source and detect faces in the frame
-    def capture_frame(self):
-        hasFrame, frame = self.cap.read()
-        if not hasFrame:
-            return None, None
-
-        return self.detectFace(self.faceCascade, frame), frame
