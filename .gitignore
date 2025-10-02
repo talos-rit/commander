@@ -167,5 +167,5 @@ cython_debug/
 *.pt
 
 # Config
-# config/camera_config.local.yaml
-# config/network_config.local.yaml
+config/camera_config.local.yaml
+config/network_config.local.yaml
