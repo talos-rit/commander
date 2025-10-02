@@ -56,8 +56,8 @@ class Tracker:
     fps = CAMERA_CONFIG.get("fps", 60)
     camera_index = CAMERA_CONFIG["camera_index"]
     acceptable_box_percent = CAMERA_CONFIG["acceptable_box_percent"]
-    desired_width = CAMERA_CONFIG.get("frame_width", None)
-    desired_height = CAMERA_CONFIG.get("frame_height", None)
+    desired_width: int | None = CAMERA_CONFIG.get("frame_width", None)
+    desired_height: int | None = CAMERA_CONFIG.get("frame_height", None)
     model = None
     _bboxes: list | None = None
     _frame = None
@@ -231,7 +231,8 @@ class Tracker:
 
             # Create the new dimensions tuple (width, height)
             dim = (new_width, new_height)
-        pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)
+        assert dim[0] is not None and dim[1] is not None
+        pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
         return ImageTk.PhotoImage(image=pil_image)
 
     def create_imagetk(self, bboxes=None, frame=None):
