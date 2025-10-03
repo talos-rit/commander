@@ -11,6 +11,7 @@ from utils import (
 # Temporary hardcoded index to until hostname can be passed in
 CONFIG = ROBOT_CONFIGS["operator.talos"]
 
+
 class KeepAwayDirector(BaseDirector):
     # Time when the person first moved outside the box
     movement_detection_start_time: float | None = None

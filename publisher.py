@@ -8,6 +8,7 @@ from tkscheduler import Scheduler
 # Temporary hardcoded index to until hostname can be passed in
 CONFIG = ROBOT_CONFIGS["operator.talos"]
 
+
 def assert_normalized(*nums: int):
     nums_abs = list(map(lambda x: abs(x), nums))
     return map(lambda x: x in [0, 1], nums_abs)
@@ -22,7 +23,9 @@ class Publisher:
     A static class that is used to publish instructions to the operator.
     """
 
-    connection = Connection(host=CONFIG["socket_host"], port=CONFIG["socket_port"], connect_on_init=False)
+    connection = Connection(
+        host=CONFIG["socket_host"], port=CONFIG["socket_port"], connect_on_init=False
+    )
     command_count = 0
     CHAR_ENCODING = "utf-8"
 
