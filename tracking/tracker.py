@@ -48,7 +48,7 @@ def _detect_person_worker(
         except Empty:
             continue
         except KeyboardInterrupt:
-            bbox_queue.put(None)
+            bbox_queue.put_nowait(None)
             bbox_queue.close()
             return
 
