@@ -1,19 +1,11 @@
 import os
-
 import yaml
 
-# remember to add a .local version to .gitignore when creating new config directories
-
-CAMERA_BASE_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "camera_config.yaml")
-CAMERA_LOCAL_CONFIG_PATH = os.path.join(
-    os.path.dirname(__file__), "camera_config.local.yaml"
+DEFAULT_BASE_PATH = os.path.join(
+    os.path.dirname(__file__), "config.yaml"
 )
-
-NETWORK_BASE_CONFIG_PATH = os.path.join(
-    os.path.dirname(__file__), "network_config.yaml"
-)
-NETWORK_LOCAL_CONFIG_PATH = os.path.join(
-    os.path.dirname(__file__), "network_config.local.yaml"
+DEFAULT_LOCAL_PATH = os.path.join(
+    os.path.dirname(__file__), "config.local.yaml"
 )
 
 
@@ -37,6 +29,4 @@ def load_a_config(base_path, local_path):
 
     return merge_dicts(base_config, local_config)
 
-
-CAMERA_CONFIG = load_a_config(CAMERA_BASE_CONFIG_PATH, CAMERA_LOCAL_CONFIG_PATH)
-NETWORK_CONFIG = load_a_config(NETWORK_BASE_CONFIG_PATH, NETWORK_LOCAL_CONFIG_PATH)
+DEFAULT_CONFIG = load_a_config(DEFAULT_BASE_PATH, DEFAULT_LOCAL_PATH)

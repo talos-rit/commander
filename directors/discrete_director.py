@@ -1,6 +1,6 @@
 import time
 
-from config.config import CAMERA_CONFIG
+from config.config import DEFAULT_CONFIG
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import (
@@ -10,10 +10,10 @@ from utils import (
 
 
 class DiscreteDirector(BaseDirector):
-    horizontal_field_of_view = CAMERA_CONFIG["horizontal_field_of_view"]
-    vertical_field_of_view = CAMERA_CONFIG["vertical_field_of_view"]
-    confirmation_delay = CAMERA_CONFIG["confirmation_delay"]
-    command_delay = CAMERA_CONFIG["command_delay"]
+    horizontal_field_of_view = DEFAULT_CONFIG["horizontal_field_of_view"]
+    vertical_field_of_view = DEFAULT_CONFIG["vertical_field_of_view"]
+    confirmation_delay = DEFAULT_CONFIG["confirmation_delay"]
+    command_delay = DEFAULT_CONFIG["command_delay"]
     last_command_time = 0  # Track the time of the last command
 
     # Time when the person first moved outside the box

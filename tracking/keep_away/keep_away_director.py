@@ -1,6 +1,6 @@
 import time
 
-from config.config import CAMERA_CONFIG
+from config.config import DEFAULT_CONFIG
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import (
@@ -17,8 +17,8 @@ class KeepAwayDirector(BaseDirector):
     # bool to ensure only one polar_pan_continuous_stop command is sent at a time
     last_command_stop = False
 
-    confirmation_delay = CAMERA_CONFIG["confirmation_delay"]
-    command_delay = CAMERA_CONFIG["command_delay"]
+    confirmation_delay = DEFAULT_CONFIG["confirmation_delay"]
+    command_delay = DEFAULT_CONFIG["command_delay"]
 
     # This method is called to process each frame
     def process_frame(self, bounding_box: list, frame, is_director_running):

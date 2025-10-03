@@ -1,6 +1,6 @@
 import time
 
-from config.config import NETWORK_CONFIG
+from config.config import DEFAULT_CONFIG
 from connections import Connection
 from icd_config import Command, int_to_bytes
 from tkscheduler import Scheduler
@@ -20,7 +20,7 @@ class Publisher:
     A static class that is used to publish instructions to the operator.
     """
 
-    connection = Connection(host=NETWORK_CONFIG["socket_host"], port=NETWORK_CONFIG["socket_port"], connect_on_init=False)
+    connection = Connection(host=DEFAULT_CONFIG["socket_host"], port=DEFAULT_CONFIG["socket_port"], connect_on_init=False)
     command_count = 0
     CHAR_ENCODING = "utf-8"
 
