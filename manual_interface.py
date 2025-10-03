@@ -433,3 +433,6 @@ class ManualInterface(tkinter.Tk):
             Direction.LEFT,
             Direction.RIGHT,
         }
+
+    def on_close(self):
+        print("ugh")
