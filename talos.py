@@ -2,10 +2,10 @@ import argparse
 import multiprocessing
 
 import cv2
-from tracking.media_pipe.media_pipe_pose import MediaPipePoseModel
 
 from directors.continuous_director import ContinuousDirector
 from manual_interface import ManualInterface
+from tracking.media_pipe import MediaPipePoseModel
 from utils import start_termination_guard, terminate
 
 
@@ -48,11 +48,8 @@ def main():
                 break
             director.process_frame(bounding_box, frame, True)
 
-    start_termination_guard()
     interface = ManualInterface()
-    interface.protocol("WM_DELETE_WINDOW", lambda: terminate(0, 0))
     interface.mainloop()
-    terminate(0, 0)
 
 
 if __name__ == "__main__":
