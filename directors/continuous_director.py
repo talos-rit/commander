@@ -1,14 +1,14 @@
 import time
 
-from config.config import CAMERA_CONFIG
+from config.config import DEFAULT_CONFIG
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import calculate_acceptable_box, calculate_center_bbox
 
 
 class ContinuousDirector(BaseDirector):
-    confirmation_delay = CAMERA_CONFIG["confirmation_delay"]
-    command_delay = CAMERA_CONFIG["command_delay"]
+    confirmation_delay = DEFAULT_CONFIG["confirmation_delay"]
+    command_delay = DEFAULT_CONFIG["command_delay"]
     last_command_stop = False  # bool to ensure only one polar_pan_continuous_stop command is sent at a time
     last_command_time = 0  # Track the time of the last command
     # Time when the person first moved outside the box
