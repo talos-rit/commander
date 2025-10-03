@@ -1,7 +1,7 @@
+import multiprocessing
 import os.path as path
 import signal
 import sys
-import threading
 
 import yaml
 
@@ -76,23 +76,26 @@ def calculate_center_bbox(bbox: tuple[int, int, int, int]):
     return calculate_center_box(*bbox)
 
 
-TERMINATION_HANDLERS = []
-TERMINATION_THREAD_LOCK = threading.Lock()
+TERMINATION_HANDLERS: list
+
+
+def start_termination_guard():
+    print("Setting up cleanup handlers")
+    global TERMINATION_HANDLERS
+    TERMINATION_HANDLERS = list()
+    signal.signal(signal.SIGINT, terminate)
 
 
 def add_termination_handler(handler):
     global TERMINATION_HANDLERS
-    with TERMINATION_THREAD_LOCK:
-        TERMINATION_HANDLERS.append(handler)
+    TERMINATION_HANDLERS.append(handler)
 
 
 def terminate(signum, frame):
     global TERMINATION_HANDLERS
     print(f"\nSignal {signum} received! Executing handler.")
-    print("Performing cleanup or specific action...")
+    print(f"Performing cleanup or specific action... {len(TERMINATION_HANDLERS)}")
 
     for handler in TERMINATION_HANDLERS:
         handler()
-
-
-signal.signal(signal.SIGINT, terminate)
+    sys.exit(0)

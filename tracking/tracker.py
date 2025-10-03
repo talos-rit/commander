@@ -47,6 +47,10 @@ def _detect_person_worker(
             bbox_queue.put(bboxes)
         except Empty:
             continue
+        except KeyboardInterrupt:
+            bbox_queue.put(None)
+            bbox_queue.close()
+            return
 
 
 # Abstract class for tracking
