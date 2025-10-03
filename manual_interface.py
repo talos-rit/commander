@@ -14,6 +14,7 @@ from tracking.media_pipe.media_pipe_pose import MediaPipePoseModel
 from tracking.media_pipe.media_pipe_tracker import MediaPipeModel
 from tracking.tracker import Tracker
 from tracking.yolo.yolo_tracker import YOLOModel
+from utils import start_termination_guard, terminate
 
 
 class Direction(IntEnum):
@@ -65,6 +66,8 @@ class ManualInterface(tkinter.Tk):
     def __init__(self):
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
+        start_termination_guard()
+        self.protocol("WM_DELETE_WINDOW", lambda: terminate(0, 0))
         self.scheduler = Scheduler(self)
         self.title("Talos Manual Interface")
         self.pressed_keys = set()  # keeps track of keys which are pressed down
