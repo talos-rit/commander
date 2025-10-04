@@ -138,10 +138,11 @@ class Tracker:
         self.hasNewFrame = True
         return self.hasNewFrame, self._frame
 
-    def get_frame(self):
-        res = (self.hasNewFrame, self._frame)
+    def get_frame_shape(self):
         self.hasNewFrame = False
-        return res
+        frame_height = self._frame.shape[0]
+        frame_width = self._frame.shape[1]
+        return (frame_height, frame_width)
 
     def get_bbox(self):
         return self._bboxes
