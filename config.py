@@ -1,6 +1,7 @@
 import os
-import yaml
 from glob import glob
+
+import yaml
 
 from utils import get_file_path
 
@@ -11,7 +12,8 @@ DEFAULT_LOCAL_PATH = os.path.join(
     os.path.dirname(__file__), "config/default_config.local.yaml"
 )
 if not os.path.exists(DEFAULT_LOCAL_PATH):
-  DEFAULT_LOCAL_PATH = None
+    DEFAULT_LOCAL_PATH = None
+
 
 def add_config(socket_host: str, port: int):
     """
@@ -44,6 +46,7 @@ def add_config(socket_host: str, port: int):
     print(f"Created config/{socket_host}_config.yaml")
     return output_path
 
+
 def find_config_pairs():
     """
     Searches the current directory for all *_config.yaml and *_config.local.yaml files.
@@ -66,11 +69,17 @@ def find_config_pairs():
 
     # Filter out defaults
     base_configs = [f for f in base_configs if not f.endswith("default_config.yaml")]
-    local_configs = [f for f in local_configs if not f.endswith("default_config.local.yaml")]
+    local_configs = [
+        f for f in local_configs if not f.endswith("default_config.local.yaml")
+    ]
 
     # Maps of {hostname: file_path}
-    base_map = {os.path.basename(f).replace("_config.yaml", ""): f for f in base_configs}
-    local_map = {os.path.basename(f).replace("_config.local.yaml", ""): f for f in local_configs}
+    base_map = {
+        os.path.basename(f).replace("_config.yaml", ""): f for f in base_configs
+    }
+    local_map = {
+        os.path.basename(f).replace("_config.local.yaml", ""): f for f in local_configs
+    }
 
     config_pairs = {}
 
@@ -82,30 +91,36 @@ def find_config_pairs():
     # Warn about unpaired local configs
     for name, local_path in local_map.items():
         if name not in base_map:
-            print(f"[WARNING] Ignoring local config '{os.path.basename(local_path)}' (no matching base config found).")
+            print(
+                f"[WARNING] Ignoring local config '{os.path.basename(local_path)}' (no matching base config found)."
+            )
 
     return config_pairs
 
+
 def _load_yaml(path):
-        if os.path.exists(path):
-            with open(get_file_path(path), "r") as f:
-                return yaml.safe_load(f) or {}
-        return {}
+    if os.path.exists(path):
+        with open(get_file_path(path), "r") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
 
 def _merge_dicts(base, override):
-          for k, v in override.items():
-              if isinstance(v, dict) and isinstance(base.get(k), dict):
-                  _merge_dicts(base[k], v)
-              else:
-                  base[k] = v
-          return base
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _merge_dicts(base[k], v)
+        else:
+            base[k] = v
+    return base
 
-def load_a_config(base_path, local_path = None):
+
+def load_a_config(base_path, local_path=None):
     base_config = _load_yaml(base_path)
     if local_path:
-      local_config = _load_yaml(local_path)
-      return _merge_dicts(base_config, local_config)
+        local_config = _load_yaml(local_path)
+        return _merge_dicts(base_config, local_config)
     return base_config
+
 
 def load_all_robot_configs():
     """
@@ -130,6 +145,7 @@ def load_all_robot_configs():
             print(f"[WARNING] Failed to load config for '{hostname}': {e}")
 
     return robot_configs
+
 
 ROBOT_CONFIGS = load_all_robot_configs()
 DEFAULT_CONFIG = load_a_config(DEFAULT_BASE_PATH, DEFAULT_LOCAL_PATH)
