@@ -101,9 +101,34 @@ def load_a_config(base_path, local_path = None):
       return merge_dicts(base_config, local_config)
     return base_config
 
+def load_all_host_configs():
+    """
+    Loads and merges all host configurations based on the map returned by find_config_pairs().
+    Returns:
+        {
+            "socket_host": { merged config dict },
+            ...
+        }
+    """
+    pairs = find_config_pairs()
+    robot_configs = {}
+
+    for hostname, paths in pairs.items():
+        base_path = paths["base"]
+        local_path = paths["local"]
+
+        try:
+            config_data = load_a_config(base_path, local_path)
+            robot_configs[hostname] = config_data
+        except Exception as e:
+            print(f"[WARNING] Failed to load config for '{hostname}': {e}")
+
+    return robot_configs
+
 DEFAULT_CONFIG = load_a_config(DEFAULT_BASE_PATH, DEFAULT_LOCAL_PATH)
 
 #testing
 if __name__ == "__main__":
     add_config("testhost", 8080)
     print(find_config_pairs())
+    print (load_all_host_configs())
