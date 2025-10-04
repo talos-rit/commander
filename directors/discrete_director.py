@@ -1,6 +1,6 @@
 import time
 
-from config.config import DEFAULT_CONFIG
+from config.config import ROBOT_CONFIGS
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import (
@@ -8,12 +8,14 @@ from utils import (
     calculate_center_bbox,
 )
 
+# Temporary hardcoded index to until hostname can be passed in
+CONFIG = ROBOT_CONFIGS["operator.talos"]
 
 class DiscreteDirector(BaseDirector):
-    horizontal_field_of_view = DEFAULT_CONFIG["horizontal_field_of_view"]
-    vertical_field_of_view = DEFAULT_CONFIG["vertical_field_of_view"]
-    confirmation_delay = DEFAULT_CONFIG["confirmation_delay"]
-    command_delay = DEFAULT_CONFIG["command_delay"]
+    horizontal_field_of_view = CONFIG["horizontal_field_of_view"]
+    vertical_field_of_view = CONFIG["vertical_field_of_view"]
+    confirmation_delay = CONFIG["confirmation_delay"]
+    command_delay = CONFIG["command_delay"]
     last_command_time = 0  # Track the time of the last command
 
     # Time when the person first moved outside the box

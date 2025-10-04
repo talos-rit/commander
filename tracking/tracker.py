@@ -5,7 +5,7 @@ from queue import Empty
 import cv2
 from PIL import Image, ImageTk
 
-from config.config import DEFAULT_CONFIG
+from config.config import ROBOT_CONFIGS
 from tkscheduler import IterativeTask, Scheduler
 from utils import (
     add_termination_handler,
@@ -13,6 +13,8 @@ from utils import (
     calculate_center_bbox,
 )
 
+# Temporary hardcoded index to until hostname can be passed in
+CONFIG = ROBOT_CONFIGS["operator.talos"]
 
 class ObjectModel(ABC):
     """
@@ -21,11 +23,11 @@ class ObjectModel(ABC):
     """
 
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = DEFAULT_CONFIG.get("fps", 60)
-    camera_index = DEFAULT_CONFIG["camera_index"]
-    acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
-    desired_width = DEFAULT_CONFIG.get("frame_width", None)
-    desired_height = DEFAULT_CONFIG.get("frame_height", None)
+    fps = CONFIG.get("fps", 60)
+    camera_index = CONFIG["camera_index"]
+    acceptable_box_percent = CONFIG["acceptable_box_percent"]
+    desired_width = CONFIG.get("frame_width", None)
+    desired_height = CONFIG.get("frame_height", None)
 
     # Capture a frame from the source
     @abstractmethod
@@ -53,11 +55,11 @@ def _detect_person_worker(
 class Tracker:
     task: IterativeTask | None = None
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = DEFAULT_CONFIG.get("fps", 60)
-    camera_index = DEFAULT_CONFIG["camera_index"]
-    acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
-    desired_width: int | None = DEFAULT_CONFIG.get("frame_width", None)
-    desired_height: int | None = DEFAULT_CONFIG.get("frame_height", None)
+    fps = CONFIG.get("fps", 60)
+    camera_index = CONFIG["camera_index"]
+    acceptable_box_percent = CONFIG["acceptable_box_percent"]
+    desired_width: int | None = CONFIG.get("frame_width", None)
+    desired_height: int | None = CONFIG.get("frame_height", None)
     model = None
     _bboxes: list | None = None
     _frame = None

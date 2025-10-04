@@ -8,6 +8,8 @@ DEFAULT_BASE_PATH = os.path.join(
 DEFAULT_LOCAL_PATH = os.path.join(
     os.path.dirname(__file__), "default_config.local.yaml"
 )
+if not os.path.exists(DEFAULT_LOCAL_PATH):
+  DEFAULT_LOCAL_PATH = None
 
 def add_config(socket_host: str, port: int):
     """
@@ -17,6 +19,9 @@ def add_config(socket_host: str, port: int):
     base_dir = os.path.dirname(__file__)
     default_path = os.path.join(base_dir, "default_config.yaml")
     output_path = os.path.join(base_dir, f"{socket_host}_config.yaml")
+    if os.path.exists(output_path):
+        print(f"[WARNING] {output_path} already exists, not overwriting")
+        return output_path
 
     # Load the default configuration
     with open(default_path, "r") as f:
@@ -34,7 +39,7 @@ def add_config(socket_host: str, port: int):
     with open(output_path, "w") as f:
         yaml.safe_dump(config_data, f, sort_keys=False)
 
-    print(f"Created {output_path}")
+    print(f"Created {socket_host}_config.yaml")
     return output_path
 
 def find_config_pairs():
@@ -101,7 +106,7 @@ def load_a_config(base_path, local_path = None):
       return merge_dicts(base_config, local_config)
     return base_config
 
-def load_all_host_configs():
+def load_all_robot_configs():
     """
     Loads and merges all host configurations based on the map returned by find_config_pairs().
     Returns:
@@ -125,10 +130,5 @@ def load_all_host_configs():
 
     return robot_configs
 
+ROBOT_CONFIGS = load_all_robot_configs()
 DEFAULT_CONFIG = load_a_config(DEFAULT_BASE_PATH, DEFAULT_LOCAL_PATH)
-
-#testing
-if __name__ == "__main__":
-    add_config("testhost", 8080)
-    print(find_config_pairs())
-    print (load_all_host_configs())
