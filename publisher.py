@@ -1,10 +1,12 @@
 import time
 
-from config.config import DEFAULT_CONFIG
+from config.config import ROBOT_CONFIGS
 from connections import Connection
 from icd_config import Command, int_to_bytes
 from tkscheduler import Scheduler
 
+# Temporary hardcoded index to until hostname can be passed in
+CONFIG = ROBOT_CONFIGS["operator.talos"]
 
 def assert_normalized(*nums: int):
     nums_abs = list(map(lambda x: abs(x), nums))
@@ -20,7 +22,7 @@ class Publisher:
     A static class that is used to publish instructions to the operator.
     """
 
-    connection = Connection(host=DEFAULT_CONFIG["socket_host"], port=DEFAULT_CONFIG["socket_port"], connect_on_init=False)
+    connection = Connection(host=CONFIG["socket_host"], port=CONFIG["socket_port"], connect_on_init=False)
     command_count = 0
     CHAR_ENCODING = "utf-8"
 

@@ -1,12 +1,14 @@
 import time
 
-from config.config import DEFAULT_CONFIG
+from config.config import ROBOT_CONFIGS
 from connections import CommandConnection
 from icd_config import int_to_bytes
 
+# Temporary hardcoded index to until hostname can be passed in
+CONFIG = ROBOT_CONFIGS["operator.talos"]
 
 class MockOperator:
-    connection = CommandConnection(host=DEFAULT_CONFIG["socket_host"], port=DEFAULT_CONFIG["socket_port"])
+    connection = CommandConnection(host=CONFIG["socket_host"], port=CONFIG["socket_port"])
 
     @staticmethod
     def close_connection():
