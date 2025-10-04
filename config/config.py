@@ -1,5 +1,6 @@
 import os
 import yaml
+from glob import glob
 
 DEFAULT_BASE_PATH = os.path.join(
     os.path.dirname(__file__), "default_config.yaml"
@@ -36,7 +37,49 @@ def add_config(socket_host: str, port: int):
     print(f"Created {output_path}")
     return output_path
 
-def load_a_config(base_path, local_path):
+def find_config_pairs():
+    """
+    Searches the current directory for all *_config.yaml and *_config.local.yaml files.
+    Returns a dictionary in the form:
+        {
+            "hostname": {
+                "base": "/path/to/hostname_config.yaml",
+                "local": "/path/to/hostname_config.local.yaml" or None
+            },
+            ...
+        }
+    - Excludes default_config.yaml and default_config.local.yaml.
+    - If a local file has no matching base config, it is discarded with a warning.
+    """
+    base_dir = os.path.dirname(__file__)
+
+    # Find all base and local configs
+    base_configs = glob(os.path.join(base_dir, "*_config.yaml"))
+    local_configs = glob(os.path.join(base_dir, "*_config.local.yaml"))
+
+    # Filter out defaults
+    base_configs = [f for f in base_configs if not f.endswith("default_config.yaml")]
+    local_configs = [f for f in local_configs if not f.endswith("default_config.local.yaml")]
+
+    # Maps of {hostname: file_path}
+    base_map = {os.path.basename(f).replace("_config.yaml", ""): f for f in base_configs}
+    local_map = {os.path.basename(f).replace("_config.local.yaml", ""): f for f in local_configs}
+
+    config_pairs = {}
+
+    # Pair up base with local configs via hostname
+    for name, base_path in base_map.items():
+        local_path = local_map.get(name)
+        config_pairs[name] = {"base": base_path, "local": local_path}
+
+    # Warn about unpaired local configs
+    for name, local_path in local_map.items():
+        if name not in base_map:
+            print(f"[WARNING] Ignoring local config '{os.path.basename(local_path)}' (no matching base config found).")
+
+    return config_pairs
+
+def load_a_config(base_path, local_path = None):
     def _load_yaml(path):
         if os.path.exists(path):
             with open(path, "r") as f:
@@ -44,21 +87,23 @@ def load_a_config(base_path, local_path):
         return {}
 
     base_config = _load_yaml(base_path)
-    local_config = _load_yaml(local_path)
+    if local_path:
+      local_config = _load_yaml(local_path)
 
-    def merge_dicts(base, override):
-        for k, v in override.items():
-            if isinstance(v, dict) and isinstance(base.get(k), dict):
-                merge_dicts(base[k], v)
-            else:
-                base[k] = v
-        return base
+      def merge_dicts(base, override):
+          for k, v in override.items():
+              if isinstance(v, dict) and isinstance(base.get(k), dict):
+                  merge_dicts(base[k], v)
+              else:
+                  base[k] = v
+          return base
 
-    return merge_dicts(base_config, local_config)
+      return merge_dicts(base_config, local_config)
+    return base_config
 
 DEFAULT_CONFIG = load_a_config(DEFAULT_BASE_PATH, DEFAULT_LOCAL_PATH)
 
 #testing
-
-# if __name__ == "__main__":
-#     add_config("testhost", 8080)
+if __name__ == "__main__":
+    add_config("testhost", 8080)
+    print(find_config_pairs())
