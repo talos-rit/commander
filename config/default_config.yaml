@@ -2,7 +2,7 @@
 
 socket_host: 'default_host'
 # socket_host: "localhost"
-socket_port: 61616
+socket_port: 8080
 
 acceptable_box_percent: 0.4 # Percentage of the frame width and height used to define the size of the acceptable box
 vertical_field_of_view: 48 # vertical FOV of camera being used
