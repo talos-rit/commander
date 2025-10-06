@@ -4,7 +4,7 @@ import cv2
 
 from directors.continuous_director import ContinuousDirector
 from manual_interface import ManualInterface
-from tracking.media_pipe.media_pipe_pose import MediaPipePoseModel
+from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
 
 
 def main():

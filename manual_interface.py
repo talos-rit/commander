@@ -9,11 +9,11 @@ from directors import BaseDirector, ContinuousDirector
 from publisher import Publisher
 from tkscheduler import Scheduler
 from tracking.keep_away.keep_away_director import KeepAwayDirector
-from tracking.keep_away.keep_away_tracker import KeepAwayModel
-from tracking.media_pipe.media_pipe_pose import MediaPipePoseModel
-from tracking.media_pipe.media_pipe_tracker import MediaPipeModel
+from tracking.keep_away.keep_away_Model import KeepAwayModel
+from tracking.media_pipe.media_pipe_model import MediaPipeModel
+from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
 from tracking.tracker import Tracker
-from tracking.yolo.yolo_tracker import YOLOModel
+from tracking.yolo.yolo_model import YOLOModel
 from utils import start_termination_guard, terminate
 
 

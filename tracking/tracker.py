@@ -38,6 +38,9 @@ class ObjectModel(ABC):
 def _detect_person_worker(
     model_class, frame_queue: multiprocessing.Queue, bbox_queue: multiprocessing.Queue
 ):
+    if model_class is None:
+        print("Model was not found please pass a model into Tracker to run.")
+        return
     model: ObjectModel = model_class()
     frame = True
     while frame is not None:
