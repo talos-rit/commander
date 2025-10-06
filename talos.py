@@ -6,7 +6,6 @@ import cv2
 from directors.continuous_director import ContinuousDirector
 from manual_interface import ManualInterface
 from tracking.media_pipe import MediaPipePoseModel
-from utils import start_termination_guard, terminate
 
 
 def main():
