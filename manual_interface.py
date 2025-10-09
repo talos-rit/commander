@@ -8,6 +8,7 @@ from PIL import ImageTk
 from directors import BaseDirector, ContinuousDirector
 from publisher import Publisher
 from tkscheduler import Scheduler
+from tracking import MODEL_OPTIONS, ModelOption
 from tracking.keep_away.keep_away_director import KeepAwayDirector
 from tracking.keep_away.keep_away_model import KeepAwayModel
 from tracking.media_pipe.media_pipe_model import MediaPipeModel
@@ -24,16 +25,6 @@ class Direction(IntEnum):
     DOWN = 2
     LEFT = 3
     RIGHT = 4
-
-
-class ModelOption(StrEnum):
-    YOLO = "yolo"
-    STANDARD = "standard"
-    MEDIAPIPEPOSE = "mediapipepose"
-    KEEPAWAY = "keepaway"
-
-
-MODEL_OPTIONS = list(map(lambda v: v.value, list(ModelOption)))
 
 
 class ButtonText(StrEnum):
@@ -66,7 +57,6 @@ class ManualInterface(tkinter.Tk):
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
     manual_mode = True  # True for manual, False for computer vision
     continuous_mode = True
-    current_mode = "standard"
 
     # Flags for director loop
     is_frame_loop_running = False
