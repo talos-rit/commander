@@ -11,6 +11,7 @@ from utils import (
 # Temporary hardcoded index to until hostname can be passed in
 CONFIG = ROBOT_CONFIGS["operator.talos"]
 
+
 class DiscreteDirector(BaseDirector):
     horizontal_field_of_view = CONFIG["horizontal_field_of_view"]
     vertical_field_of_view = CONFIG["vertical_field_of_view"]
@@ -22,7 +23,7 @@ class DiscreteDirector(BaseDirector):
     movement_detection_start_time = None
 
     # This method is called to process each frame
-    def process_frame(self, bounding_box: list, frame_shape, is_director_running):
+    def process_frame(self, bounding_box: list, frame_shape):
         # Do something with the frame
 
         # Getting frame width and frame height
@@ -44,8 +45,6 @@ class DiscreteDirector(BaseDirector):
         # Calculate the center of the bounding box
         bbox_center_x, bbox_center_y = calculate_center_bbox(bounding_box[0])
 
-        if not is_director_running:
-            return
         # Are we inside the acceptable box
         if (
             bbox_center_x < acceptable_box_left
