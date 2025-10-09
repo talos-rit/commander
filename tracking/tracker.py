@@ -16,6 +16,7 @@ from utils import (
 # Temporary hardcoded index to until hostname can be passed in
 CONFIG = ROBOT_CONFIGS["operator.talos"]
 
+
 class ObjectModel(ABC):
     """
     This is a model class where it can handle turning image frame into bounding box
@@ -148,6 +149,9 @@ class Tracker:
         return self.hasNewFrame, self._frame
 
     def get_frame_shape(self):
+        if self._frame is None:
+            self.save_frame()
+        assert self._frame is not None
         self.hasNewFrame = False
         frame_height = self._frame.shape[0]
         frame_width = self._frame.shape[1]
