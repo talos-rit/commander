@@ -27,16 +27,6 @@ class Direction(IntEnum):
     RIGHT = 4
 
 
-class ModelOption(StrEnum):
-    YOLO = "yolo"
-    STANDARD = "standard"
-    MEDIAPIPEPOSE = "mediapipepose"
-    KEEPAWAY = "keepaway"
-
-
-MODEL_OPTIONS = list(map(lambda v: v.value, list(ModelOption)))
-
-
 class ButtonText(StrEnum):
     """Button text Enum for interface controls"""
 
