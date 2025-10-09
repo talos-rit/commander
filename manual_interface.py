@@ -9,7 +9,7 @@ from directors import BaseDirector, ContinuousDirector
 from publisher import Publisher
 from tkscheduler import Scheduler
 from tracking.keep_away.keep_away_director import KeepAwayDirector
-from tracking.keep_away.keep_away_Model import KeepAwayModel
+from tracking.keep_away.keep_away_model import KeepAwayModel
 from tracking.media_pipe.media_pipe_model import MediaPipeModel
 from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
 from tracking.tracker import Tracker
@@ -24,6 +24,16 @@ class Direction(IntEnum):
     DOWN = 2
     LEFT = 3
     RIGHT = 4
+
+
+class ModelOption(StrEnum):
+    YOLO = "yolo"
+    STANDARD = "standard"
+    MEDIAPIPEPOSE = "mediapipepose"
+    KEEPAWAY = "keepaway"
+
+
+MODEL_OPTIONS = list(map(lambda v: v.value, list(ModelOption)))
 
 
 class ButtonText(StrEnum):
@@ -175,31 +185,10 @@ class ManualInterface(tkinter.Tk):
             row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew"
         )
 
-        # Set up keep away button
-        # Keep‐Away mode toggle button
-        self.keepaway_button = tkinter.Button(
-            self,
-            text="Play Keep Away",
-            font=("Cascadia Code", 12),
-            command=self.toggle_keep_away_mode,
-        )
-        self.keepaway_button.grid(row=2, column=6, padx=10)
-
-        self.yolo_button = tkinter.Button(
-            self,
-            text="Yolo Tracker",
-            font=("Cascadia Code", 12),
-            command=self.toggle_yolo_mode,
-        )
-        self.yolo_button.grid(row=3, column=6, padx=10)
-
-        self.media_pipe_pose_button = tkinter.Button(
-            self,
-            text="Media Pipe Pose Tracker",
-            font=("Cascadia Code", 12),
-            command=self.toggle_media_pipe_pose_mode,
-        )
-        self.media_pipe_pose_button.grid(row=4, column=6, padx=10)
+        selected = tkinter.StringVar(value=ModelOption.STANDARD)
+        menu = tkinter.OptionMenu(self, selected, *MODEL_OPTIONS, command=self.set_mode)
+        menu.config(width=10)
+        menu.grid(row=3, column=5, padx=20)
 
     def setup_keyboard_controls(self):
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
@@ -360,6 +349,7 @@ class ManualInterface(tkinter.Tk):
     def start_director_loop(self):
         self.is_frame_loop_running = True
         self.last_mode = None
+        self.change_model()  # start model
         self.after(0, self.frame_loop)
 
     def frame_loop(self):
@@ -367,53 +357,42 @@ class ManualInterface(tkinter.Tk):
         if not self.is_frame_loop_running:
             print("Ending director loop")
             return
-        # if mode changed, tear down & rebuild
-        if self.current_mode != self.last_mode:
-            self.last_mode = self.current_mode
-            if self.director is not None:
-                self.director.stop_auto_control()
-                self.director = None
-            new_model = None
-            if self.last_mode == "keepaway":
-                print("Entering Keep Away")
-                self.keepaway_button.config(text="Standard Mode")
-                self.yolo_button.config(text="Yolo Mode")
-                self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                new_model = KeepAwayModel
-                self.director = KeepAwayDirector(self.tracker, self.scheduler)
-            elif self.last_mode == "yolo":
-                print("Entering Yolo")
-                self.yolo_button.config(text="Standard Mode")
-                self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                self.keepaway_button.config(text="Keep Away Mode")
-                new_model = YOLOModel
-                self.director = ContinuousDirector(self.tracker, self.scheduler)
-            elif self.last_mode == "mediapipepose":
-                print("Entering Media Pipe Pose")
-                self.media_pipe_pose_button.config(text="Standard Mode")
-                self.yolo_button.config(text="Yolo Mode")
-                self.keepaway_button.config(text="Keep Away Mode")
-                new_model = MediaPipePoseModel
-                self.director = ContinuousDirector(self.tracker, self.scheduler)
-            else:  # "standard"
-                print("Entering Media Pipe")
-                self.yolo_button.config(text="Yolo Mode")
-                self.media_pipe_pose_button.config(text="Media Pipe Pose Mode")
-                self.keepaway_button.config(text="Keep Away Mode")
-                new_model = MediaPipeModel
-                self.director = ContinuousDirector(self.tracker, self.scheduler)
-            self.tracker.swap_model(new_model)
 
         img = self.tracker.create_imagetk()
         if img is not None:
             self.update_video_frame(img)
-        self.after(10, self.frame_loop)
+        self.after(20, self.frame_loop)
+
+    def set_mode(self, new_mode):
+        self.change_model(new_mode)
 
     def update_video_frame(self, img: ImageTk.PhotoImage):
         self.video_label.config(image=img)
         # Keep a reference to prevent gc
         # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
         self.video_label.dumb_image_ref = img  # pyright: ignore[reportAttributeAccessIssue]
+
+    def change_model(self, option: str | None = None):
+        if self.director is not None:
+            self.director.stop_auto_control()
+            self.director = None
+        if option == ModelOption.KEEPAWAY:
+            print("Entering Keep Away")
+            new_model = KeepAwayModel
+            self.director = KeepAwayDirector(self.tracker, self.scheduler)
+        elif option == ModelOption.YOLO:
+            print("Entering Yolo")
+            new_model = YOLOModel
+            self.director = ContinuousDirector(self.tracker, self.scheduler)
+        elif option == ModelOption.MEDIAPIPEPOSE:
+            print("Entering Media Pipe Pose")
+            new_model = MediaPipePoseModel
+            self.director = ContinuousDirector(self.tracker, self.scheduler)
+        else:  # "standard"
+            print("Entering Media Pipe(default)")
+            new_model = MediaPipeModel
+            self.director = ContinuousDirector(self.tracker, self.scheduler)
+        self.tracker.swap_model(new_model)
 
     def toggle_continuous_mode(self):
         self.continuous_mode = not self.continuous_mode
@@ -422,27 +401,6 @@ class ManualInterface(tkinter.Tk):
             self.cont_mode_label.config(text=ButtonText.CONTINUOUS_MODE_LABEL)
         else:
             self.cont_mode_label.config(text=ButtonText.DISCRETE_MODE_LABEL)
-
-    def toggle_keep_away_mode(self):
-        """Switch between normal tracking and Keep-Away game mode."""
-        if self.current_mode == "keepaway":
-            self.current_mode = "standard"
-        else:
-            self.current_mode = "keepaway"
-
-    def toggle_media_pipe_pose_mode(self):
-        """Switch between normal tracking and Media Pipe Pose mode."""
-        if self.current_mode == "mediapipepose":
-            self.current_mode = "standard"
-        else:
-            self.current_mode = "mediapipepose"
-
-    def toggle_yolo_mode(self):
-        """Switch between normal tracking and yolo mode."""
-        if self.current_mode == "yolo":
-            self.current_mode = "standard"
-        else:
-            self.current_mode = "yolo"
 
     def toggle_command_mode(self):
         """Toggles command mode between manual mode and automatic mode.
@@ -485,6 +443,3 @@ class ManualInterface(tkinter.Tk):
             Direction.LEFT,
             Direction.RIGHT,
         }
-
-    def on_close(self):
-        print("ugh")
