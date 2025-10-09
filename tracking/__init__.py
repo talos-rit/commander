@@ -1,12 +1,26 @@
+from enum import StrEnum
+
 from .tracker import ObjectModel
 
-MODELS: list[ObjectModel.__class__] = list()
+
+class ModelOption(StrEnum):
+    YOLO = "yolo"
+    STANDARD = "standard"
+    MEDIAPIPEPOSE = "mediapipepose"
+    KEEPAWAY = "keepaway"
+
+
+MODEL_OPTIONS = list(map(lambda v: v.value, list(ModelOption)))
+
+
+MODELS: dict[str, ObjectModel.__class__] = dict()
 
 
 try:
     from .haar_cascade.basic_model import BasicModel
 
-    MODELS.append(BasicModel)
+    # Test if this model works
+    MODELS["basic"] = BasicModel
 except ImportError as e:
     print(
         e,
@@ -17,9 +31,9 @@ try:
     from .keep_away.keep_away_model import KeepAwayModel
     from .media_pipe import MediaPipeModel, MediaPipePoseModel
 
-    MODELS.append(KeepAwayModel)
-    MODELS.append(MediaPipeModel)
-    MODELS.append(MediaPipePoseModel)
+    MODELS[ModelOption.KEEPAWAY] = KeepAwayModel
+    MODELS[ModelOption.MEDIAPIPEPOSE] = MediaPipeModel
+    MODELS[ModelOption.STANDARD] = MediaPipePoseModel
 except ImportError as e:
     print(
         e,
@@ -29,11 +43,11 @@ except ImportError as e:
 try:
     from .yolo.yolo_model import YOLOModel
 
-    MODELS.append(YOLOModel)
+    MODELS[ModelOption.YOLO] = YOLOModel
 except ImportError as e:
     print(
         e,
         "Failed to import Yolo model. This is an optional import, but may limit the ability to run this model",
     )
 
-__all__ = ["MODELS"]
+__all__ = ["MODELS", "ModelOption", "MODEL_OPTIONS"]
