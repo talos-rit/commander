@@ -36,7 +36,7 @@ class Connection:
         self.is_running = True
         while self.is_running:
             try:
-                self.socket.bind((self.host, self.port))
+                self.socket.connect((self.host, self.port))
                 print(f"Bound to socket: {self.host}:{self.port}")
                 break
             except OSError as e:
