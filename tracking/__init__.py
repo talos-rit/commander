@@ -1,10 +1,10 @@
-from tracker import ObjectModel
+from .tracker import ObjectModel
 
 MODELS: list[ObjectModel.__class__] = list()
 
 
 try:
-    from haar_cascade.basic_model import BasicModel
+    from .haar_cascade.basic_model import BasicModel
 
     MODELS.append(BasicModel)
 except ImportError as e:
@@ -14,8 +14,8 @@ except ImportError as e:
     )
 
 try:
-    from keep_away.keep_away_model import KeepAwayModel
-    from media_pipe import MediaPipeModel, MediaPipePoseModel
+    from .keep_away.keep_away_model import KeepAwayModel
+    from .media_pipe import MediaPipeModel, MediaPipePoseModel
 
     MODELS.append(KeepAwayModel)
     MODELS.append(MediaPipeModel)
@@ -27,7 +27,7 @@ except ImportError as e:
     )
 
 try:
-    from yolo.yolo_model import YOLOModel
+    from .yolo.yolo_model import YOLOModel
 
     MODELS.append(YOLOModel)
 except ImportError as e:
@@ -35,3 +35,5 @@ except ImportError as e:
         e,
         "Failed to import Yolo model. This is an optional import, but may limit the ability to run this model",
     )
+
+__all__ = ["MODELS"]
