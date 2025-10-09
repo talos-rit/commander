@@ -147,7 +147,8 @@ class Tracker:
 
     def get_frame_shape(self):
         if self._frame is None:
-            return
+            self.save_frame()
+        assert self._frame is not None
         self.hasNewFrame = False
         frame_height = self._frame.shape[0]
         frame_width = self._frame.shape[1]
