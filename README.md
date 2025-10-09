@@ -4,14 +4,6 @@ Allows robot arms to be repurposed as camera arms.
 
 ## Installation
 
-Install ActiveMQ
-
-bash:
-
-```bash
-brew install apache-activemq
-```
-
 Create virtual environment and install required packages.
 Using python package manager: [uv](https://docs.astral.sh/uv/getting-started/installation/)
 ```bash
@@ -71,19 +63,33 @@ if this doesn't work, reinstall python for uv
 
 ## Setup
 
-Start the ActiveMQ service
-
-bash:
-
-```bash
-brew services start activemq
-```
-
-Then, navigate to the ActiveMQ dashboard hosted at
-[http://localhost:8161/admin](http://localhost:8161/admin)
-
 Activate your virtual environment (update 2025: no longer needed with uv)
 
 ```bash
 source venv/py3.12/bin/activate
 ```
+
+## Running with Operator
+1. Edit `config/network_config.yaml` to set the host and port for the operator to connect to. (The Pi is unctalos.student.rit.edu:61616)
+2. Turn on the robot arm and connect it to the pi via USB.
+3. SSH into the Pi (username: pi, password: raspberry, IP: unctalos.student.rit.edu) and ensure the robot arm is connected by running:
+```bash
+    /home/pi/talos/build/bin/erv
+```
+4. Run the commander and it should connect to the operator. Try a home command to test the connection.
+
+
+### Troubleshooting
+If you are having trouble connecting to the arm, try running the following command on the Pi:
+```bash
+ls /dev/tty*
+```
+and ensure that you see a device named `/dev/ttyUSB0`
+If you don't see it, try unplugging and replugging the arm and running the command again. If it still doesn't show up, try restarting the Pi.
+If you see the device, but still can't connect, try running the following command on the Pi:
+```bash
+screen /dev/ttyUSB0 9600
+```
+Hit enter a few times to see if `>` shows up on each line. If it does, then the arm is connected properly. If not, try restarting the robot arm and running the command again.
+After testing, exit the screen session by typing `Ctrl+A` then `K` then `Y`.
+
