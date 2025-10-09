@@ -15,15 +15,14 @@ class ContinuousDirector(BaseDirector):
     movement_detection_start_time = None
 
     # This method is called to process each frame
-    def process_frame(self, bounding_box: list, frame):
+    def process_frame(self, bounding_box: list, frame_shape):
         """
         Based on received bounding box, this method tells the arm where to move the keep the subject in the acceptable box..
         It does this by continuously sending polar pan start and a direction until the subject is in the acceptable box.
         Then it sends a polar pan stop.
         """
-        frameOpenCV = frame.copy()
-        frame_height = frameOpenCV.shape[0]
-        frame_width = frameOpenCV.shape[1]
+        frame_height = frame_shape[0]
+        frame_width = frame_shape[1]
 
         if len(bounding_box) == 0:
             return
