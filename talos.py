@@ -1,16 +1,21 @@
 import argparse
+import multiprocessing
 
 import cv2
 
 from directors.continuous_director import ContinuousDirector
 from manual_interface import ManualInterface
-from tracking.media_pipe.media_pipe_pose import MediaPipePoseModel
+from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
 
 
 def main():
     # while (not Publisher.connection.is_connected):
     #     print("Waiting to connect...")
     #     time.sleep(5)
+
+    # This is a required call for pyinstaller
+    # https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing
+    multiprocessing.freeze_support()
 
     parser = argparse.ArgumentParser()
     parser.add_argument(

@@ -15,17 +15,17 @@ class BaseDirector(ABC):
     def __init__(self, tracker: Tracker, scheduler: Scheduler | None = None):
         self.tracker = tracker
         self.scheduler = scheduler
+        self.frame_shape = self.tracker.get_frame_shape()
 
     # Processes the bounding box and sends commands
     @abstractmethod
-    def process_frame(self, bounding_box: list, frame):
+    def process_frame(self, bounding_box: list, frame_shape):
         raise NotImplementedError("Subclasses must implement this method.")
 
     def track_obj(self):
-        # TODO: remove the usage of frames in this function because all it does is check the frame size
-        bbox, frame = self.tracker.get_bbox(), self.tracker.get_frame()
+        bbox = self.tracker.get_bbox()
         if bbox is not None:
-            return self.process_frame(bbox, frame)
+            return self.process_frame(bbox, self.frame_shape)
 
     def start_auto_control(self):
         if self.scheduler is not None:
