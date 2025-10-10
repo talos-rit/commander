@@ -1,6 +1,6 @@
 import time
 
-from config.config import ROBOT_CONFIGS
+from config import ROBOT_CONFIGS
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import (

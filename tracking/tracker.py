@@ -5,7 +5,7 @@ from queue import Empty
 import cv2
 from PIL import Image, ImageTk
 
-from config.config import ROBOT_CONFIGS
+from config import ROBOT_CONFIGS
 from tkscheduler import IterativeTask, Scheduler
 from utils import (
     add_termination_handler,
