@@ -36,6 +36,9 @@ class ObjectModel(ABC):
 def _detect_person_worker(
     model_class, frame_queue: multiprocessing.Queue, bbox_queue: multiprocessing.Queue
 ):
+    if model_class is None:
+        print("Model was not found please pass a model into Tracker to run.")
+        return
     model: ObjectModel = model_class()
     frame = True
     while frame is not None:
@@ -47,6 +50,10 @@ def _detect_person_worker(
             bbox_queue.put(bboxes)
         except Empty:
             continue
+        except KeyboardInterrupt:
+            bbox_queue.put_nowait(None)
+            bbox_queue.close()
+            return
 
 
 # Abstract class for tracking
@@ -139,6 +146,9 @@ class Tracker:
         return self.hasNewFrame, self._frame
 
     def get_frame_shape(self):
+        if self._frame is None:
+            self.save_frame()
+        assert self._frame is not None
         self.hasNewFrame = False
         frame_height = self._frame.shape[0]
         frame_width = self._frame.shape[1]
