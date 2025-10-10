@@ -86,26 +86,25 @@ def find_config_pairs():
 
     return config_pairs
 
-def load_a_config(base_path, local_path = None):
-    def _load_yaml(path):
+def _load_yaml(path):
         if os.path.exists(path):
             with open(get_file_path(path), "r") as f:
                 return yaml.safe_load(f) or {}
         return {}
 
-    base_config = _load_yaml(base_path)
-    if local_path:
-      local_config = _load_yaml(local_path)
-
-      def merge_dicts(base, override):
+def _merge_dicts(base, override):
           for k, v in override.items():
               if isinstance(v, dict) and isinstance(base.get(k), dict):
-                  merge_dicts(base[k], v)
+                  _merge_dicts(base[k], v)
               else:
                   base[k] = v
           return base
 
-      return merge_dicts(base_config, local_config)
+def load_a_config(base_path, local_path = None):
+    base_config = _load_yaml(base_path)
+    if local_path:
+      local_config = _load_yaml(local_path)
+      return _merge_dicts(base_config, local_config)
     return base_config
 
 def load_all_robot_configs():
