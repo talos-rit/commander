@@ -2,6 +2,8 @@ import os
 import yaml
 from glob import glob
 
+from utils import get_file_path
+
 DEFAULT_BASE_PATH = os.path.join(
     os.path.dirname(__file__), "config/default_config.yaml"
 )
@@ -24,7 +26,7 @@ def add_config(socket_host: str, port: int):
         return output_path
 
     # Load the default configuration
-    with open(default_path, "r") as f:
+    with open(get_file_path(default_path), "r") as f:
         config_data = yaml.safe_load(f)
 
     # Update the first two fields if they exist
@@ -36,7 +38,7 @@ def add_config(socket_host: str, port: int):
         raise ValueError("default_config.yaml has no socket_host and port fields")
 
     # Write the modified configuration
-    with open(output_path, "w") as f:
+    with open(get_file_path(output_path), "w") as f:
         yaml.safe_dump(config_data, f, sort_keys=False)
 
     print(f"Created config/{socket_host}_config.yaml")
@@ -87,7 +89,7 @@ def find_config_pairs():
 def load_a_config(base_path, local_path = None):
     def _load_yaml(path):
         if os.path.exists(path):
-            with open(path, "r") as f:
+            with open(get_file_path(path), "r") as f:
                 return yaml.safe_load(f) or {}
         return {}
 
