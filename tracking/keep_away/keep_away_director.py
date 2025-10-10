@@ -1,6 +1,6 @@
 import time
 
-from config.config import CAMERA_CONFIG
+from config import ROBOT_CONFIGS
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import (
@@ -8,6 +8,8 @@ from utils import (
     calculate_center_bbox,
 )
 
+# Temporary hardcoded index to until hostname can be passed in
+CONFIG = ROBOT_CONFIGS["operator.talos"]
 
 class KeepAwayDirector(BaseDirector):
     # Time when the person first moved outside the box
@@ -17,8 +19,8 @@ class KeepAwayDirector(BaseDirector):
     # bool to ensure only one polar_pan_continuous_stop command is sent at a time
     last_command_stop = False
 
-    confirmation_delay = CAMERA_CONFIG["confirmation_delay"]
-    command_delay = CAMERA_CONFIG["command_delay"]
+    confirmation_delay = CONFIG["confirmation_delay"]
+    command_delay = CONFIG["command_delay"]
 
     # This method is called to process each frame
     def process_frame(self, bounding_box: list, frame, is_director_running):
