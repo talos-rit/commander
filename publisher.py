@@ -1,6 +1,6 @@
 import time
 
-from config.config import ROBOT_CONFIGS
+from config import ROBOT_CONFIGS
 from connections import Connection
 from icd_config import Command, int_to_bytes
 from tkscheduler import Scheduler

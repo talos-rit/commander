@@ -3,10 +3,10 @@ import yaml
 from glob import glob
 
 DEFAULT_BASE_PATH = os.path.join(
-    os.path.dirname(__file__), "default_config.yaml"
+    os.path.dirname(__file__), "config/default_config.yaml"
 )
 DEFAULT_LOCAL_PATH = os.path.join(
-    os.path.dirname(__file__), "default_config.local.yaml"
+    os.path.dirname(__file__), "config/default_config.local.yaml"
 )
 if not os.path.exists(DEFAULT_LOCAL_PATH):
   DEFAULT_LOCAL_PATH = None
@@ -17,8 +17,8 @@ def add_config(socket_host: str, port: int):
     replacing the socket_host and port variables with the passed in parameters.
     """
     base_dir = os.path.dirname(__file__)
-    default_path = os.path.join(base_dir, "default_config.yaml")
-    output_path = os.path.join(base_dir, f"{socket_host}_config.yaml")
+    default_path = os.path.join(base_dir, "config/default_config.yaml")
+    output_path = os.path.join(base_dir, f"config/{socket_host}_config.yaml")
     if os.path.exists(output_path):
         print(f"[WARNING] {output_path} already exists, not overwriting")
         return output_path
@@ -39,7 +39,7 @@ def add_config(socket_host: str, port: int):
     with open(output_path, "w") as f:
         yaml.safe_dump(config_data, f, sort_keys=False)
 
-    print(f"Created {socket_host}_config.yaml")
+    print(f"Created config/{socket_host}_config.yaml")
     return output_path
 
 def find_config_pairs():
@@ -56,7 +56,7 @@ def find_config_pairs():
     - Excludes default_config.yaml and default_config.local.yaml.
     - If a local file has no matching base config, it is discarded with a warning.
     """
-    base_dir = os.path.dirname(__file__)
+    base_dir = os.path.join(os.path.dirname(__file__), "config/")
 
     # Find all base and local configs
     base_configs = glob(os.path.join(base_dir, "*_config.yaml"))

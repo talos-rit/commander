@@ -1,6 +1,6 @@
 import time
 
-from config.config import ROBOT_CONFIGS
+from config import ROBOT_CONFIGS
 from connections import CommandConnection
 from icd_config import int_to_bytes
 

@@ -38,7 +38,7 @@ def calculate_acceptable_box(
     - frame_height
     """
     if acceptable_box_percent is None:
-        from config.config import DEFAULT_CONFIG
+        from config import DEFAULT_CONFIG
 
         acceptable_box_percent = (
             acceptable_box_percent or DEFAULT_CONFIG["acceptable_box_percent"]
