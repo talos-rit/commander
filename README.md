@@ -4,14 +4,6 @@ Allows robot arms to be repurposed as camera arms.
 
 ## Installation
 
-Install ActiveMQ
-
-bash:
-
-```bash
-brew install apache-activemq
-```
-
 Create virtual environment and install required packages.
 Using python package manager: [uv](https://docs.astral.sh/uv/getting-started/installation/)
 ```bash
