@@ -1,6 +1,6 @@
 # this is the default robot configuration
 
-socket_host: "default_host"
+socket_host: 'default_host'
 # socket_host: "localhost"
 socket_port: 8080
 
@@ -8,7 +8,9 @@ acceptable_box_percent: 0.4 # Percentage of the frame width and height used to d
 vertical_field_of_view: 48 # vertical FOV of camera being used
 horizontal_field_of_view: 89 # horizontal FOV of camera being used
 confirmation_delay: 0.25 # Amount of time subject is outside of acceptable box before a command is sent
-camera_index: 2 # Index of the camera device to be used for video capture
+camera_index: 0 # Index of the camera device to be used for video capture
+# Link to camera feed to be used for video capture
+# camera_index: http://unctalos.student.rit.edu:5000/video_feed
 
 command_delay: 0.25 # Wait time before another command can be sent
 fps: 30 # Frame rate to update the gui video

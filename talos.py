@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing
 
 import cv2
 
@@ -11,6 +12,10 @@ def main():
     # while (not Publisher.connection.is_connected):
     #     print("Waiting to connect...")
     #     time.sleep(5)
+
+    # This is a required call for pyinstaller
+    # https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing
+    multiprocessing.freeze_support()
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
