@@ -1,5 +1,6 @@
 import os.path as path
-import signal
+
+# import signal
 import sys
 
 import yaml
@@ -82,7 +83,7 @@ def start_termination_guard():
     print("Setting up cleanup handlers")
     global TERMINATION_HANDLERS
     TERMINATION_HANDLERS = list()
-    signal.signal(signal.SIGINT, terminate)
+    # signal.signal(signal.SIGINT, terminate)
 
 
 def add_termination_handler(handler):
