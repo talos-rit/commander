@@ -5,16 +5,9 @@ from threading import Thread
 
 from PIL import ImageTk
 
-from directors import BaseDirector, ContinuousDirector
 from publisher import Publisher
 from tkscheduler import Scheduler
-from tracking import MODEL_OPTIONS, ModelOption
-from tracking.keep_away.keep_away_director import KeepAwayDirector
-from tracking.keep_away.keep_away_model import KeepAwayModel
-from tracking.media_pipe.media_pipe_model import MediaPipeModel
-from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
-from tracking.tracker import Tracker
-from tracking.yolo.yolo_model import YOLOModel
+from tracking import USABLE_MODELS, Tracker
 from utils import start_termination_guard, terminate
 
 
@@ -61,9 +54,9 @@ class ManualInterface(tkinter.Tk):
     # Flags for director loop
     is_frame_loop_running = False
     director_thread = None
-    director: BaseDirector | None = None
+    director = None  # BaseDirector
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
         start_termination_guard()
@@ -175,12 +168,14 @@ class ManualInterface(tkinter.Tk):
             row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew"
         )
 
-        selected = tkinter.StringVar(value=ModelOption.STANDARD)
-        menu = tkinter.OptionMenu(self, selected, *MODEL_OPTIONS, command=self.set_mode)
+        selected = tkinter.StringVar(value="None")
+        menu = tkinter.OptionMenu(
+            self, selected, "None", *USABLE_MODELS, command=self.set_mode
+        )
         menu.config(width=10)
         menu.grid(row=3, column=5, padx=20)
 
-    def setup_keyboard_controls(self):
+    def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
         self.bind("<KeyPress-Up>", lambda event: self.start_move(Direction.UP))
         self.bind("<KeyRelease-Up>", lambda event: self.stop_move(Direction.UP))
@@ -194,7 +189,7 @@ class ManualInterface(tkinter.Tk):
         self.bind("<KeyPress-Right>", lambda event: self.start_move(Direction.RIGHT))
         self.bind("<KeyRelease-Right>", lambda event: self.stop_move(Direction.RIGHT))
 
-    def bind_button(self, button, direction: Direction):
+    def bind_button(self, button, direction: Direction) -> None:
         """Shortens the constructor by binding button up/down presses.
 
         Args:
@@ -205,7 +200,7 @@ class ManualInterface(tkinter.Tk):
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
 
-    def start_move(self, direction: Direction):
+    def start_move(self, direction: Direction) -> None:
         """Moves the robotic arm a static number of degrees per second.
 
         Args:
@@ -239,7 +234,7 @@ class ManualInterface(tkinter.Tk):
                 Publisher.polar_pan_discrete(10, 0, 1000, 3000)
                 print("Polar pan discrete right")
 
-    def stop_move(self, direction: Direction):
+    def stop_move(self, direction: Direction) -> None:
         """Stops a movement going the current direction.
 
         Args:
@@ -257,7 +252,7 @@ class ManualInterface(tkinter.Tk):
             # Time.sleep stops the whole function, so new key presses will not
             # be heard until after the sleep. So, create a new thread which is
             # async to wait for a new key press
-            def stop_func():
+            def stop_func() -> None:
                 # Wait a fraction of a second
                 time.sleep(0.05)
                 # Get the last time the key was pressed again
@@ -275,7 +270,7 @@ class ManualInterface(tkinter.Tk):
         self.pressed_keys.remove(direction)
         self.change_button_state(direction, "raised")
 
-    def change_button_state(self, direction, depression):
+    def change_button_state(self, direction, depression) -> None:
         """Changes button state to sunken or raised based on input depression argument.
 
         Args:
@@ -297,7 +292,7 @@ class ManualInterface(tkinter.Tk):
             Publisher.polar_pan_continuous_stop()
             print("Polar pan cont STOP")
 
-    def keep_moving(self, direction: Direction):
+    def keep_moving(self, direction: Direction) -> None:
         """Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
             the associated directional is being pressed.
 
@@ -331,18 +326,18 @@ class ManualInterface(tkinter.Tk):
                 self.move_delay_ms, lambda: self.keep_moving(direction)
             )  # lambda used as function reference to execute when required
 
-    def move_home(self):
+    def move_home(self) -> None:
         """Moves the robotic arm from its current location to its home position"""
         print("Moving home")
         Publisher.home(1000)  # sends a command to move to home via the publisher
 
-    def start_director_loop(self):
+    def start_director_loop(self) -> None:
         self.is_frame_loop_running = True
         self.last_mode = None
         self.change_model()  # start model
         self.after(0, self.frame_loop)
 
-    def frame_loop(self):
+    def frame_loop(self) -> None:
         """the director loop"""
         if not self.is_frame_loop_running:
             print("Ending director loop")
@@ -353,38 +348,33 @@ class ManualInterface(tkinter.Tk):
             self.update_video_frame(img)
         self.after(20, self.frame_loop)
 
-    def set_mode(self, new_mode):
+    def set_mode(self, new_mode) -> None:
+        if new_mode == "None":
+            return self.change_model(None)
         self.change_model(new_mode)
 
-    def update_video_frame(self, img: ImageTk.PhotoImage):
+    def update_video_frame(self, img: ImageTk.PhotoImage) -> None:
         self.video_label.config(image=img)
         # Keep a reference to prevent gc
         # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
         self.video_label.dumb_image_ref = img  # pyright: ignore[reportAttributeAccessIssue]
 
-    def change_model(self, option: str | None = None):
+    def change_model(self, option: str | None = None) -> None:
         if self.director is not None:
+            self.tracker.stop_detection_process()
             self.director.stop_auto_control()
             self.director = None
-        if option == ModelOption.KEEPAWAY:
-            print("Entering Keep Away")
-            new_model = KeepAwayModel
-            self.director = KeepAwayDirector(self.tracker, self.scheduler)
-        elif option == ModelOption.YOLO:
-            print("Entering Yolo")
-            new_model = YOLOModel
-            self.director = ContinuousDirector(self.tracker, self.scheduler)
-        elif option == ModelOption.MEDIAPIPEPOSE:
-            print("Entering Media Pipe Pose")
-            new_model = MediaPipePoseModel
-            self.director = ContinuousDirector(self.tracker, self.scheduler)
-        else:  # "standard"
-            print("Entering Media Pipe(default)")
-            new_model = MediaPipeModel
-            self.director = ContinuousDirector(self.tracker, self.scheduler)
-        self.tracker.swap_model(new_model)
+        if option is None or option not in USABLE_MODELS:
+            print(
+                f"Model option was None or Not found skipping initialization... (found {option})"
+            )
+            return
+        print(f"Entering {option}")
+        model_class, director_class = USABLE_MODELS[option]
+        self.director = director_class(self.tracker, self.scheduler)
+        self.tracker.swap_model(model_class)
 
-    def toggle_continuous_mode(self):
+    def toggle_continuous_mode(self) -> None:
         self.continuous_mode = not self.continuous_mode
 
         if self.continuous_mode:
@@ -392,7 +382,7 @@ class ManualInterface(tkinter.Tk):
         else:
             self.cont_mode_label.config(text=ButtonText.DISCRETE_MODE_LABEL)
 
-    def toggle_command_mode(self):
+    def toggle_command_mode(self) -> None:
         """Toggles command mode between manual mode and automatic mode.
         Disables all other controls when in automatic mode.
         """

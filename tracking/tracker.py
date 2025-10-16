@@ -16,6 +16,7 @@ from utils import (
 # Temporary hardcoded index to until hostname can be passed in
 CONFIG = ROBOT_CONFIGS["operator.talos"]
 
+
 class ObjectModel(ABC):
     """
     This is a model class where it can handle turning image frame into bounding box
@@ -85,7 +86,7 @@ class Tracker:
         self.model = model
         self.start_video()
 
-    def start_detection_process(self):
+    def start_detection_process(self) -> None:
         if hasattr(self, "_detection_process") and self._detection_process is not None:
             return  # Already running
 
@@ -102,7 +103,7 @@ class Tracker:
             self.scheduler.set_timeout(10, self.poll_bboxes)
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
 
-    def poll_bboxes(self):
+    def poll_bboxes(self) -> None:
         try:
             self._bboxes = self._bbox_queue.get(block=False)
         except Empty:
@@ -113,8 +114,11 @@ class Tracker:
             and self.scheduler
         ):
             self.scheduler.set_timeout(10, self.poll_bboxes)
+        elif self._detection_process is None:
+            print("detection process is None; clearing internal bbox cache")
+            self._bboxes = None
 
-    def send_latest_frame(self):
+    def send_latest_frame(self) -> None:
         if hasattr(self, "_frame") and self._frame is not None:
             try:
                 self._frame_queue.put_nowait(self._frame)
@@ -127,7 +131,7 @@ class Tracker:
         ):
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
 
-    def stop_detection_process(self):
+    def stop_detection_process(self) -> None:
         if hasattr(self, "_detection_process") and self._detection_process is not None:
             try:
                 if hasattr(self, "_frame_queue"):
@@ -138,6 +142,7 @@ class Tracker:
             except Exception:
                 pass
             self._detection_process = None
+        self._bboxes = None
 
     def save_frame(self):
         hasFrame, frame = self.cap.read()
@@ -147,7 +152,7 @@ class Tracker:
         self.hasNewFrame = True
         return self.hasNewFrame, self._frame
 
-    def get_frame_shape(self):
+    def get_frame_shape(self) -> tuple[int, int]:
         if self._frame is None:
             self.save_frame()
         assert self._frame is not None
@@ -156,10 +161,10 @@ class Tracker:
         frame_width = self._frame.shape[1]
         return (frame_height, frame_width)
 
-    def get_bbox(self):
+    def get_bbox(self):  # -> list[Any] | None:
         return self._bboxes
 
-    def draw_visuals(self, bounding_box, frame):
+    def draw_visuals(self, bounding_box, frame):  # -> Any:
         """
         Draws all the visuals we need on the frame. Rectangles around bounding boxes, circles in the middle, acceptable box for director, red dot for speaker.
 
@@ -229,7 +234,7 @@ class Tracker:
             )
         return frame
 
-    def conv_cv2_frame_to_tkimage(self, frame):
+    def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage:
         # Convert frame to tkinter image
         # Convert from BGR to RGB
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -248,7 +253,7 @@ class Tracker:
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
         return ImageTk.PhotoImage(image=pil_image)
 
-    def create_imagetk(self, bboxes=None, frame=None):
+    def create_imagetk(self, bboxes=None, frame=None) -> None | ImageTk.PhotoImage:
         """This adds bounding box to the frame
         and returns the tkimage created.
         If the frame is supplied that frame will be used,
@@ -267,30 +272,30 @@ class Tracker:
             self.draw_visuals(bboxes, frame)
         return self.conv_cv2_frame_to_tkimage(frame)
 
-    def start_video(self):
+    def start_video(self) -> IterativeTask:
         assert self.scheduler is not None
         assert Tracker.task is None or not Tracker.task.running
         Tracker.task = self.scheduler.set_interval(self.frame_delay, self.save_frame)
         print("Video started")
         return Tracker.task
 
-    def stop_video(self):
+    def stop_video(self) -> None:
         """Stops the save frame capturing process"""
         print("Stopping video")
         if Tracker.task is not None:
             Tracker.task.cancel()
 
-    def start(self):
+    def start(self) -> None:
         print("Starting Tracker")
         self.start_video()
         self.start_detection_process()
 
-    def stop(self):
+    def stop(self) -> None:
         print("Stopping Tracker")
         self.stop_video()
         self.stop_detection_process()
 
-    def swap_model(self, new_model):
+    def swap_model(self, new_model) -> None:
         """This will stop the current detection process and start a new process on the new model"""
         self.stop_detection_process()
         self.model = new_model

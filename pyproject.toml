@@ -2,14 +2,13 @@
 authors = [{name = "Hiro", email = "hiroto125takeuchi@gmail.com"}]
 dependencies = [
     # --- Universal dependencies ---
-    "docopt==0.6.2",
-    "websocket-client==1.8.0",
-    "abcmeta==2.2.0",
-    "opencv-python==4.10.0.84",
-    "mediapipe==0.10.14",
-    "numpy==1.26.0",
-    "pyyaml==6.0.2",
-    "ultralytics==8.3.73",
+    "docopt",
+    "websocket-client",
+    "opencv-python",
+    "opencv-contrib-python",
+    "numpy",
+    "pyyaml",
+    "pillow",
 
     # --- Platform-Specific Dependencies ---
     # For x86_64 macOS: use specific versions due to compatibility issues
@@ -28,3 +27,8 @@ version = "0.1.0"
 dev = [
     "pyinstaller>=6.16.0"
 ]
+
+[project.optional-dependencies]
+mediapipe = ["mediapipe"]
+yolo = ["ultralytics"]
+all = ["mediapipe", "ultralytics"]
