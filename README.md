@@ -16,6 +16,19 @@ python3.12 -m venv venv/py3.12
 pip install -r requirements.txt
 ```
 
+**Optional Installation**
+You can also opt in to install several other object detection models.
+
+1. mediapipe
+    * Run `uv sync --extra mediapipe`
+    * This will add the mediapipe model options in the model dropdown menu
+2. yolo
+    * Run `uv sync --extra yolo`
+    * This will add the yolo model option in the model dropdown menu
+3. all
+    * Run `uv sync --extra all`
+    * This will add all of the extra model options in the dropdown menu
+
 ### Creating an executable
 [Pyinstaller](https://pyinstaller.org/en/stable/) can be used to create an executable (on any OS) for easier launching/distribution of the application. Follow the steps below to create an executable:
 

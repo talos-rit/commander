@@ -5,10 +5,9 @@ import cv2
 
 from directors.continuous_director import ContinuousDirector
 from manual_interface import ManualInterface
-from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
 
 
-def main():
+def main() -> None:
     # while (not Publisher.connection.is_connected):
     #     print("Waiting to connect...")
     #     time.sleep(5)
@@ -30,6 +29,8 @@ def main():
     args = parser.parse_args()
 
     if args.no_interface == "true":
+        from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
+
         tracker = MediaPipePoseModel(None, source=args.source)
         # tracker = MediaPipeTracker(args.source, get_file_path("./config.yaml"))
         # tracker = YOLOTracker(args.source, get_file_path("./config.yaml"))
