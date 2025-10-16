@@ -95,6 +95,8 @@ def terminate(signum, frame):
     print(f"\nSignal {signum} received! Executing handler.")
     print(f"Performing cleanup or specific action... {len(TERMINATION_HANDLERS)}")
 
-    for handler in TERMINATION_HANDLERS:
+    while len(TERMINATION_HANDLERS) > 0:
+        handler = TERMINATION_HANDLERS.pop()
         handler()
-    sys.exit(0)
+    print("Finished clean up")
+    # sys.exit(0)

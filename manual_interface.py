@@ -60,7 +60,7 @@ class ManualInterface(tkinter.Tk):
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
         start_termination_guard()
-        self.protocol("WM_DELETE_WINDOW", lambda: terminate(0, 0))
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.scheduler = Scheduler(self)
         self.title("Talos Manual Interface")
         self.pressed_keys = set()  # keeps track of keys which are pressed down
@@ -423,3 +423,7 @@ class ManualInterface(tkinter.Tk):
             Direction.LEFT,
             Direction.RIGHT,
         }
+
+    def destroy(self):
+        terminate(0, 0)
+        super().destroy()
