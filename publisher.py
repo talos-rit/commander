@@ -1,12 +1,12 @@
 import time
 
-from config import ROBOT_CONFIGS
+from config import CONFIG as CONFIGS
 from connections import Connection
 from icd_config import Command, int_to_bytes
 from tkscheduler import Scheduler
 
-# Temporary hardcoded index to until hostname can be passed in
-CONFIG = ROBOT_CONFIGS["operator.talos"]
+# Temporary hardcoded index to until config can be passed in on initialization
+CONFIG = CONFIGS["unctalos.student.rit.edu"]
 
 def assert_normalized(*nums: int):
     nums_abs = list(map(lambda x: abs(x), nums))

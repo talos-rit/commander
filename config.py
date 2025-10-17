@@ -26,10 +26,15 @@ def load_config():
         with open(CONFIG_PATH, "r") as f:
           config = yaml.safe_load(f)
     else:
-        print("[WARNING] no connection configurations found, loading default configuration with placeholder values")
-        with open(DEFAULT_PATH, "r") as f:
-            config = {}
-            config["default_host"] = yaml.safe_load(f)
+        #TODO: change to default config with placeholder values once add_config can be easily used
+        print("[WARNING] no connection configurations found, adding known dev configuration")
+        add_config("unctalos.student.rit.edu", 61616)
+        with open(CONFIG_PATH, "r") as f:
+          config = yaml.safe_load(f)
+        # print("[WARNING] no connection configurations found, loading default configuration with placeholder values")
+        # with open(DEFAULT_PATH, "r") as f:
+        #     config = {}
+        #     config["default_host"] = yaml.safe_load(f)
     return config
 
 def add_config(socket_host: str, port: int):
@@ -81,4 +86,5 @@ def add_config(socket_host: str, port: int):
     global CONFIG
     CONFIG = load_config()
 
+# Set global CONFIG variable
 CONFIG = load_config()

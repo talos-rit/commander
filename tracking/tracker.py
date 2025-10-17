@@ -5,7 +5,7 @@ from queue import Empty
 import cv2
 from PIL import Image, ImageTk
 
-from config import ROBOT_CONFIGS
+from config import CONFIG as CONFIGS
 from tkscheduler import IterativeTask, Scheduler
 from utils import (
     add_termination_handler,
@@ -13,8 +13,8 @@ from utils import (
     calculate_center_bbox,
 )
 
-# Temporary hardcoded index to until hostname can be passed in
-CONFIG = ROBOT_CONFIGS["operator.talos"]
+# Temporary hardcoded index to until config can be passed in on initialization
+CONFIG = CONFIGS["unctalos.student.rit.edu"]
 
 
 class ObjectModel(ABC):
