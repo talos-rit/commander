@@ -45,11 +45,15 @@ def add_config(socket_host: str, port: int):
     # Ensure the root is a dictionary
     if not isinstance(config, dict):
         raise ValueError("config.local.yaml does not contain a dictionary at the root")
+    
+    # Warn if overwriting an existing configuration
+    if config.get(socket_host):
+        print(f"[WARNING] Overwriting existing configuration for '{socket_host}' in config.local.yaml")
 
     # Add the new configuration and write back to file
     config[socket_host] = config_data
     with open(output_path, "w") as f:
-        yaml.safe_dump(config_data, f, sort_keys=False)
+        yaml.safe_dump(config, f, sort_keys=False)
     
     return output_path
 
