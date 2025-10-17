@@ -1,7 +1,9 @@
-# this is the default robot configuration
+# This is the default configuration for new connections to the system.
+# This file is not used directly for any connections, only as a template for new configurations 
+# that are added to config.local.yaml via config.py
 
+# The host and port have placeholder values in this file that will be replaced when adding a new connection.
 socket_host: "default_host"
-# socket_host: "localhost"
 socket_port: 8080
 
 acceptable_box_percent: 0.4 # Percentage of the frame width and height used to define the size of the acceptable box

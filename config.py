@@ -15,18 +15,16 @@ if not os.path.exists(DEFAULT_LOCAL_PATH):
 
 def add_config(socket_host: str, port: int):
     """
-    Create a {socket_host}_config.yaml file based on default_config.yaml,
-    replacing the socket_host and port variables with the passed in parameters.
+    Add a new local configuration to config/config.local.yaml based on config/default_config.yaml,
+    updating the first two fields to socket_host and port.
+    Creates config/config.local.yaml if it does not exist.
     """
     base_dir = os.path.dirname(__file__)
-    default_path = os.path.join(base_dir, "config/default_config.yaml")
-    output_path = os.path.join(base_dir, f"config/{socket_host}_config.yaml")
-    if os.path.exists(output_path):
-        print(f"[WARNING] {output_path} already exists, not overwriting")
-        return output_path
+    default_path = get_file_path(os.path.join(base_dir, "config/default_config.yaml"))
+    output_path = get_file_path(os.path.join(base_dir, "config/config.local.yaml"))
 
     # Load the default configuration
-    with open(get_file_path(default_path), "r") as f:
+    with open(default_path, "r") as f:
         config_data = yaml.safe_load(f)
 
     # Update the first two fields if they exist
@@ -37,11 +35,22 @@ def add_config(socket_host: str, port: int):
     else:
         raise ValueError("default_config.yaml has no socket_host and port fields")
 
-    # Write the modified configuration
-    with open(get_file_path(output_path), "w") as f:
-        yaml.safe_dump(config_data, f, sort_keys=False)
+    # Load existing local configuration or create a new one
+    if not os.path.exists(output_path):
+        config = {}
+    else:
+        with open(output_path, "r") as f:
+            config = yaml.safe_load(f) or {}
 
-    print(f"Created config/{socket_host}_config.yaml")
+    # Ensure the root is a dictionary
+    if not isinstance(config, dict):
+        raise ValueError("config.local.yaml does not contain a dictionary at the root")
+
+    # Add the new configuration and write back to file
+    config[socket_host] = config_data
+    with open(output_path, "w") as f:
+        yaml.safe_dump(config_data, f, sort_keys=False)
+    
     return output_path
 
 def find_config_pairs():
@@ -133,3 +142,8 @@ def load_all_robot_configs():
 
 ROBOT_CONFIGS = load_all_robot_configs()
 DEFAULT_CONFIG = load_a_config(DEFAULT_BASE_PATH, DEFAULT_LOCAL_PATH)
+
+# For testing purposes
+if __name__ == "__main__":
+    new_config_path = add_config("new_host", 9090)
+    print(f"New configuration added at: {new_config_path}")
