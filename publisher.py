@@ -1,12 +1,8 @@
 import time
 
-from config import CONFIG as CONFIGS
 from connections import Connection
 from icd_config import Command, int_to_bytes
 from tkscheduler import Scheduler
-
-# Temporary hardcoded index to until config can be passed in on initialization
-CONFIG = CONFIGS["unctalos.student.rit.edu"]
 
 def assert_normalized(*nums: int):
     nums_abs = list(map(lambda x: abs(x), nums))
@@ -19,31 +15,31 @@ def assert_normalized(*nums: int):
 
 class Publisher:
     """
-    A static class that is used to publish instructions to the operator.
+    A class that is used to publish instructions to the operator.
     """
-
-    connection = Connection(host=CONFIG["socket_host"], port=CONFIG["socket_port"], connect_on_init=False)
     command_count = 0
     CHAR_ENCODING = "utf-8"
 
-    @staticmethod
-    def start_socket_connection(schedule: Scheduler | None = None):
-        Publisher.connection.schedule = schedule
-        Publisher.connection.connect_on_thread()
+    def __init__(self, socket_host: str, socket_port: int):
+        self.connection = Connection(
+            host=socket_host,
+            port=socket_port
+        )
 
-    @staticmethod
-    def close_connection():
-        Publisher.connection.close()
+    def start_socket_connection(self, schedule: Scheduler | None = None):
+        self.connection.schedule = schedule
+        self.connection.connect_on_thread()
 
-    @staticmethod
-    def handshake():
+    def close_connection(self):
+        self.connection.close()
+
+    def handshake(self):
         # Handshake sends an empty payload
         payload = b""
 
-        Publisher.connection.publish(command=Command.HANDSHAKE, payload=payload)
+        self.connection.publish(command=Command.HANDSHAKE, payload=payload)
 
-    @staticmethod
-    def polar_pan_discrete(
+    def polar_pan_discrete(self,
         delta_azimuth_int: int,
         delta_altitude_int: int,
         delay_int: int,
@@ -63,12 +59,11 @@ class Publisher:
         # Put everything together
         payload = delta_azimuth + delta_altitude + delay + duration
 
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.POLAR_PAN_DISCRETE, payload=payload
         )
 
-    @staticmethod
-    def polar_pan_continuous_start(
+    def polar_pan_continuous_start(self,
         moving_azimuth_int: int = 0, moving_altitude_int: int = 0
     ):
         """
@@ -90,37 +85,33 @@ class Publisher:
         # Put everything together
         payload = moving_azimuth + moving_altitude
 
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.POLAR_PAN_CONTINUOUS_START, payload=payload
         )
 
-    @staticmethod
-    def polar_pan_continuous_stop():
+    def polar_pan_continuous_stop(self):
         """
         Stops a continuous polar pan rotation.
         """
-        Publisher.connection.publish(command=Command.POLAR_PAN_CONTINUOUS_STOP)
+        self.connection.publish(command=Command.POLAR_PAN_CONTINUOUS_STOP)
 
-    @staticmethod
-    def home(delay_ms: int):
+    def home(self, delay_ms: int):
         """
         Delay (ms)	UINT32	How long to wait until executing pan
         """
         delay = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
 
-        Publisher.connection.publish(command=Command.HOME, payload=delay)
+        self.connection.publish(command=Command.HOME, payload=delay)
 
-    @staticmethod
-    def set_speed(speed: int):
+    def set_speed(self, speed: int):
         """
         Speed 	UINT8 	What to set the speed of all axes to on the scorbot
         """
         speed_bytes = int_to_bytes(speed, num_bits=8, unsigned=True)
 
-        Publisher.connection.publish(command=Command.SET_SPEED, payload=speed_bytes)
+        self.connection.publish(command=Command.SET_SPEED, payload=speed_bytes)
 
-    @staticmethod
-    def save_position(name: str, anchor: bool, parent: str):
+    def save_position(self, name: str, anchor: bool, parent: str):
         """
         Saves a position.
 
@@ -137,20 +128,19 @@ class Publisher:
         """
 
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.CHAR_ENCODING)
+        name_bytes = name.encode(self.CHAR_ENCODING)
 
         anchor_bytes = b"\x01" if anchor else b"\x00"
 
         parent_len_bytes = int_to_bytes(len(parent), num_bits=8, unsigned=True)
-        parent_bytes = parent.encode(Publisher.CHAR_ENCODING)
+        parent_bytes = parent.encode(self.CHAR_ENCODING)
 
         payload = (
             name_len_bytes + name_bytes + anchor_bytes + parent_len_bytes + parent_bytes
         )
-        Publisher.connection.publish(command=Command.SAVE_POSITION, payload=payload)
+        self.connection.publish(command=Command.SAVE_POSITION, payload=payload)
 
-    @staticmethod
-    def delete_position(name: str):
+    def delete_position(self, name: str):
         """
         Given a position name, deletes that position information.
 
@@ -158,26 +148,24 @@ class Publisher:
         """
 
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.CHAR_ENCODING)
+        name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
-        Publisher.connection.publish(command=Command.DELETE_POSITION, payload=payload)
+        self.connection.publish(command=Command.DELETE_POSITION, payload=payload)
 
-    @staticmethod
-    def go_to_position(name: str):
+    def go_to_position(self, name: str):
         """
         Move to a pre-defined position.
 
         Name    CHAR[]  Name descriptor for the position (non null terminated)
         """
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.CHAR_ENCODING)
+        name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
-        Publisher.connection.publish(command=Command.GO_TO_POSITION, payload=payload)
+        self.connection.publish(command=Command.GO_TO_POSITION, payload=payload)
 
-    @staticmethod
-    def set_polar_position(name: str, delta: int, azimuth: int, radius: int):
+    def set_polar_position(self, name: str, delta: int, azimuth: int, radius: int):
         """
         Defines a position in terms of polar coordinates
 
@@ -188,7 +176,7 @@ class Publisher:
         """
 
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.CHAR_ENCODING)
+        name_bytes = name.encode(self.CHAR_ENCODING)
 
         delta_bytes = int_to_bytes(delta, num_bits=32, unsigned=False)
         azimuth_bytes = int_to_bytes(azimuth, num_bits=32, unsigned=False)
@@ -197,28 +185,26 @@ class Publisher:
         payload = (
             name_len_bytes + name_bytes + delta_bytes + azimuth_bytes + radius_bytes
         )
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.SET_POLAR_POSITION, payload=payload
         )
 
-    @staticmethod
-    def get_polar_position(name: str):
+    def get_polar_position(self, name: str):
         """
         Returns the polar coordinates of a named position
 
         Name    CHAR[]  Name descriptor for the position (non null terminated)
         """
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.CHAR_ENCODING)
+        name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
 
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.GET_POLAR_POSITION, payload=payload
         )
 
-    @staticmethod
-    def set_cartesian_position(
+    def set_cartesian_position(self,
         name: str, x_mm_tenths: int, y_mm_tenths: int, z_mm_tenths: int
     ):
         """
@@ -231,7 +217,7 @@ class Publisher:
         """
 
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.CHAR_ENCODING)
+        name_bytes = name.encode(self.CHAR_ENCODING)
 
         x_mm_tenths_bytes = int_to_bytes(x_mm_tenths, num_bits=32, unsigned=False)
         y_mm_tenths_bytes = int_to_bytes(y_mm_tenths, num_bits=32, unsigned=False)
@@ -244,38 +230,35 @@ class Publisher:
             + y_mm_tenths_bytes
             + z_mm_tenths_bytes
         )
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.SET_CARTESIAN_POSITION, payload=payload
         )
 
-    @staticmethod
-    def get_cartesian_position(name: str):
+    def get_cartesian_position(self, name: str):
         """
         Returns the cartesian coordinates of a named position
 
         Name    CHAR[]  Name descriptor for the position (non null terminated)
         """
         name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
-        name_bytes = name.encode(Publisher.CHAR_ENCODING)
+        name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
 
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.GET_CARTESIAN_POSITION, payload=payload
         )
 
-    @staticmethod
-    def get_speed():
+    def get_speed(self):
         """
         Command to get the speed of all axes on Talos
         """
         # Sends an empty payload
         payload = b""
 
-        Publisher.connection.publish(command=Command.GET_SPEED, payload=payload)
+        self.connection.publish(command=Command.GET_SPEED, payload=payload)
 
-    @staticmethod
-    def cartesian_move_discrete(delta_x, delta_y, delta_z, delay_ms, time):
+    def cartesian_move_discrete(self, delta_x, delta_y, delta_z, delay_ms, time):
         """
         Args:
         Delta X 	INT32 	Requested change in X
@@ -293,12 +276,11 @@ class Publisher:
             delta_x_bytes + delta_y_bytes + delta_z_bytes + delay_ms_bytes + time_bytes
         )
 
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.CARTESIAN_MOVE_DISCRETE, payload=payload
         )
 
-    @staticmethod
-    def cartesian_move_continuous_start(moving_x, moving_y, moving_z):
+    def cartesian_move_continuous_start(self, moving_x, moving_y, moving_z):
         """
         Starts/maintains a continuous cartesian movement.
 
@@ -317,24 +299,22 @@ class Publisher:
 
         payload = moving_x_bytes + moving_y_bytes + moving_z_bytes
 
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.CARTESIAN_MOVE_CONTINUOUS_START, payload=payload
         )
 
-    @staticmethod
-    def cartesian_move_continuous_stop():
+    def cartesian_move_continuous_stop(self):
         """
         Stops a continuous cartesian move.
         """
         # Sends an empty payload
         payload = b""
 
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.CARTESIAN_MOVE_CONTINUOUS_STOP, payload=payload
         )
 
-    @staticmethod
-    def execute_hardware_operation(subcommand_value, operations_payload):
+    def execute_hardware_operation(self, subcommand_value, operations_payload):
         """
         Some operations require high coupling with the specifics of the hardware
         (e.g. axis-by-axis positions). Such operations should be defined by a separate
@@ -353,11 +333,11 @@ class Publisher:
 
         payload = subcommand_value_bytes + reserved_bytes + operations_payload
 
-        Publisher.connection.publish(
+        self.connection.publish(
             command=Command.EXECUTE_HARDWARE_OPERATION, payload=payload
         )
 
-
+# Not sure what this is for, but leaving it here for now
 def main():
     while not Publisher.connection.is_running:
         time.sleep(1)
