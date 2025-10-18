@@ -5,11 +5,14 @@ from threading import Thread
 
 from PIL import ImageTk
 
+from config import CONFIG
 from publisher import Publisher
 from tkscheduler import Scheduler
 from tracking import USABLE_MODELS, Tracker
 from utils import start_termination_guard, terminate
 
+# Temporary hardcoded index to until config can be passed in on initialization
+TEMP_CONFIG = CONFIG["unctalos.student.rit.edu"]
 
 class Direction(IntEnum):
     """Directional Enum for interface controls"""
@@ -66,7 +69,8 @@ class ManualInterface(tkinter.Tk):
         self.pressed_keys = set()  # keeps track of keys which are pressed down
         self.last_key_presses = {}
         self.tracker = Tracker(scheduler=self.scheduler)
-        Publisher.start_socket_connection(self.scheduler)
+        publisher = Publisher(TEMP_CONFIG["socket_host"], TEMP_CONFIG["socket_port"])  
+        publisher.start_socket_connection(self.scheduler)
         self.after("idle", self.start_director_loop)
 
         # setting up manual vs automatic control toggle
@@ -199,6 +203,18 @@ class ManualInterface(tkinter.Tk):
 
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
+
+    # def add_connection(self, socket_host: str, socket_port: int) -> None:
+    #     """Opens a new connection, creates necessary classes, and saves connection info to config.
+
+    #     Args:
+    #         socket_host (string): the host ip address of the socket connection
+    #         socket_port (int): the port number of the socket connection
+    #     """
+    #     publisher = Publisher(socket_host, socket_port)
+    #     publisher.start_socket_connection(self.scheduler, socket_host, socket_port)
+    #     add_config(socket_host, socket_port)
+    #     from config import CONFIG
 
     def start_move(self, direction: Direction) -> None:
         """Moves the robotic arm a static number of degrees per second.

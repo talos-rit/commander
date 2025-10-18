@@ -1,6 +1,6 @@
 import time
 
-from config import ROBOT_CONFIGS
+from config import CONFIG as CONFIGS
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import (
@@ -8,8 +8,8 @@ from utils import (
     calculate_center_bbox,
 )
 
-# Temporary hardcoded index to until hostname can be passed in
-CONFIG = ROBOT_CONFIGS["operator.talos"]
+# Temporary hardcoded index to until config can be passed in on initialization
+CONFIG = CONFIGS["unctalos.student.rit.edu"]
 
 class DiscreteDirector(BaseDirector):
     horizontal_field_of_view = CONFIG["horizontal_field_of_view"]
