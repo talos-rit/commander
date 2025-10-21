@@ -6,16 +6,25 @@ from utils import get_file_path
 CONFIG_PATH = get_file_path(os.path.join(
     os.path.dirname(__file__), "config/config.local.yaml"
 ))
-
-# Set default path allowing for local override
 DEFAULT_PATH = get_file_path(os.path.join(
     os.path.dirname(__file__), "config/default_config.yaml"
 ))
-local_default_path = get_file_path(os.path.join(
+LOCAL_DEFAULT_PATH = get_file_path(os.path.join(
     os.path.dirname(__file__), "config/default_config.local.yaml"
 ))
-if os.path.exists(local_default_path):
-  DEFAULT_PATH = local_default_path
+
+def load_default_config():
+    """
+    Load the default configuration from config/default_config.yaml or
+    config/default_config.local.yaml if it exists.
+    """
+    if os.path.exists(LOCAL_DEFAULT_PATH):
+        with open(LOCAL_DEFAULT_PATH, "r") as f:
+            default_config = yaml.safe_load(f)
+    else:
+        with open(DEFAULT_PATH, "r") as f:
+            default_config = yaml.safe_load(f)
+    return default_config
 
 def load_config():
     """
@@ -32,9 +41,8 @@ def load_config():
         with open(CONFIG_PATH, "r") as f:
           config = yaml.safe_load(f)
         # print("[WARNING] no connection configurations found, loading default configuration with placeholder values")
-        # with open(DEFAULT_PATH, "r") as f:
-        #     config = {}
-        #     config["default_host"] = yaml.safe_load(f)
+        # config = {}
+        # config["default_host"] = load_default_config()
     return config
 
 def add_config(socket_host: str, port: int):
@@ -50,8 +58,7 @@ def add_config(socket_host: str, port: int):
     output_path = get_file_path(os.path.join(base_dir, "config/config.local.yaml"))
 
     # Load the default configuration
-    with open(DEFAULT_PATH, "r") as f:
-        config_data = yaml.safe_load(f)
+    config_data = load_default_config()
 
     # Update the first two fields if they exist
     keys = list(config_data.keys())
@@ -86,5 +93,8 @@ def add_config(socket_host: str, port: int):
     global CONFIG
     CONFIG = load_config()
 
-# Set global CONFIG variable
+    return config
+
+# Set global variables
 CONFIG = load_config()
+DEFAULT_CONFIG = load_default_config()

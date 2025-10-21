@@ -4,12 +4,14 @@ from enum import IntEnum, StrEnum
 from threading import Thread
 
 from PIL import ImageTk
+from tkinter import ttk
 
-from config import CONFIG
 from publisher import Publisher
 from tkscheduler import Scheduler
 from tracking import USABLE_MODELS, Tracker
 from utils import start_termination_guard, terminate
+from config import load_config, add_config, CONFIG
+from connection_manager import ConnectionManager
 
 # Temporary hardcoded index to until config can be passed in on initialization
 TEMP_CONFIG = CONFIG["unctalos.student.rit.edu"]
@@ -72,6 +74,10 @@ class ManualInterface(tkinter.Tk):
         publisher = Publisher(TEMP_CONFIG["socket_host"], TEMP_CONFIG["socket_port"])  
         publisher.start_socket_connection(self.scheduler)
         self.after("idle", self.start_director_loop)
+
+        self.config = load_config()
+        self.connections = []
+        self.active_connection = None
 
         # setting up manual vs automatic control toggle
         self.mode_label = tkinter.Label(
@@ -172,12 +178,35 @@ class ManualInterface(tkinter.Tk):
             row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew"
         )
 
-        selected = tkinter.StringVar(value="None")
-        menu = tkinter.OptionMenu(
-            self, selected, "None", *USABLE_MODELS, command=self.set_mode
+        selectedModel = tkinter.StringVar(value="None")
+        modelMenu = tkinter.OptionMenu(
+            self, selectedModel, "None", *USABLE_MODELS, command=self.set_mode
         )
-        menu.config(width=10)
-        menu.grid(row=3, column=5, padx=20)
+        modelMenu.config(width=10)
+        modelMenu.grid(row=3, column=5, padx=10)
+
+        self.loadAllButton = tkinter.Button(
+            self,
+            text="Connect all",
+            font=("Cascadia Code", 10, "bold"),
+            # command=self.load_all_connections,
+        )
+        self.loadAllButton.grid(row=1, column=6, padx=10)
+
+        self.manageConnectionsButton = tkinter.Button(
+            self,
+            text="Manage connections",
+            font=("Cascadia Code", 10, "bold"),
+            command=self.manage_connections,
+        )
+        self.manageConnectionsButton.grid(row=2, column=6, padx=10)
+
+        selectedConnection = tkinter.StringVar(value="None")
+        connectionMenu = tkinter.OptionMenu(
+            self, selectedConnection, "None", *self.connections, command=self.set_active_connection
+        )
+        connectionMenu.config(width=10)
+        connectionMenu.grid(row=3, column=6, padx=10)
 
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
@@ -204,17 +233,16 @@ class ManualInterface(tkinter.Tk):
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
 
-    # def add_connection(self, socket_host: str, socket_port: int) -> None:
-    #     """Opens a new connection, creates necessary classes, and saves connection info to config.
+    def add_connection(self, socket_host: str, socket_port: int) -> None:
+        """Opens a new connection, creates necessary classes, and saves connection info to config.
 
-    #     Args:
-    #         socket_host (string): the host ip address of the socket connection
-    #         socket_port (int): the port number of the socket connection
-    #     """
-    #     publisher = Publisher(socket_host, socket_port)
-    #     publisher.start_socket_connection(self.scheduler, socket_host, socket_port)
-    #     add_config(socket_host, socket_port)
-    #     from config import CONFIG
+        Args:
+            socket_host (string): the host ip address of the socket connection
+            socket_port (int): the port number of the socket connection
+        """
+        # publisher = Publisher(socket_host, socket_port)
+        # publisher.start_socket_connection(self.scheduler, socket_host, socket_port)
+        add_config(socket_host, socket_port)
 
     def start_move(self, direction: Direction) -> None:
         """Moves the robotic arm a static number of degrees per second.
@@ -346,6 +374,17 @@ class ManualInterface(tkinter.Tk):
         """Moves the robotic arm from its current location to its home position"""
         print("Moving home")
         Publisher.home(1000)  # sends a command to move to home via the publisher
+
+    def manage_connections(self) -> None:
+        """Opens a pop-up window to manage socket connections."""
+        ConnectionManager(self, self.connections)
+
+    def set_active_connection(self, option: str | None = None) -> None:
+        if option is None or option not in self.connections:
+            print(f"Connection was not found or was None... (found {option})")
+            return
+        self.active_connection = option
+        print(f"Active connection set to: {self.active_connection}")
 
     def start_director_loop(self) -> None:
         self.is_frame_loop_running = True
