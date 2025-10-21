@@ -4,10 +4,10 @@ from enum import StrEnum
 from threading import Thread
 
 import customtkinter
-from PIL import ImageTk, Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
 
 from config import CONFIG, load_config
-from connection_manager import ConnectionManager, ConnectionData
+from connection_manager import ConnectionData, ConnectionManager
 from publisher import Direction, Publisher
 from tkscheduler import Scheduler
 from tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
@@ -231,7 +231,7 @@ class ManualInterface(tkinter.Tk):
 
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
-    
+
     def draw_no_signal_display(self) -> ImageTk.PhotoImage:
         no_signal_image = Image.new("RGB", (500, 380), color="gray")
         draw = ImageDraw.Draw(no_signal_image)
@@ -239,7 +239,7 @@ class ManualInterface(tkinter.Tk):
         image_tk = ImageTk.PhotoImage(no_signal_image)
         return image_tk
 
-    def open_connection(self, hostname: str, port = None, camera = None) -> None:
+    def open_connection(self, hostname: str, port=None, camera=None) -> None:
         """Opens a new connection. Port and camera are supplied only if opening a new connection not from config.
 
         Args:
@@ -256,7 +256,9 @@ class ManualInterface(tkinter.Tk):
         # If camera is not supplied, get it from config
         if camera is None:
             camera = self.config[hostname]["camera_index"]
-        print(f"Opening connection to {hostname} on port {port}, with the camera at {camera}")
+        print(
+            f"Opening connection to {hostname} on port {port}, with the camera at {camera}"
+        )
         publisher = Publisher(hostname, port)
         self.connections[hostname] = ConnectionData(hostname, port, publisher)
         self.set_active_connection(hostname)
@@ -310,7 +312,9 @@ class ManualInterface(tkinter.Tk):
         # moves toward input direction by delta 10 (degrees)
         connectionData = self.connections.get(self.active_connection)
         if connectionData is None:
-            print(f"[ERROR] No connection found for active connection: {self.active_connection}")
+            print(
+                f"[ERROR] No connection found for active connection: {self.active_connection}"
+            )
             return
         publisher = connectionData.publisher
         match direction:
@@ -384,7 +388,9 @@ class ManualInterface(tkinter.Tk):
         if self.continuous_mode.get() and len(self.pressed_keys) == 0:
             connectionData = self.connections.get(self.active_connection)
             if connectionData is None:
-                print(f"[ERROR] No connection found for active connection: {self.active_connection}")
+                print(
+                    f"[ERROR] No connection found for active connection: {self.active_connection}"
+                )
                 return
             publisher = connectionData.publisher
             publisher.polar_pan_continuous_stop()
@@ -404,7 +410,9 @@ class ManualInterface(tkinter.Tk):
         if len(self.pressed_keys) > 0:
             connectionData = self.connections.get(self.active_connection)
             if connectionData is None:
-                print(f"[ERROR] No connection found for active connection: {self.active_connection}")
+                print(
+                    f"[ERROR] No connection found for active connection: {self.active_connection}"
+                )
                 return
             publisher = connectionData.publisher
             publisher.polar_pan_continuous_direction_start(sum(self.pressed_keys))
@@ -413,7 +421,9 @@ class ManualInterface(tkinter.Tk):
         """Moves the robotic arm from its current location to its home position"""
         connectionData = self.connections.get(self.active_connection)
         if connectionData is None:
-            print(f"[ERROR] No connection found for active connection: {self.active_connection}")
+            print(
+                f"[ERROR] No connection found for active connection: {self.active_connection}"
+            )
             return
         publisher = connectionData.publisher
         publisher.home(1000)
@@ -438,11 +448,11 @@ class ManualInterface(tkinter.Tk):
             )
             self.selectedConnection.set("None")
             return
-        
+
         for conn in self.connections:
             menu.add_command(
                 label=conn,
-                command=lambda value=conn: self.selectedConnection.set(value)
+                command=lambda value=conn: self.selectedConnection.set(value),
             )
         # If a new connection was added, switch to it
         if new_selection and new_selection in self.connections:
@@ -456,6 +466,8 @@ class ManualInterface(tkinter.Tk):
         self.run_display_loop = True
         self.last_mode = None
         self.change_model()  # start model
+        if self.active_connection is not None:
+            self.tracker.set_active_connection(self.active_connection)
         self.after(0, self.display_loop)
 
     def display_loop(self) -> None:
@@ -463,7 +475,7 @@ class ManualInterface(tkinter.Tk):
         if not self.run_display_loop:
             self.update_display(self.no_signal_display)
             return
-        
+
         img = self.tracker.create_imagetk(self.active_connection)
         if img is not None:
             self.update_display(img)
