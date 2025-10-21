@@ -8,7 +8,7 @@ from PIL import ImageTk
 from publisher import Publisher
 from tkscheduler import Scheduler
 from tracking import USABLE_MODELS, Tracker
-from utils import start_termination_guard, terminate
+from utils import add_termination_handler, start_termination_guard, terminate
 
 
 class Direction(IntEnum):
@@ -68,6 +68,7 @@ class ManualInterface(tkinter.Tk):
         self.tracker = Tracker(scheduler=self.scheduler)
         Publisher.start_socket_connection(self.scheduler)
         self.after("idle", self.start_director_loop)
+        add_termination_handler(self.destroy)
 
         # setting up manual vs automatic control toggle
         self.mode_label = tkinter.Label(
