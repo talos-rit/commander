@@ -2,12 +2,17 @@ import tkinter
 from tkinter import ttk
 
 class ConnectionManager(tkinter.Toplevel):
-    def __init__(self, parent, connections_list):
+    def __init__(self, parent, connections_list, config):
         super().__init__(parent)
         self.title("Connection Manager")
         self.geometry("350x300")
         self.connections_list = connections_list
+        self.config = config
         self.parent = parent
+
+        self.transient(parent)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.list_frame = ttk.Frame(self)
         self.list_frame.pack(pady=10, fill="x")
@@ -18,9 +23,12 @@ class ConnectionManager(tkinter.Toplevel):
 
         ttk.Button(control_frame, text="Add", command=self.add_connection).pack(side="left", padx=5)
         self.render_list()
+    
+    def on_close(self):
+        self.grab_release()
+        self.destroy()
 
     def render_list(self):
-        """Redraw connections list."""
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
@@ -45,8 +53,6 @@ class ConnectionManager(tkinter.Toplevel):
 
     def get_host_port(self, parent=None):
       """Open a popup to request host and port, return them as a (host, port) tuple."""
-      result = [None]  # use a list to allow assignment inside nested function
-
       popup = tkinter.Toplevel(parent)
       popup.title("Enter Host and Port")
       popup.geometry("300x160")
@@ -62,15 +68,17 @@ class ConnectionManager(tkinter.Toplevel):
       port_var = tkinter.StringVar()
       ttk.Entry(popup, textvariable=port_var).pack(fill="x", padx=20)
 
+      result = None
       def submit():
+          nonlocal result
           host = host_var.get().strip()
           port = port_var.get().strip()
           if host and port:
-              result[0] = (host, port)
+              result = (host, port)
               popup.destroy()
 
       ttk.Button(popup, text="Submit", command=submit).pack(pady=15)
       popup.bind("<Return>", lambda e: submit())
 
       popup.wait_window()  # wait for the popup to close
-      return result[0]
+      return result

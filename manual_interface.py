@@ -377,7 +377,7 @@ class ManualInterface(tkinter.Tk):
 
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
-        ConnectionManager(self, self.connections)
+        ConnectionManager(self, self.connections, self.config)
 
     def set_active_connection(self, option: str | None = None) -> None:
         if option is None or option not in self.connections:
