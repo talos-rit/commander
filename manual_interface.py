@@ -68,7 +68,7 @@ class ManualInterface(tkinter.Tk):
         self.tracker = Tracker(scheduler=self.scheduler)
         Publisher.start_socket_connection(self.scheduler)
         self.after("idle", self.start_director_loop)
-        add_termination_handler(self.destroy)
+        add_termination_handler(super().destroy)
 
         # setting up manual vs automatic control toggle
         self.mode_label = tkinter.Label(
