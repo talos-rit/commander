@@ -8,4 +8,8 @@ assignees:
 ## Description
 This is a generic issue template.
 
+**Difficulty:** [High/Medium/Low]
+
+**Expected Completion Date:** [YYYY-MM-DD]
+
 ## Related Issues
