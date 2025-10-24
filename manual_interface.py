@@ -4,7 +4,6 @@ from enum import IntEnum, StrEnum
 from threading import Thread
 
 from PIL import ImageTk
-from tkinter import ttk
 
 from publisher import Publisher
 from tkscheduler import Scheduler
@@ -71,12 +70,12 @@ class ManualInterface(tkinter.Tk):
         self.pressed_keys = set()  # keeps track of keys which are pressed down
         self.last_key_presses = {}
         self.tracker = Tracker(scheduler=self.scheduler)
-        publisher = Publisher(TEMP_CONFIG["socket_host"], TEMP_CONFIG["socket_port"])  
-        publisher.start_socket_connection(self.scheduler)
-        self.after("idle", self.start_director_loop)
+        # publisher = Publisher(TEMP_CONFIG["socket_host"], TEMP_CONFIG["socket_port"])  
+        # publisher.start_socket_connection(self.scheduler)
+        # self.after("idle", self.start_director_loop)
 
         self.config = load_config()
-        self.connections = []
+        self.connections = {}
         self.active_connection = None
 
         # setting up manual vs automatic control toggle
@@ -189,7 +188,7 @@ class ManualInterface(tkinter.Tk):
             self,
             text="Connect all",
             font=("Cascadia Code", 10, "bold"),
-            # command=self.load_all_connections,
+            command=self.open_all_configured,
         )
         self.loadAllButton.grid(row=1, column=6, padx=10)
 
@@ -201,12 +200,17 @@ class ManualInterface(tkinter.Tk):
         )
         self.manageConnectionsButton.grid(row=2, column=6, padx=10)
 
-        selectedConnection = tkinter.StringVar(value="None")
-        connectionMenu = tkinter.OptionMenu(
-            self, selectedConnection, "None", *self.connections, command=self.set_active_connection
+        self.selectedConnection = tkinter.StringVar(value="None")
+        initial_options = self.connections if self.connections else ["None"]
+
+        self.connectionMenu = tkinter.OptionMenu(
+            self,
+            self.selectedConnection,
+            *initial_options,
+            command=self.set_active_connection
         )
-        connectionMenu.config(width=10)
-        connectionMenu.grid(row=3, column=6, padx=10)
+        self.connectionMenu.config(width=10)
+        self.connectionMenu.grid(row=3, column=6, padx=10)
 
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
@@ -233,16 +237,53 @@ class ManualInterface(tkinter.Tk):
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
 
-    def add_connection(self, socket_host: str, socket_port: int) -> None:
-        """Opens a new connection, creates necessary classes, and saves connection info to config.
+    def open_connection(self, hostname: str) -> None:
+        """Opens a new connection.
 
         Args:
             socket_host (string): the host ip address of the socket connection
             socket_port (int): the port number of the socket connection
         """
-        # publisher = Publisher(socket_host, socket_port)
-        # publisher.start_socket_connection(self.scheduler, socket_host, socket_port)
+        if hostname in self.connections:
+            print(f"Connection to {hostname} already exists")
+            return
+        port = self.config[hostname]["socket_port"]
+        print(f"Opening connection to {hostname} on port {port}")
+        publisher = Publisher(hostname, port)  
+        self.connections[hostname] = publisher
+        self.update_connection_menu(new_selection=hostname)
+        publisher.start_socket_connection(self.scheduler)
+        self.after("idle", self.start_director_loop)
+
+    def open_all_configured(self) -> None:
+        """Loads all connections from the config file."""
+        for hostname in self.config:
+            self.open_connection(hostname)
+    
+    def open_new_connection(self, socket_host: str, socket_port: int) -> None:
+        """Opens a new connection.
+
+        Args:
+            socket_host (string): the host ip address of the socket connection
+            socket_port (int): the port number of the socket connection
+        """
+        print("This hasn't been implemented yet!!")
+        #TODO do all the normal connection stuff
+        #if successful:
         add_config(socket_host, socket_port)
+
+    def close_connection(self, hostname: str) -> None:
+        """Closes an existing connection.
+
+        Args:
+            socket_host (string): the host ip address of the socket connection
+        """
+        if hostname not in self.connections:
+            print(f"Connection to {hostname} does not exist")
+            return
+        self.connections[hostname].close_connection()
+        self.connections.pop(hostname)
+        self.update_connection_menu()
 
     def start_move(self, direction: Direction) -> None:
         """Moves the robotic arm a static number of degrees per second.
@@ -385,6 +426,31 @@ class ManualInterface(tkinter.Tk):
             return
         self.active_connection = option
         print(f"Active connection set to: {self.active_connection}")
+
+    def update_connection_menu(self, new_selection=None):
+        """Refresh dropdown menu to show the latest connections"""
+        menu = self.connectionMenu["menu"]
+        menu.delete(0, "end")  # clear old options
+
+        if self.connections:
+            for conn in self.connections:
+                menu.add_command(
+                    label=conn,
+                    command=lambda value=conn: self.selectedConnection.set(value)
+                )
+            # If a new connection was added, switch to it
+            if new_selection and new_selection in self.connections:
+                self.selectedConnection.set(new_selection)
+            # Otherwise, keep the current one if it still exists
+            elif self.selectedConnection.get() not in self.connections:
+                first_key = next(iter(self.connections))
+                self.selectedConnection.set(first_key)
+        else:
+            menu.add_command(
+                label="None",
+                command=lambda: self.selectedConnection.set("None")
+            )
+            self.selectedConnection.set("None")
 
     def start_director_loop(self) -> None:
         self.is_frame_loop_running = True

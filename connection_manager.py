@@ -2,11 +2,11 @@ import tkinter
 from tkinter import ttk
 
 class ConnectionManager(tkinter.Toplevel):
-    def __init__(self, parent, connections_list, config):
+    def __init__(self, parent, connections, config):
         super().__init__(parent)
         self.title("Connection Manager")
         self.geometry("350x300")
-        self.connections_list = connections_list
+        self.connections = connections
         self.config = config
         self.parent = parent
 
@@ -17,7 +17,7 @@ class ConnectionManager(tkinter.Toplevel):
         self.list_frame = ttk.Frame(self)
         self.list_frame.pack(pady=10, fill="x")
 
-        # Controls for adding connections_list
+        # Controls for adding connections
         control_frame = ttk.Frame(self)
         control_frame.pack(pady=10, fill="x")
 
@@ -32,24 +32,50 @@ class ConnectionManager(tkinter.Toplevel):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
 
-        for index, (host, port) in enumerate(self.connections_list):
+        ttk.Label(self.list_frame, text="Available Configs:", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=5, pady=(5, 0))
+        for _, cfg in self.config.items():
+            if "socket_host" in cfg and "socket_port" in cfg:
+                frame = ttk.Frame(self.list_frame)
+                frame.pack(fill="x", padx=10, pady=2)
+
+                ttk.Label(frame, text=f"{cfg['socket_host']}:{cfg['socket_port']}").pack(side="left", fill="x", expand=True)
+                ttk.Button(
+                    frame,
+                    text="Connect",
+                    command=lambda hostname=cfg["socket_host"]: self.add_from_config(hostname)
+                ).pack(side="right")
+            else:
+                print("config missing socket_host or socket_port, skipping")
+
+        ttk.Label(self.list_frame, text="Current Connections:", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=5, pady=(5, 0))
+        ttk.Separator(self.list_frame, orient="horizontal").pack(fill="x", pady=5)
+
+        for _, host in enumerate(self.connections):
+
             row = ttk.Frame(self.list_frame)
             row.pack(fill="x", pady=2, padx=5)
 
-            ttk.Label(row, text=f"{host}:{port}").pack(side="left", expand=True, fill="x")
-            ttk.Button(row, text="X", command=lambda i=index: self.remove_item(i)).pack(side="right")
+            ttk.Label(row, text=f"{host}:{self.config[host]["socket_port"]}").pack(side="left", expand=True, fill="x")
+            ttk.Button(
+                row, 
+                text="X", 
+                command=lambda h=host: self.remove_connection(h)
+            ).pack(side="right")
 
-    def remove_item(self, index):
-        if 0 <= index < len(self.connections_list):
-            self.connections_list.pop(index)
+    def remove_connection(self, hostname):
+        if hostname in self.connections:
+            self.parent.close_connection(hostname)
             self.render_list()
     
     def add_connection(self):
         new_connection = self.get_host_port(self)
         if new_connection:
-            self.connections_list.append(new_connection)
-            self.parent.add_connection(socket_host = new_connection[0], socket_port = new_connection[1])
+            self.parent.open_new_connection(new_connection[0], new_connection[1])
             self.render_list()
+    
+    def add_from_config(self, hostname):
+        self.parent.open_connection(hostname)
+        self.render_list()
 
     def get_host_port(self, parent=None):
       """Open a popup to request host and port, return them as a (host, port) tuple."""
