@@ -1,30 +1,23 @@
-import time
-
 from connections import Connection
-from icd_config import Command, int_to_bytes
+from icd_config import Command, CTypesInt, toBytes
 from tkscheduler import Scheduler
+
 
 def assert_normalized(*nums: int):
     nums_abs = list(map(lambda x: abs(x), nums))
-    return map(lambda x: x in [0, 1], nums_abs)
-    # if abs_num != 0 and abs_num != 1:
-    #     raise ValueError(
-    #         f"Invalid value provided. Value should be -1, 0, or 1. Got: {num}"
-    #     )
+    return all(map(lambda x: x in [0, 1], nums_abs))
 
 
 class Publisher:
     """
     A class that is used to publish instructions to the operator.
     """
+
     command_count = 0
     CHAR_ENCODING = "utf-8"
 
     def __init__(self, socket_host: str, socket_port: int):
-        self.connection = Connection(
-            host=socket_host,
-            port=socket_port
-        )
+        self.connection = Connection(host=socket_host, port=socket_port)
 
     def start_socket_connection(self, schedule: Scheduler | None = None):
         self.connection.schedule = schedule
@@ -39,7 +32,8 @@ class Publisher:
 
         self.connection.publish(command=Command.HANDSHAKE, payload=payload)
 
-    def polar_pan_discrete(self,
+    def polar_pan_discrete(
+        self,
         delta_azimuth_int: int,
         delta_altitude_int: int,
         delay_int: int,
@@ -51,20 +45,18 @@ class Publisher:
         Delay (ms)  	UINT32	How long to wait until executing pan
         Duration (ms)	UINT32	How long the pan should take to execute
         """
-        delta_azimuth = int_to_bytes(delta_azimuth_int, num_bits=32, unsigned=False)
-        delta_altitude = int_to_bytes(delta_altitude_int, num_bits=32, unsigned=False)
-        delay = int_to_bytes(delay_int, num_bits=32, unsigned=True)
-        duration = int_to_bytes(duration_int, num_bits=32, unsigned=True)
+        delta_azimuth = toBytes(delta_azimuth_int, CTypesInt.INT32)
+        delta_altitude = toBytes(delta_altitude_int, CTypesInt.INT32)
+        delay = toBytes(delay_int, CTypesInt.UINT32)
+        duration = toBytes(duration_int, CTypesInt.UINT32)
 
         # Put everything together
         payload = delta_azimuth + delta_altitude + delay + duration
 
-        self.connection.publish(
-            command=Command.POLAR_PAN_DISCRETE, payload=payload
-        )
+        self.connection.publish(command=Command.POLAR_PAN_DISCRETE, payload=payload)
 
-    def polar_pan_continuous_start(self,
-        moving_azimuth_int: int = 0, moving_altitude_int: int = 0
+    def polar_pan_continuous_start(
+        self, moving_azimuth_int: int = 0, moving_altitude_int: int = 0
     ):
         """
         Starts/maintains a continuous polar pan rotation.
@@ -79,8 +71,8 @@ class Publisher:
         """
         assert assert_normalized(moving_azimuth_int, moving_altitude_int)
 
-        moving_azimuth = int_to_bytes(moving_azimuth_int, num_bits=8, unsigned=False)
-        moving_altitude = int_to_bytes(moving_altitude_int, num_bits=8, unsigned=False)
+        moving_azimuth = toBytes(moving_azimuth_int, CTypesInt.INT8)
+        moving_altitude = toBytes(moving_altitude_int, CTypesInt.INT8)
 
         # Put everything together
         payload = moving_azimuth + moving_altitude
@@ -99,7 +91,7 @@ class Publisher:
         """
         Delay (ms)	UINT32	How long to wait until executing pan
         """
-        delay = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
+        delay = toBytes(delay_ms, CTypesInt.UINT32)
 
         self.connection.publish(command=Command.HOME, payload=delay)
 
@@ -107,8 +99,7 @@ class Publisher:
         """
         Speed 	UINT8 	What to set the speed of all axes to on the scorbot
         """
-        speed_bytes = int_to_bytes(speed, num_bits=8, unsigned=True)
-
+        speed_bytes = toBytes(speed, CTypesInt.UINT8)
         self.connection.publish(command=Command.SET_SPEED, payload=speed_bytes)
 
     def save_position(self, name: str, anchor: bool, parent: str):
@@ -127,12 +118,12 @@ class Publisher:
         Parent  CHAR[]      Another previously saved position to act as a parent (or refernce) position
         """
 
-        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_len_bytes = toBytes(len(name), CTypesInt.UINT8)
         name_bytes = name.encode(self.CHAR_ENCODING)
 
         anchor_bytes = b"\x01" if anchor else b"\x00"
 
-        parent_len_bytes = int_to_bytes(len(parent), num_bits=8, unsigned=True)
+        parent_len_bytes = toBytes(len(parent), CTypesInt.UINT8)
         parent_bytes = parent.encode(self.CHAR_ENCODING)
 
         payload = (
@@ -147,7 +138,7 @@ class Publisher:
         Name    CHAR[]  Name descriptor for the position (non null terminated)
         """
 
-        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_len_bytes = toBytes(len(name), CTypesInt.UINT8)
         name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
@@ -159,7 +150,7 @@ class Publisher:
 
         Name    CHAR[]  Name descriptor for the position (non null terminated)
         """
-        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_len_bytes = toBytes(len(name), CTypesInt.UINT8)
         name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
@@ -175,19 +166,17 @@ class Publisher:
         Radius      INT32   Tenths of distance to extend outwards
         """
 
-        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_len_bytes = toBytes(len(name), CTypesInt.UINT8)
         name_bytes = name.encode(self.CHAR_ENCODING)
 
-        delta_bytes = int_to_bytes(delta, num_bits=32, unsigned=False)
-        azimuth_bytes = int_to_bytes(azimuth, num_bits=32, unsigned=False)
-        radius_bytes = int_to_bytes(radius, num_bits=32, unsigned=False)
+        delta_bytes = toBytes(delta, CTypesInt.INT32)
+        azimuth_bytes = toBytes(azimuth, CTypesInt.INT32)
+        radius_bytes = toBytes(radius, CTypesInt.INT32)
 
         payload = (
             name_len_bytes + name_bytes + delta_bytes + azimuth_bytes + radius_bytes
         )
-        self.connection.publish(
-            command=Command.SET_POLAR_POSITION, payload=payload
-        )
+        self.connection.publish(command=Command.SET_POLAR_POSITION, payload=payload)
 
     def get_polar_position(self, name: str):
         """
@@ -195,17 +184,15 @@ class Publisher:
 
         Name    CHAR[]  Name descriptor for the position (non null terminated)
         """
-        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_len_bytes = toBytes(len(name), CTypesInt.UINT8)
         name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
 
-        self.connection.publish(
-            command=Command.GET_POLAR_POSITION, payload=payload
-        )
+        self.connection.publish(command=Command.GET_POLAR_POSITION, payload=payload)
 
-    def set_cartesian_position(self,
-        name: str, x_mm_tenths: int, y_mm_tenths: int, z_mm_tenths: int
+    def set_cartesian_position(
+        self, name: str, x_mm_tenths: int, y_mm_tenths: int, z_mm_tenths: int
     ):
         """
         Defines a position in terms of cartesian coordinates
@@ -216,12 +203,12 @@ class Publisher:
         Z       INT32   Tenths of millimeters on Z-axis
         """
 
-        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_len_bytes = toBytes(len(name), CTypesInt.UINT8)
         name_bytes = name.encode(self.CHAR_ENCODING)
 
-        x_mm_tenths_bytes = int_to_bytes(x_mm_tenths, num_bits=32, unsigned=False)
-        y_mm_tenths_bytes = int_to_bytes(y_mm_tenths, num_bits=32, unsigned=False)
-        z_mm_tenths_bytes = int_to_bytes(z_mm_tenths, num_bits=32, unsigned=False)
+        x_mm_tenths_bytes = toBytes(x_mm_tenths, CTypesInt.INT32)
+        y_mm_tenths_bytes = toBytes(y_mm_tenths, CTypesInt.INT32)
+        z_mm_tenths_bytes = toBytes(z_mm_tenths, CTypesInt.INT32)
 
         payload = (
             name_len_bytes
@@ -230,9 +217,7 @@ class Publisher:
             + y_mm_tenths_bytes
             + z_mm_tenths_bytes
         )
-        self.connection.publish(
-            command=Command.SET_CARTESIAN_POSITION, payload=payload
-        )
+        self.connection.publish(command=Command.SET_CARTESIAN_POSITION, payload=payload)
 
     def get_cartesian_position(self, name: str):
         """
@@ -240,14 +225,12 @@ class Publisher:
 
         Name    CHAR[]  Name descriptor for the position (non null terminated)
         """
-        name_len_bytes = int_to_bytes(len(name), num_bits=8, unsigned=True)
+        name_len_bytes = toBytes(len(name), CTypesInt.UINT8)
         name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
 
-        self.connection.publish(
-            command=Command.GET_CARTESIAN_POSITION, payload=payload
-        )
+        self.connection.publish(command=Command.GET_CARTESIAN_POSITION, payload=payload)
 
     def get_speed(self):
         """
@@ -267,11 +250,11 @@ class Publisher:
         Delay (ms) 	UINT32 	How long to wait until executing pan
         Time 	    UINT32 	How long the pan should take to execute
         """
-        delta_x_bytes = int_to_bytes(delta_x, num_bits=32, unsigned=False)
-        delta_y_bytes = int_to_bytes(delta_y, num_bits=32, unsigned=False)
-        delta_z_bytes = int_to_bytes(delta_z, num_bits=32, unsigned=False)
-        delay_ms_bytes = int_to_bytes(delay_ms, num_bits=32, unsigned=True)
-        time_bytes = int_to_bytes(time, num_bits=32, unsigned=True)
+        delta_x_bytes = toBytes(delta_x, CTypesInt.INT32)
+        delta_y_bytes = toBytes(delta_y, CTypesInt.INT32)
+        delta_z_bytes = toBytes(delta_z, CTypesInt.INT32)
+        delay_ms_bytes = toBytes(delay_ms, CTypesInt.UINT32)
+        time_bytes = toBytes(time, CTypesInt.UINT32)
         payload = (
             delta_x_bytes + delta_y_bytes + delta_z_bytes + delay_ms_bytes + time_bytes
         )
@@ -289,13 +272,11 @@ class Publisher:
         Moving Y 	INT8 	-1, 0, or 1
         Moving Z 	INT8 	-1, 0, or 1
         """
-        assert_normalized(moving_x)
-        assert_normalized(moving_y)
-        assert_normalized(moving_z)
+        assert assert_normalized(moving_x, moving_y, moving_z)
 
-        moving_x_bytes = int_to_bytes(moving_x, num_bits=8, unsigned=False)
-        moving_y_bytes = int_to_bytes(moving_y, num_bits=8, unsigned=False)
-        moving_z_bytes = int_to_bytes(moving_z, num_bits=8, unsigned=False)
+        moving_x_bytes = toBytes(moving_x, CTypesInt.INT8)
+        moving_y_bytes = toBytes(moving_y, CTypesInt.INT8)
+        moving_z_bytes = toBytes(moving_z, CTypesInt.INT8)
 
         payload = moving_x_bytes + moving_y_bytes + moving_z_bytes
 
@@ -326,28 +307,11 @@ class Publisher:
         Payload 	        UINT8[] 	Payload defined by hardware specific ICD
         """
 
-        subcommand_value_bytes = int_to_bytes(
-            subcommand_value, num_bits=16, unsigned=True
-        )
-        reserved_bytes = int_to_bytes(0, num_bits=32, unsigned=True)
+        subcommand_value_bytes = toBytes(subcommand_value, CTypesInt.UINT8)
+        reserved_bytes = toBytes(0, CTypesInt.UINT32)
 
         payload = subcommand_value_bytes + reserved_bytes + operations_payload
 
         self.connection.publish(
             command=Command.EXECUTE_HARDWARE_OPERATION, payload=payload
         )
-
-# Not sure what this is for, but leaving it here for now
-def main():
-    while not Publisher.connection.is_running:
-        time.sleep(1)
-
-    Publisher.home(0)
-
-    # Stay alive
-    while True:
-        time.sleep(1)
-
-
-if __name__ == "__main__":
-    main()
