@@ -1,27 +1,20 @@
 import time
 import tkinter
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from threading import Thread
 
+import customtkinter
 from PIL import ImageTk
 
-from publisher import Publisher
-from tkscheduler import Scheduler
-from tracking import USABLE_MODELS, Tracker
-from utils import start_termination_guard, terminate
-from config import load_config, add_config, CONFIG
+from config import CONFIG, add_config, load_config
 from connection_manager import ConnectionManager
+from publisher import Direction, Publisher
+from tkscheduler import Scheduler
+from tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
+from utils import start_termination_guard, terminate
 
 # Temporary hardcoded index to until config can be passed in on initialization
 TEMP_CONFIG = CONFIG["unctalos.student.rit.edu"]
-
-class Direction(IntEnum):
-    """Directional Enum for interface controls"""
-
-    UP = 1
-    DOWN = 2
-    LEFT = 3
-    RIGHT = 4
 
 
 class ButtonText(StrEnum):
@@ -36,10 +29,10 @@ class ButtonText(StrEnum):
     SWITCH = " ⤭ "
 
     # button labels
-    CONTINUOUS_MODE_LABEL = "Movement Mode: Continuous"
-    DISCRETE_MODE_LABEL = "Movement Mode: Discrete"
-    MANUAL_MODE_LABEL = "Control Mode: Manual"
-    AUTOMATIC_MODE_LABEL = "Control Mode: Automatic"
+    CONTINUOUS_MODE_LABEL = "Continuous"
+    DISCRETE_MODE_LABEL = "Discrete"
+    MANUAL_MODE_LABEL = "Manual"
+    AUTOMATIC_MODE_LABEL = "Automatic"
 
 
 class ManualInterface(tkinter.Tk):
@@ -50,10 +43,8 @@ class ManualInterface(tkinter.Tk):
 
     scheduler: Scheduler
 
-    pressed_keys: set = set()
+    pressed_keys: set[Direction] = set()
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
-    manual_mode = True  # True for manual, False for computer vision
-    continuous_mode = True
 
     # Flags for director loop
     is_frame_loop_running = False
@@ -70,7 +61,7 @@ class ManualInterface(tkinter.Tk):
         self.pressed_keys = set()  # keeps track of keys which are pressed down
         self.last_key_presses = {}
         self.tracker = Tracker(scheduler=self.scheduler)
-        # publisher = Publisher(TEMP_CONFIG["socket_host"], TEMP_CONFIG["socket_port"])  
+        # publisher = Publisher(TEMP_CONFIG["socket_host"], TEMP_CONFIG["socket_port"])
         # publisher.start_socket_connection(self.scheduler)
         # self.after("idle", self.start_director_loop)
 
@@ -78,48 +69,40 @@ class ManualInterface(tkinter.Tk):
         self.connections = {}
         self.active_connection = None
 
-        # setting up manual vs automatic control toggle
-        self.mode_label = tkinter.Label(
-            self,
-            text=ButtonText.MANUAL_MODE_LABEL,
-            font=("Cascadia Code", 12),
-        )
-        self.mode_label.grid(row=2, column=4)
+        self.manual_mode = tkinter.BooleanVar(value=True)  # Control mode
+        self.continuous_mode = tkinter.BooleanVar(value=True)  # continuous/discrete
+        self.toggle_group = tkinter.Frame(self)
+        self.toggle_group.grid(row=1, column=0)
 
-        self.toggle_button = tkinter.Button(
-            self,
-            text=ButtonText.SWITCH,
+        self.automatic_button = customtkinter.CTkSwitch(
+            self.toggle_group,
+            text=ButtonText.AUTOMATIC_MODE_LABEL,
             font=("Cascadia Code", 16, "bold"),
             command=self.toggle_command_mode,
         )
-        self.toggle_button.grid(row=2, column=5, padx=10)
+        self.automatic_button.pack(side="top", anchor="w", pady=5)
 
-        # Setup up continuous/discrete toggle
-
-        self.cont_mode_label = tkinter.Label(
-            self,
+        self.cont_toggle_button = customtkinter.CTkSwitch(
+            self.toggle_group,
             text=ButtonText.CONTINUOUS_MODE_LABEL,
-            font=("Cascadia Code", 12),
-        )
-        self.cont_mode_label.grid(row=1, column=4)
-
-        self.cont_toggle_button = tkinter.Button(
-            self,
-            text=ButtonText.SWITCH,
             font=("Cascadia Code", 16, "bold"),
-            command=self.toggle_continuous_mode,
+            variable=self.continuous_mode,
+            onvalue=True,
+            offvalue=False,
         )
-        self.cont_toggle_button.grid(row=1, column=5, padx=10)
+        self.cont_toggle_button.pack(side="top", anchor="w")
 
         # setting up home button
 
         self.home_button = tkinter.Button(
             self,
             text=ButtonText.HOME,
-            font=("Cascadia Code", 16),
+            height=2,
+            width=10,
+            font=("Cascadia Code", 16, "bold"),
             command=self.move_home,
         )
-        self.home_button.grid(row=3, column=4)
+        self.home_button.grid(row=2, column=1, padx=10, pady=10)
 
         # setting up directional buttons
 
@@ -177,12 +160,25 @@ class ManualInterface(tkinter.Tk):
             row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew"
         )
 
-        selectedModel = tkinter.StringVar(value="None")
-        modelMenu = tkinter.OptionMenu(
-            self, selectedModel, "None", *USABLE_MODELS, command=self.set_mode
-        )
-        modelMenu.config(width=10)
-        modelMenu.grid(row=3, column=5, padx=10)
+        self.model_frame = tkinter.Frame(self)
+        self.model_frame.grid(row=3, column=0)
+
+        tkinter.Label(
+            self.model_frame,
+            text="Detection Model",
+            font=("Cascadia Code", 16),
+        ).pack(side="top", anchor="w")
+
+        customtkinter.CTkOptionMenu(
+            self.model_frame,
+            variable=tkinter.StringVar(value="None"),
+            values=MODEL_OPTIONS,
+            command=self.set_mode,
+            width=150,
+            button_color="#4c4c4c",
+            button_hover_color="#565656",
+            fg_color="#2b2b2b",
+        ).pack(side="top", anchor="w")
 
         self.loadAllButton = tkinter.Button(
             self,
@@ -207,7 +203,7 @@ class ManualInterface(tkinter.Tk):
             self,
             self.selectedConnection,
             *initial_options,
-            command=self.set_active_connection
+            command=self.set_active_connection,
         )
         self.connectionMenu.config(width=10)
         self.connectionMenu.grid(row=3, column=6, padx=10)
@@ -249,7 +245,7 @@ class ManualInterface(tkinter.Tk):
             return
         port = self.config[hostname]["socket_port"]
         print(f"Opening connection to {hostname} on port {port}")
-        publisher = Publisher(hostname, port)  
+        publisher = Publisher(hostname, port)
         self.connections[hostname] = publisher
         self.update_connection_menu(new_selection=hostname)
         publisher.start_socket_connection(self.scheduler)
@@ -259,7 +255,7 @@ class ManualInterface(tkinter.Tk):
         """Loads all connections from the config file."""
         for hostname in self.config:
             self.open_connection(hostname)
-    
+
     def open_new_connection(self, socket_host: str, socket_port: int) -> None:
         """Opens a new connection.
 
@@ -268,8 +264,8 @@ class ManualInterface(tkinter.Tk):
             socket_port (int): the port number of the socket connection
         """
         print("This hasn't been implemented yet!!")
-        #TODO do all the normal connection stuff
-        #if successful:
+        # TODO do all the normal connection stuff
+        # if successful:
         add_config(socket_host, socket_port)
 
     def close_connection(self, hostname: str) -> None:
@@ -291,7 +287,7 @@ class ManualInterface(tkinter.Tk):
         Args:
             direction (string): global variables for directional commands are provided at the top of this file
         """
-        if not self.manual_mode:
+        if not self.manual_mode.get():
             return
         self.last_key_presses[direction] = time.time()
 
@@ -301,7 +297,7 @@ class ManualInterface(tkinter.Tk):
 
         self.change_button_state(direction, "sunken")
 
-        if self.continuous_mode:
+        if self.continuous_mode.get():
             self.keep_moving(direction)
             return
         # moves toward input direction by delta 10 (degrees)
@@ -325,7 +321,7 @@ class ManualInterface(tkinter.Tk):
         Args:
             direction (string): global variables for directional commands are provided at the top of this file
         """
-        if not (self.manual_mode and direction in self.pressed_keys):
+        if not (self.manual_mode.get() and direction in self.pressed_keys):
             return
         if direction in self.last_key_presses:
             last_pressed_time = self.last_key_presses[direction]
@@ -373,9 +369,8 @@ class ManualInterface(tkinter.Tk):
             case Direction.RIGHT:
                 self.right_button.config(relief=depression)
 
-        if self.continuous_mode and len(self.pressed_keys) == 0:
+        if self.continuous_mode.get() and len(self.pressed_keys) == 0:
             Publisher.polar_pan_continuous_stop()
-            print("Polar pan cont STOP")
 
     def keep_moving(self, direction: Direction) -> None:
         """Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
@@ -384,37 +379,17 @@ class ManualInterface(tkinter.Tk):
         Args:
             direction (_type_): global variables for directional commands are provided at the top of this file
         """
-        if self.continuous_mode and len(self.pressed_keys) > 0:
-            moving_azimuth = 0
-            moving_altitude = 0
+        if not self.continuous_mode.get():
+            return
 
-            # Use addition so that if two opposing keys are pressed it cancels out
-            if Direction.UP in self.pressed_keys:
-                moving_altitude += 1
-            if Direction.DOWN in self.pressed_keys:
-                moving_altitude -= 1
-            if Direction.LEFT in self.pressed_keys:
-                moving_azimuth += 1
-            if Direction.RIGHT in self.pressed_keys:
-                moving_azimuth -= 1
+        self.after(self.move_delay_ms, lambda: self.keep_moving(direction))
 
-            print(
-                f"Polar pan cont Azimuth: {moving_azimuth} Altitude: {moving_altitude}"
-            )
-
-            Publisher.polar_pan_continuous_start(
-                moving_azimuth_int=moving_azimuth, moving_altitude_int=moving_altitude
-            )
-
-        if self.continuous_mode:
-            self.after(
-                self.move_delay_ms, lambda: self.keep_moving(direction)
-            )  # lambda used as function reference to execute when required
+        if len(self.pressed_keys) > 0:
+            Publisher.polar_pan_continuous_direction_start(sum(self.pressed_keys))
 
     def move_home(self) -> None:
         """Moves the robotic arm from its current location to its home position"""
-        print("Moving home")
-        Publisher.home(1000)  # sends a command to move to home via the publisher
+        Publisher.home(1000)
 
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
@@ -436,7 +411,7 @@ class ManualInterface(tkinter.Tk):
             for conn in self.connections:
                 menu.add_command(
                     label=conn,
-                    command=lambda value=conn: self.selectedConnection.set(value)
+                    command=lambda value=conn: self.selectedConnection.set(value),
                 )
             # If a new connection was added, switch to it
             if new_selection and new_selection in self.connections:
@@ -447,8 +422,7 @@ class ManualInterface(tkinter.Tk):
                 self.selectedConnection.set(first_key)
         else:
             menu.add_command(
-                label="None",
-                command=lambda: self.selectedConnection.set("None")
+                label="None", command=lambda: self.selectedConnection.set("None")
             )
             self.selectedConnection.set("None")
 
@@ -495,22 +469,21 @@ class ManualInterface(tkinter.Tk):
         self.director = director_class(self.tracker, self.scheduler)
         self.tracker.swap_model(model_class)
 
-    def toggle_continuous_mode(self) -> None:
-        self.continuous_mode = not self.continuous_mode
+    # def toggle_continuous_mode(self) -> None:
+    #     self.continuous_mode = not self.continuous_mode
 
-        if self.continuous_mode:
-            self.cont_mode_label.config(text=ButtonText.CONTINUOUS_MODE_LABEL)
-        else:
-            self.cont_mode_label.config(text=ButtonText.DISCRETE_MODE_LABEL)
+    # if self.continuous_mode:
+    #     self.cont_mode_label.config(text=ButtonText.CONTINUOUS_MODE_LABEL)
+    # else:
+    #     self.cont_mode_label.config(text=ButtonText.DISCRETE_MODE_LABEL)
 
     def toggle_command_mode(self) -> None:
         """Toggles command mode between manual mode and automatic mode.
         Disables all other controls when in automatic mode.
         """
-        self.manual_mode = not self.manual_mode
+        self.manual_mode.set(not self.manual_mode.get())
 
-        if self.manual_mode:
-            self.mode_label.config(text=ButtonText.MANUAL_MODE_LABEL)
+        if self.manual_mode.get():
             if self.director is not None:
                 self.director.stop_auto_control()
 
@@ -525,7 +498,6 @@ class ManualInterface(tkinter.Tk):
             self.pressed_keys = set()
             return
 
-        self.mode_label.config(text=ButtonText.AUTOMATIC_MODE_LABEL)
         if self.director is not None:
             self.director.start_auto_control()
         else:

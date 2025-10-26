@@ -1,6 +1,37 @@
+from enum import IntEnum
+
 from connections import Connection
 from icd_config import Command, CTypesInt, toBytes
 from tkscheduler import Scheduler
+
+
+class Direction(IntEnum):
+    """Directional Enum for interface controls
+
+    The values can be summed to get combined directions(from -4 to 4)
+    -4: DL, -3: L, -2: UL, -1: D, 0: None, 1: U, 2: DR, 3: R, 4: UR
+    """
+
+    UP = 1
+    DOWN = -1
+    RIGHT = 3
+    LEFT = -3
+
+    @staticmethod
+    def toDirectionTuple(sum_direction: int) -> tuple[int, int]:
+        """Convert Direction enum to (x, y) tuple representation"""
+        mapping = {
+            0: (0, 0),
+            1: (0, 1),
+            -1: (0, -1),
+            2: (1, 1),
+            -2: (-1, -1),
+            3: (1, 0),
+            -3: (-1, 0),
+            4: (1, -1),
+            -4: (-1, 1),
+        }
+        return mapping[sum_direction]
 
 
 def assert_normalized(*nums: int):
@@ -54,6 +85,21 @@ class Publisher:
         payload = delta_azimuth + delta_altitude + delay + duration
 
         self.connection.publish(command=Command.POLAR_PAN_DISCRETE, payload=payload)
+
+    def polar_pan_continuous_direction_start(self, dir_sum: int):
+        """
+        Starts/maintains a continuous polar pan rotation.
+
+        Args:
+        Direction   INT8    -4 to 4 (see Direction enum for mapping)
+
+        The values in the body describe whether or not the arm is rotating in a given direction.
+        1 rotates counter-clockwise along the axis of movement, -1 rotates clockwise along the axis of
+        movement and 0 means no rotation.
+        """
+        assert dir_sum in range(-4, 5), "Direction sum must be between -4 and 4"
+        x_dir, y_dir = Direction.toDirectionTuple(dir_sum)
+        return self.polar_pan_continuous_start(x_dir, y_dir)
 
     def polar_pan_continuous_start(
         self, moving_azimuth_int: int = 0, moving_altitude_int: int = 0
