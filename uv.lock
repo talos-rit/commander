@@ -99,23 +99,19 @@ source = { virtual = "." }
 dependencies = [
     { name = "customtkinter" },
     { name = "docopt" },
-    { name = "jax", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "numpy" },
     { name = "opencv-contrib-python" },
     { name = "opencv-python" },
     { name = "pillow" },
     { name = "pyyaml" },
-    { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "websocket-client" },
 ]
 
 [package.optional-dependencies]
-all = [
-    { name = "mediapipe" },
-    { name = "ultralytics" },
-]
 mediapipe = [
+    { name = "jax", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "mediapipe" },
+    { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
 ]
 yolo = [
     { name = "ultralytics" },
@@ -130,20 +126,18 @@ dev = [
 requires-dist = [
     { name = "customtkinter", specifier = ">=5.2.2" },
     { name = "docopt" },
-    { name = "jax", extras = ["cpu"], marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "==0.4.38" },
-    { name = "mediapipe", marker = "extra == 'all'" },
+    { name = "jax", extras = ["cpu"], marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'mediapipe'", specifier = "==0.4.38" },
     { name = "mediapipe", marker = "extra == 'mediapipe'" },
     { name = "numpy" },
     { name = "opencv-contrib-python" },
     { name = "opencv-python" },
     { name = "pillow" },
     { name = "pyyaml" },
-    { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "==2.2.2" },
-    { name = "ultralytics", marker = "extra == 'all'" },
+    { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'mediapipe'", specifier = "==2.2.2" },
     { name = "ultralytics", marker = "extra == 'yolo'" },
     { name = "websocket-client" },
 ]
-provides-extras = ["mediapipe", "yolo", "all"]
+provides-extras = ["mediapipe", "yolo"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pyinstaller", specifier = ">=6.16.0" }]

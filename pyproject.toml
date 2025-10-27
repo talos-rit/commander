@@ -28,6 +28,12 @@ dev = [
 ]
 
 [project.optional-dependencies]
-mediapipe = ["mediapipe"]
+mediapipe = [
+    "mediapipe",
+    # --- Platform-Specific Dependencies ---
+    # For x86_64 macOS: use specific versions due to compatibility issues
+    "jax[cpu]==0.4.38; sys_platform == 'darwin' and platform_machine == 'x86_64'", 
+    "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'"
+]
 yolo = ["ultralytics"]
 all = ["mediapipe", "ultralytics"]
