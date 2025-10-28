@@ -420,7 +420,7 @@ class ManualInterface(tkinter.Tk):
         """Opens a pop-up window to manage socket connections."""
         ConnectionManager(self, self.connections, self.config)
 
-    def set_active_connection(self, option: str | None = None) -> None:
+    def set_active_connection(self, option) -> None:
         if option is None or option not in self.connections:
             print(f"Connection was not found or was None... (found {option})")
             return
@@ -432,25 +432,26 @@ class ManualInterface(tkinter.Tk):
         menu = self.connectionMenu["menu"]
         menu.delete(0, "end")  # clear old options
 
-        if self.connections:
-            for conn in self.connections:
-                menu.add_command(
-                    label=conn,
-                    command=lambda value=conn: self.selectedConnection.set(value)
-                )
-            # If a new connection was added, switch to it
-            if new_selection and new_selection in self.connections:
-                self.selectedConnection.set(new_selection)
-            # Otherwise, keep the current one if it still exists
-            elif self.selectedConnection.get() not in self.connections:
-                first_key = next(iter(self.connections))
-                self.selectedConnection.set(first_key)
-        else:
+        if not self.connections:
             menu.add_command(
                 label="None",
                 command=lambda: self.selectedConnection.set("None")
             )
             self.selectedConnection.set("None")
+            return
+        
+        for conn in self.connections:
+            menu.add_command(
+                label=conn,
+                command=lambda value=conn: self.selectedConnection.set(value)
+            )
+        # If a new connection was added, switch to it
+        if new_selection and new_selection in self.connections:
+            self.selectedConnection.set(new_selection)
+        # Otherwise, keep the current one if it still exists
+        elif self.selectedConnection.get() not in self.connections:
+            first_key = next(iter(self.connections))
+            self.selectedConnection.set(first_key)
 
     def start_director_loop(self) -> None:
         self.is_frame_loop_running = True
