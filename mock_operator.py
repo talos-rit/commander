@@ -1,7 +1,8 @@
 import time
 
 from connections import CommandConnection
-from icd_config import int_to_bytes
+from icd_config import CTypesInt, toBytes
+
 
 class MockOperator:
     connection = CommandConnection(host="mock_socket_host", port=420)
@@ -16,7 +17,7 @@ class MockOperator:
 
 
 def create_return_payload(success):
-    return int_to_bytes(int(success), num_bits=16, unsigned=True)
+    return toBytes(int(success), CTypesInt.UINT16)
 
 
 def main():

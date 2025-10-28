@@ -2,7 +2,7 @@ import socket
 import threading
 import time
 
-from icd_config import bytes_to_int, int_to_bytes
+from icd_config import CTypesInt, toBytes, toInt
 from tkscheduler import Scheduler
 from utils import add_termination_handler
 
@@ -87,12 +87,12 @@ class Connection:
         payload_length = 0 if payload is None else len(payload)
 
         # TODO: Implement checksum. May get removed
-        crc = int_to_bytes(0, num_bits=16, unsigned=True)
+        crc = toBytes(0, CTypesInt.UINT16)
 
-        command_id = int_to_bytes(command_id, num_bits=32, unsigned=True)
-        reserved = int_to_bytes(0, num_bits=16, unsigned=True)
-        command_byte = int_to_bytes(command, num_bits=16, unsigned=True)
-        payload_length = int_to_bytes(payload_length, num_bits=16, unsigned=True)
+        command_id = toBytes(command_id, CTypesInt.UINT32)
+        reserved = toBytes(0, CTypesInt.UINT16)
+        command_byte = toBytes(command, CTypesInt.UINT16)
+        payload_length = toBytes(payload_length, CTypesInt.UINT16)
 
         # Put header together
         header = command_id + reserved + command_byte + payload_length
@@ -139,9 +139,7 @@ class CommandConnection(Connection):
 
     def on_message(self, connection: socket.socket, message: bytes):
         command_value_bytes = message[6:8]
-        command_value = bytes_to_int(command_value_bytes)
+        command_value = toInt(command_value_bytes)
         return_command_value = command_value + 0x8000
-        return_command_value_bytes = int_to_bytes(
-            return_command_value, num_bits=16, unsigned=True
-        )
+        return_command_value_bytes = toBytes(return_command_value, CTypesInt.UINT16)
         connection.send(return_command_value_bytes)
