@@ -21,7 +21,7 @@ class ConnectionManager(tkinter.Toplevel):
         control_frame = ttk.Frame(self)
         control_frame.pack(pady=10, fill="x")
 
-        ttk.Button(control_frame, text="Add", command=self.add_connection).pack(side="left", padx=5)
+        ttk.Button(control_frame, text="Add", command=self.show_host_port_input).pack(side="left", padx=5)
         self.render_list()
     
     def on_close(self):
@@ -34,18 +34,18 @@ class ConnectionManager(tkinter.Toplevel):
 
         ttk.Label(self.list_frame, text="Available Configs:", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=5, pady=(5, 0))
         for _, cfg in self.config.items():
-            if "socket_host" in cfg and "socket_port" in cfg:
-                frame = ttk.Frame(self.list_frame)
-                frame.pack(fill="x", padx=10, pady=2)
-
-                ttk.Label(frame, text=f"{cfg['socket_host']}:{cfg['socket_port']}").pack(side="left", fill="x", expand=True)
-                ttk.Button(
-                    frame,
-                    text="Connect",
-                    command=lambda hostname=cfg["socket_host"]: self.add_from_config(hostname)
-                ).pack(side="right")
-            else:
+            if "socket_host" not in cfg or "socket_port" not in cfg:
                 print("config missing socket_host or socket_port, skipping")
+                continue
+            frame = ttk.Frame(self.list_frame)
+            frame.pack(fill="x", padx=10, pady=2)
+
+            ttk.Label(frame, text=f"{cfg['socket_host']}:{cfg['socket_port']}").pack(side="left", fill="x", expand=True)
+            ttk.Button(
+                frame,
+                text="Connect",
+                command=lambda hostname=cfg["socket_host"]: self.add_from_config(hostname)
+            ).pack(side="right")
 
         ttk.Label(self.list_frame, text="Current Connections:", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=5, pady=(5, 0))
         ttk.Separator(self.list_frame, orient="horizontal").pack(fill="x", pady=5)
@@ -67,17 +67,15 @@ class ConnectionManager(tkinter.Toplevel):
             self.parent.close_connection(hostname)
             self.render_list()
     
-    def add_connection(self):
-        new_connection = self.get_host_port(self)
-        if new_connection:
-            self.parent.open_new_connection(new_connection[0], new_connection[1])
-            self.render_list()
+    def add_connection(self, new_connection):
+        self.parent.open_new_connection(new_connection[0], new_connection[1])
+        self.render_list()
     
     def add_from_config(self, hostname):
         self.parent.open_connection(hostname)
         self.render_list()
 
-    def get_host_port(self, parent=None):
+    def show_host_port_input(self, parent=None):
       """Open a popup to request host and port, return them as a (host, port) tuple."""
       popup = tkinter.Toplevel(parent)
       popup.title("Enter Host and Port")
@@ -100,11 +98,10 @@ class ConnectionManager(tkinter.Toplevel):
           host = host_var.get().strip()
           port = port_var.get().strip()
           if host and port:
+              #TODO: input validation
               result = (host, port)
               popup.destroy()
+          self.add_connection(result)
 
       ttk.Button(popup, text="Submit", command=submit).pack(pady=15)
       popup.bind("<Return>", lambda e: submit())
-
-      popup.wait_window()  # wait for the popup to close
-      return result
