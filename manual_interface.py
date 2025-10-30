@@ -235,7 +235,7 @@ class ManualInterface(tkinter.Tk):
     def draw_no_signal_display(self) -> ImageTk.PhotoImage:
         no_signal_image = Image.new("RGB", (500, 380), color="gray")
         draw = ImageDraw.Draw(no_signal_image)
-        draw.text((220, 220), "No Signal", fill="white")
+        draw.text((225, 180), "No Signal", fill="white")
         image_tk = ImageTk.PhotoImage(no_signal_image)
         return image_tk
 
