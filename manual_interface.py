@@ -4,7 +4,7 @@ from enum import StrEnum
 from threading import Thread
 
 import customtkinter
-from PIL import ImageTk
+from PIL import ImageTk, Image, ImageDraw
 
 from config import CONFIG, load_config
 from connection_manager import ConnectionManager, ConnectionData
@@ -47,7 +47,7 @@ class ManualInterface(tkinter.Tk):
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
 
     # Flags for director loop
-    is_frame_loop_running = False
+    run_display_loop = False
     director_thread = None
     director = None  # BaseDirector
 
@@ -60,14 +60,12 @@ class ManualInterface(tkinter.Tk):
         self.title("Talos Manual Interface")
         self.pressed_keys = set()  # keeps track of keys which are pressed down
         self.last_key_presses = {}
-        # publisher = Publisher(TEMP_CONFIG["socket_host"], TEMP_CONFIG["socket_port"])
-        # publisher.start_socket_connection(self.scheduler)
-        # self.after("idle", self.start_director_loop)
 
         self.config = load_config()
         self.connections = {}
         self.active_connection = None
         self.tracker = Tracker(self.connections, scheduler=self.scheduler)
+        self.no_signal_display = self.draw_no_signal_display()
 
         self.manual_mode = tkinter.BooleanVar(value=True)  # Control mode
         self.continuous_mode = tkinter.BooleanVar(value=True)  # continuous/discrete
@@ -159,6 +157,7 @@ class ManualInterface(tkinter.Tk):
         self.video_label.grid(
             row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew"
         )
+        self.update_display(self.no_signal_display)
 
         self.model_frame = tkinter.Frame(self)
         self.model_frame.grid(row=3, column=0)
@@ -232,6 +231,13 @@ class ManualInterface(tkinter.Tk):
 
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
+    
+    def draw_no_signal_display(self) -> ImageTk.PhotoImage:
+        no_signal_image = Image.new("RGB", (500, 380), color="gray")
+        draw = ImageDraw.Draw(no_signal_image)
+        draw.text((220, 220), "No Signal", fill="white")
+        image_tk = ImageTk.PhotoImage(no_signal_image)
+        return image_tk
 
     def open_connection(self, hostname: str, port = None, camera = None) -> None:
         """Opens a new connection. Port and camera are supplied only if opening a new connection not from config.
@@ -257,8 +263,8 @@ class ManualInterface(tkinter.Tk):
         self.update_connection_menu(new_selection=hostname)
         self.tracker.add_capture(hostname, camera)
         publisher.start_socket_connection(self.scheduler)
-        #TODO make director per-robot and start its loop here
-        # self.after("idle", self.start_director_loop)
+        if not self.run_display_loop:
+            self.after("idle", self.start_display_loop)
 
     def open_all_configured(self) -> None:
         """Loads all connections from the config file."""
@@ -274,9 +280,12 @@ class ManualInterface(tkinter.Tk):
         if hostname not in self.connections:
             print(f"Connection to {hostname} does not exist")
             return
+        self.tracker.remove_capture(hostname)
         self.connections[hostname].publisher.close_connection()
         self.connections.pop(hostname)
         self.set_active_connection(None)
+        if not self.connections:
+            self.run_display_loop = False
         self.update_connection_menu()
 
     def start_move(self, direction: Direction) -> None:
@@ -414,9 +423,8 @@ class ManualInterface(tkinter.Tk):
         ConnectionManager(self, self.connections)
 
     def set_active_connection(self, option) -> None:
-        if option is not None and option not in self.connections:
-            print(f"Connection {option} was not found in state")
-            return
+        if option is None and self.connections:
+            self.active_connection = self.connections[next(iter(self.connections))]
         self.active_connection = option
 
     def update_connection_menu(self, new_selection=None):
@@ -444,29 +452,29 @@ class ManualInterface(tkinter.Tk):
             first_key = next(iter(self.connections))
             self.selectedConnection.set(first_key)
 
-    def start_director_loop(self) -> None:
-        self.is_frame_loop_running = True
+    def start_display_loop(self) -> None:
+        self.run_display_loop = True
         self.last_mode = None
         self.change_model()  # start model
-        self.after(0, self.frame_loop)
+        self.after(0, self.display_loop)
 
-    def frame_loop(self) -> None:
-        """the director loop"""
-        if not self.is_frame_loop_running:
-            print("Ending director loop")
+    def display_loop(self) -> None:
+        """Video display loop"""
+        if not self.run_display_loop:
+            self.update_display(self.no_signal_display)
             return
-
-        img = self.tracker.create_imagetk()
+        
+        img = self.tracker.create_imagetk(self.active_connection)
         if img is not None:
-            self.update_video_frame(img)
-        self.after(20, self.frame_loop)
+            self.update_display(img)
+        self.after(20, self.display_loop)
 
     def set_mode(self, new_mode) -> None:
         if new_mode == "None":
             return self.change_model(None)
         self.change_model(new_mode)
 
-    def update_video_frame(self, img: ImageTk.PhotoImage) -> None:
+    def update_display(self, img: ImageTk.PhotoImage) -> None:
         self.video_label.config(image=img)
         # Keep a reference to prevent gc
         # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
@@ -512,7 +520,7 @@ class ManualInterface(tkinter.Tk):
 
             self.home_button.config(state="normal")
 
-            self.is_frame_loop_running = False
+            self.run_display_loop = False
             self.pressed_keys = set()
             return
 

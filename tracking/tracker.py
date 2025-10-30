@@ -66,7 +66,7 @@ class Tracker:
     desired_height: int | None = DEFAULT_CONFIG.get("frame_height", None)
     model = None
     _bboxes: list | None = None
-    _frame = None
+    _frames = dict()
 
     def __init__(
         self,
@@ -84,13 +84,22 @@ class Tracker:
         self.frame_delay = 1000 / self.fps
         self.scheduler = scheduler
         self.model = model
-        self.start_video()
 
     def add_capture(self, host: str, camera: str | int) -> None:
         """Adds a new video capture for a given host."""
         cap = cv2.VideoCapture(camera)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)  # Reduce buffer size
         self.captures[host] = cap
+        if self.task is None or not self.task.running:
+            self.start_video()
+
+    def remove_capture(self, host: str) -> None:
+        """Removes a video capture for a given host."""
+        if host in self.captures:
+            self.captures[host].release()
+            self.captures.pop(host)
+        if not self.captures:
+            self.stop_video()
 
     def start_detection_process(self) -> None:
         if hasattr(self, "_detection_process") and self._detection_process is not None:
@@ -125,9 +134,12 @@ class Tracker:
             self._bboxes = None
 
     def send_latest_frame(self) -> None:
-        if hasattr(self, "_frame") and self._frame is not None:
+        if hasattr(self, "_frames") and self._frames is not None:
             try:
-                self._frame_queue.put_nowait(self._frame)
+                #TODO: merge frames from all captures and send them together
+                # for now just send the first frame
+                first_frame = self._frames[next(iter(self._frames))]
+                self._frame_queue.put_nowait(first_frame)
             except Exception:
                 pass
         if (
@@ -152,23 +164,27 @@ class Tracker:
 
     def save_frame(self):
         if not self.captures:
+            print("[WARNING] No captures available to save frame from, stopping video")
+            self.stop_video()
             return None
-        #TODO capture frames from each connection. for now just grabs the first connection
-        hasFrame, frame = self.captures[next(iter(self.captures))].read()
-        if not hasFrame:
-            return None
-        self._frame = frame
+        frames = dict()
+        for host, cap in self.captures.items():
+            hasFrame, frame = cap.read()
+            if hasFrame:
+                frames[host] = frame
+        self._frames = frames
         self.hasNewFrame = True
-        return self.hasNewFrame, self._frame
+        return self.hasNewFrame, self._frames
 
-    def get_frame_shape(self) -> tuple[int, int]:
-        if self._frame is None:
-            self.save_frame()
-        assert self._frame is not None
-        self.hasNewFrame = False
-        frame_height = self._frame.shape[0]
-        frame_width = self._frame.shape[1]
-        return (frame_height, frame_width)
+    #NOTE: This function is never used and no longer works with new multiple frames structure, commenting it out for now
+    # def get_frame_shape(self) -> tuple[int, int]:
+    #     if self._frame is None:
+    #         self.save_frame()
+    #     assert self._frame is not None
+    #     self.hasNewFrame = False
+    #     frame_height = self._frame.shape[0]
+    #     frame_width = self._frame.shape[1]
+    #     return (frame_height, frame_width)
 
     def get_bbox(self):  # -> list[Any] | None:
         return self._bboxes
@@ -262,7 +278,7 @@ class Tracker:
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
         return ImageTk.PhotoImage(image=pil_image)
 
-    def create_imagetk(self, bboxes=None, frame=None) -> None | ImageTk.PhotoImage:
+    def create_imagetk(self, active_connection, bboxes=None, frame=None) -> None | ImageTk.PhotoImage:
         """This adds bounding box to the frame
         and returns the tkimage created.
         If the frame is supplied that frame will be used,
@@ -273,7 +289,7 @@ class Tracker:
             - bboxes
             - ImageTk.PhotoImage
         """
-        frame = frame or self._frame
+        frame = frame or self._frames.get(active_connection, None)
         bboxes = bboxes or self._bboxes
         if frame is None:
             return None
