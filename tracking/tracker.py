@@ -176,15 +176,16 @@ class Tracker:
         self.hasNewFrame = True
         return self.hasNewFrame, self._frames
 
-    #NOTE: This function is never used and no longer works with new multiple frames structure, commenting it out for now
-    # def get_frame_shape(self) -> tuple[int, int]:
-    #     if self._frame is None:
-    #         self.save_frame()
-    #     assert self._frame is not None
-    #     self.hasNewFrame = False
-    #     frame_height = self._frame.shape[0]
-    #     frame_width = self._frame.shape[1]
-    #     return (frame_height, frame_width)
+    def get_frame_shape(self) -> tuple[int, int]:
+        if not self._frames:
+            self.save_frame()
+        assert self._frames
+        self.hasNewFrame = False
+        #TODO: figure out which video feed's frame shape is needed, probably by passing this function a hostname
+        frame = self._frames[next(iter(self._frames))] # Temporarily just grab the first one
+        frame_height = frame.shape[0]
+        frame_width = frame.shape[1]
+        return (frame_height, frame_width)
 
     def get_bbox(self):  # -> list[Any] | None:
         return self._bboxes
