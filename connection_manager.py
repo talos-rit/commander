@@ -1,13 +1,21 @@
 import tkinter
 from tkinter import ttk
 
+from config import add_config, load_config
+from publisher import Publisher
+
+class ConnectionData:
+    def __init__(self, host: str, port: int, publisher: Publisher):
+        self.host = host
+        self.port = port
+        self.publisher = publisher
+
 class ConnectionManager(tkinter.Toplevel):
-    def __init__(self, parent, connections, config):
+    def __init__(self, parent, connections):
         super().__init__(parent)
         self.title("Connection Manager")
         self.geometry("350x300")
         self.connections = connections
-        self.config = config
         self.parent = parent
 
         self.transient(parent)
@@ -31,16 +39,17 @@ class ConnectionManager(tkinter.Toplevel):
     def render_list(self):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
+        config = load_config()
 
         ttk.Label(self.list_frame, text="Available Configs:", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=5, pady=(5, 0))
-        for _, cfg in self.config.items():
+        for _, cfg in config.items():
             if "socket_host" not in cfg or "socket_port" not in cfg:
                 print("config missing socket_host or socket_port, skipping")
                 continue
             frame = ttk.Frame(self.list_frame)
             frame.pack(fill="x", padx=10, pady=2)
 
-            ttk.Label(frame, text=f"{cfg['socket_host']}:{cfg['socket_port']}").pack(side="left", fill="x", expand=True)
+            ttk.Label(frame, text=f"{cfg['socket_host']} : {cfg['socket_port']}").pack(side="left", fill="x", expand=True)
             ttk.Button(
                 frame,
                 text="Connect",
@@ -50,16 +59,15 @@ class ConnectionManager(tkinter.Toplevel):
         ttk.Label(self.list_frame, text="Current Connections:", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=5, pady=(5, 0))
         ttk.Separator(self.list_frame, orient="horizontal").pack(fill="x", pady=5)
 
-        for _, host in enumerate(self.connections):
+        for _, (hostname, connData) in enumerate(self.connections.items()):
 
             row = ttk.Frame(self.list_frame)
             row.pack(fill="x", pady=2, padx=5)
-
-            ttk.Label(row, text=f"{host}:{self.config[host]["socket_port"]}").pack(side="left", expand=True, fill="x")
+            ttk.Label(row, text=f"{hostname} : {connData.port}").pack(side="left", expand=True, fill="x")
             ttk.Button(
                 row, 
                 text="X", 
-                command=lambda h=host: self.remove_connection(h)
+                command=lambda h=hostname: self.remove_connection(h)
             ).pack(side="right")
 
     def remove_connection(self, hostname):
@@ -67,8 +75,10 @@ class ConnectionManager(tkinter.Toplevel):
             self.parent.close_connection(hostname)
             self.render_list()
     
-    def add_connection(self, new_connection):
-        self.parent.open_new_connection(new_connection[0], new_connection[1])
+    def add_connection(self, new_connection, write_config=True):
+        self.parent.open_connection(new_connection[0], new_connection[1])
+        if write_config:
+            add_config(new_connection[0], new_connection[1])
         self.render_list()
     
     def add_from_config(self, hostname):
@@ -79,7 +89,6 @@ class ConnectionManager(tkinter.Toplevel):
       """Open a popup to request host and port, return them as a (host, port) tuple."""
       popup = tkinter.Toplevel(parent)
       popup.title("Enter Host and Port")
-      popup.geometry("300x160")
       popup.resizable(False, False)
       popup.grab_set()  # make it modal (block interaction with parent)
       popup.transient(parent)
@@ -92,16 +101,35 @@ class ConnectionManager(tkinter.Toplevel):
       port_var = tkinter.StringVar()
       ttk.Entry(popup, textvariable=port_var).pack(fill="x", padx=20)
 
+      write_config_var = tkinter.BooleanVar(value=True)
+      ttk.Checkbutton(
+          popup,
+          text="Save to config",
+          variable=write_config_var
+      ).pack(anchor="w", padx=20, pady=(10, 5))
+
       result = None
       def submit():
           nonlocal result
           host = host_var.get().strip()
-          port = port_var.get().strip()
-          if host and port:
-              #TODO: input validation
-              result = (host, port)
-              popup.destroy()
-          self.add_connection(result)
+          port_str = port_var.get().strip()
+          write_config = write_config_var.get()
+          
+          if not host or not port_str:
+            print("Host and port inputs are required.")
+            return
+
+          try:
+              port = int(port_str)
+              if port < 1 or port > 65535:
+                  raise ValueError
+          except ValueError:
+              print("Port must be an integer between 1 and 65535.")
+              return
+
+          result = (host, port)
+          popup.destroy()
+          self.add_connection(result, write_config)
 
       ttk.Button(popup, text="Submit", command=submit).pack(pady=15)
       popup.bind("<Return>", lambda e: submit())

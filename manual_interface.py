@@ -6,8 +6,8 @@ from threading import Thread
 import customtkinter
 from PIL import ImageTk
 
-from config import CONFIG, add_config, load_config
-from connection_manager import ConnectionManager
+from config import CONFIG, load_config
+from connection_manager import ConnectionManager, ConnectionData
 from publisher import Direction, Publisher
 from tkscheduler import Scheduler
 from tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
@@ -233,8 +233,8 @@ class ManualInterface(tkinter.Tk):
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
 
-    def open_connection(self, hostname: str) -> None:
-        """Opens a new connection.
+    def open_connection(self, hostname: str, port = None) -> None:
+        """Opens a new connection. Port is supplied only if opening a new connection not from config.
 
         Args:
             socket_host (string): the host ip address of the socket connection
@@ -243,10 +243,12 @@ class ManualInterface(tkinter.Tk):
         if hostname in self.connections:
             print(f"Connection to {hostname} already exists")
             return
-        port = self.config[hostname]["socket_port"]
+        if port is None: # port not supplied, get from config
+            port = self.config[hostname]["socket_port"]
         print(f"Opening connection to {hostname} on port {port}")
         publisher = Publisher(hostname, port)
-        self.connections[hostname] = publisher
+        self.connections[hostname] = ConnectionData(hostname, port, publisher)
+        self.set_active_connection(hostname)
         self.update_connection_menu(new_selection=hostname)
         publisher.start_socket_connection(self.scheduler)
         self.after("idle", self.start_director_loop)
@@ -255,18 +257,6 @@ class ManualInterface(tkinter.Tk):
         """Loads all connections from the config file."""
         for hostname in self.config:
             self.open_connection(hostname)
-
-    def open_new_connection(self, socket_host: str, socket_port: int) -> None:
-        """Opens a new connection.
-
-        Args:
-            socket_host (string): the host ip address of the socket connection
-            socket_port (int): the port number of the socket connection
-        """
-        print("This hasn't been implemented yet!!")
-        # TODO do all the normal connection stuff
-        # if successful:
-        add_config(socket_host, socket_port)
 
     def close_connection(self, hostname: str) -> None:
         """Closes an existing connection.
@@ -277,8 +267,9 @@ class ManualInterface(tkinter.Tk):
         if hostname not in self.connections:
             print(f"Connection to {hostname} does not exist")
             return
-        self.connections[hostname].close_connection()
+        self.connections[hostname].publisher.close_connection()
         self.connections.pop(hostname)
+        self.set_active_connection(None)
         self.update_connection_menu()
 
     def start_move(self, direction: Direction) -> None:
@@ -287,7 +278,7 @@ class ManualInterface(tkinter.Tk):
         Args:
             direction (string): global variables for directional commands are provided at the top of this file
         """
-        if not self.manual_mode.get():
+        if not self.manual_mode.get() or self.active_connection is None:
             return
         self.last_key_presses[direction] = time.time()
 
@@ -301,18 +292,23 @@ class ManualInterface(tkinter.Tk):
             self.keep_moving(direction)
             return
         # moves toward input direction by delta 10 (degrees)
+        connectionData = self.connections.get(self.active_connection)
+        if connectionData is None:
+            print(f"[ERROR] No connection found for active connection: {self.active_connection}")
+            return
+        publisher = connectionData.publisher
         match direction:
             case Direction.UP:
-                Publisher.polar_pan_discrete(0, 10, 1000, 3000)
+                publisher.polar_pan_discrete(0, 10, 1000, 3000)
                 print("Polar pan discrete up")
             case Direction.DOWN:
-                Publisher.polar_pan_discrete(0, -10, 1000, 3000)
+                publisher.polar_pan_discrete(0, -10, 1000, 3000)
                 print("Polar pan discrete down")
             case Direction.LEFT:
-                Publisher.polar_pan_discrete(-10, 0, 1000, 3000)
+                publisher.polar_pan_discrete(-10, 0, 1000, 3000)
                 print("Polar pan discrete left")
             case Direction.RIGHT:
-                Publisher.polar_pan_discrete(10, 0, 1000, 3000)
+                publisher.polar_pan_discrete(10, 0, 1000, 3000)
                 print("Polar pan discrete right")
 
     def stop_move(self, direction: Direction) -> None:
@@ -370,7 +366,12 @@ class ManualInterface(tkinter.Tk):
                 self.right_button.config(relief=depression)
 
         if self.continuous_mode.get() and len(self.pressed_keys) == 0:
-            Publisher.polar_pan_continuous_stop()
+            connectionData = self.connections.get(self.active_connection)
+            if connectionData is None:
+                print(f"[ERROR] No connection found for active connection: {self.active_connection}")
+                return
+            publisher = connectionData.publisher
+            publisher.polar_pan_continuous_stop()
 
     def keep_moving(self, direction: Direction) -> None:
         """Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
@@ -385,22 +386,31 @@ class ManualInterface(tkinter.Tk):
         self.after(self.move_delay_ms, lambda: self.keep_moving(direction))
 
         if len(self.pressed_keys) > 0:
-            Publisher.polar_pan_continuous_direction_start(sum(self.pressed_keys))
+            connectionData = self.connections.get(self.active_connection)
+            if connectionData is None:
+                print(f"[ERROR] No connection found for active connection: {self.active_connection}")
+                return
+            publisher = connectionData.publisher
+            publisher.polar_pan_continuous_direction_start(sum(self.pressed_keys))
 
     def move_home(self) -> None:
         """Moves the robotic arm from its current location to its home position"""
-        Publisher.home(1000)
+        connectionData = self.connections.get(self.active_connection)
+        if connectionData is None:
+            print(f"[ERROR] No connection found for active connection: {self.active_connection}")
+            return
+        publisher = connectionData.publisher
+        publisher.home(1000)
 
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
-        ConnectionManager(self, self.connections, self.config)
+        ConnectionManager(self, self.connections)
 
     def set_active_connection(self, option) -> None:
-        if option is None or option not in self.connections:
-            print(f"Connection was not found or was None... (found {option})")
+        if option is not None and option not in self.connections:
+            print(f"Connection {option} was not found in state")
             return
         self.active_connection = option
-        print(f"Active connection set to: {self.active_connection}")
 
     def update_connection_menu(self, new_selection=None):
         """Refresh dropdown menu to show the latest connections"""

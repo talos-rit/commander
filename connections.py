@@ -107,7 +107,7 @@ class Connection:
         try:
             self.socket.sendall(message)  # safer than send()
         except OSError as e:
-            print(f"Socket send failed: {e}")
+            print(f"Socket send to {self.host} failed: {e}")
             return -1
 
         # TODO: Implement response handling if needed
