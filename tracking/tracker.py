@@ -1,8 +1,9 @@
-import multiprocessing
 from abc import ABC, abstractmethod
+from multiprocessing import Event, Lock, Process, Queue, shared_memory
 from queue import Empty
 
 import cv2
+import numpy as np
 from PIL import Image, ImageTk
 
 from config import DEFAULT_CONFIG
@@ -12,6 +13,10 @@ from utils import (
     calculate_acceptable_box,
     calculate_center_bbox,
 )
+
+SHARED_MEM_FRAME_NAME = "frame"
+SHARED_MEM_BBOX_NAME = "bboxes"
+
 
 class ObjectModel(ABC):
     """
@@ -33,26 +38,31 @@ class ObjectModel(ABC):
 
 
 def _detect_person_worker(
-    model_class, frame_queue: multiprocessing.Queue, bbox_queue: multiprocessing.Queue
-):
+    model_class, bbox_queue: Queue, stopper, frame_shape, frame_dtype, lock
+) -> None:
     if model_class is None:
         print("Model was not found please pass a model into Tracker to run.")
         return
+    shm = shared_memory.SharedMemory(name=SHARED_MEM_FRAME_NAME)
+    frame = np.ndarray(frame_shape, dtype=frame_dtype, buffer=shm.buf)
+    last_frame = np.zeros(frame_shape, frame_dtype)
     model: ObjectModel = model_class()
-    frame = True
-    while frame is not None:
-        try:
-            frame = frame_queue.get(block=False)
-            if frame is None:
-                continue
+    try:
+        while not stopper.is_set():
+            np.copyto(last_frame, frame)  # visual artifact is not critical
             bboxes = model.detect_person(frame=frame)
-            bbox_queue.put(bboxes)
-        except Empty:
-            continue
-        except KeyboardInterrupt:
-            bbox_queue.put_nowait(None)
-            bbox_queue.close()
-            return
+            with lock:
+                bbox_queue.put(bboxes)
+    except KeyboardInterrupt:
+        pass
+    except ValueError:
+        print("bbox_queue closed")
+        pass
+    finally:
+        print("Model exiting cleanly...")
+        shm.close()
+        bbox_queue.close()
+        print("Done")
 
 
 # Class for handling video feed and object detection model usage
@@ -105,11 +115,32 @@ class Tracker:
         if hasattr(self, "_detection_process") and self._detection_process is not None:
             return  # Already running
 
-        self._frame_queue = multiprocessing.Queue(maxsize=1)
-        self._bbox_queue = multiprocessing.Queue(maxsize=1)
-        self._detection_process = multiprocessing.Process(
+        img = self.save_frame()
+        if img is None:
+            print("Frame not found")
+            return
+
+        (_, frame) = img
+        self.shape = frame.shape
+        self.dtype = frame.dtype
+        self.model_stopper = Event()
+        self._frame_mem = shared_memory.SharedMemory(
+            SHARED_MEM_FRAME_NAME, create=True, size=frame.nbytes
+        )
+        self._frame_buf = np.ndarray(self.shape, self.dtype, self._frame_mem.buf)
+        # we only care about the latest bbox but I prefer to have more than 1 allocated size
+        self._bbox_queue = Queue(maxsize=2)
+        self.lock = Lock()
+        self._detection_process = Process(
             target=_detect_person_worker,
-            args=(self.model, self._frame_queue, self._bbox_queue),
+            args=(
+                self.model,
+                self._bbox_queue,
+                self.model_stopper,
+                self.shape,
+                self.dtype,
+                self.lock,
+            ),
             daemon=True,
         )
         self._detection_process.start()
@@ -120,7 +151,10 @@ class Tracker:
 
     def poll_bboxes(self) -> None:
         try:
-            self._bboxes = self._bbox_queue.get(block=False)
+            with self.lock:
+                self._bboxes = self._bbox_queue.get(block=False)
+        except ValueError:
+            pass
         except Empty:
             pass
         if (
@@ -139,8 +173,9 @@ class Tracker:
                 #TODO: merge frames from all captures and send them together
                 # for now just send the first frame
                 first_frame = self._frames[next(iter(self._frames))]
-                self._frame_queue.put_nowait(first_frame)
-            except Exception:
+                np.copyto(self._frame_buf, first_frame)
+            except Exception as e:
+                print("Exception raise while copying frame to shared memory:", e)
                 pass
         if (
             self._detection_process is not None
@@ -149,18 +184,22 @@ class Tracker:
         ):
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
 
-    def stop_detection_process(self) -> None:
+    def stop_detection_process(self) -> bool:
+        """Returns true if process properly closed"""
         if hasattr(self, "_detection_process") and self._detection_process is not None:
             try:
-                if hasattr(self, "_frame_queue"):
-                    self._frame_queue.put_nowait(None)
+                self.model_stopper.set()
                 self._detection_process.join()
+                self._frame_mem.close()
+                self._frame_mem.unlink()
+                self._bbox_queue.close()
                 self._bbox_queue.join_thread()
-                self._frame_queue.join_thread()
-            except Exception:
-                pass
+            except Exception as e:
+                print("Exception occured:", e)
+                return False
             self._detection_process = None
         self._bboxes = None
+        return True
 
     def save_frame(self):
         if not self.captures:
@@ -177,6 +216,7 @@ class Tracker:
         return self.hasNewFrame, self._frames
 
     def get_frame_shape(self) -> tuple[int, int]:
+        """returns: (height, width)"""
         if not self._frames:
             self.save_frame()
         assert self._frames
@@ -317,13 +357,18 @@ class Tracker:
         self.start_video()
         self.start_detection_process()
 
-    def stop(self) -> None:
+    def stop(self) -> bool:
         print("Stopping Tracker")
         self.stop_video()
-        self.stop_detection_process()
+        for _ in range(6):
+            if self.stop_detection_process():
+                return True
+        return False
 
     def swap_model(self, new_model) -> None:
         """This will stop the current detection process and start a new process on the new model"""
-        self.stop_detection_process()
+        if not self.stop_detection_process():
+            print("Failed to stop detection model")
+            return
         self.model = new_model
         self.start_detection_process()

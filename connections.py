@@ -41,9 +41,6 @@ class Connection:
                 break
             except OSError as e:
                 print(f"[Connection]: Bind failed, retrying in 5s {e}")
-                if self.schedule is not None:
-                    self.schedule.set_timeout(5000, self.connect)
-                    return
                 time.sleep(5)
         else:
             return  # Exit only if is_running was set to False
