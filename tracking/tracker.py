@@ -5,17 +5,13 @@ from queue import Empty
 import cv2
 from PIL import Image, ImageTk
 
-from config import CONFIG as CONFIGS
+from config import DEFAULT_CONFIG
 from tkscheduler import IterativeTask, Scheduler
 from utils import (
     add_termination_handler,
     calculate_acceptable_box,
     calculate_center_bbox,
 )
-
-# Temporary hardcoded index to until config can be passed in on initialization
-CONFIG = CONFIGS["unctalos.student.rit.edu"]
-
 
 class ObjectModel(ABC):
     """
@@ -24,11 +20,11 @@ class ObjectModel(ABC):
     """
 
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = CONFIG.get("fps", 60)
-    camera_index = CONFIG["camera_index"]
-    acceptable_box_percent = CONFIG["acceptable_box_percent"]
-    desired_width = CONFIG.get("frame_width", None)
-    desired_height = CONFIG.get("frame_height", None)
+    fps = DEFAULT_CONFIG.get("fps", 60)
+    camera_index = DEFAULT_CONFIG["camera_index"]
+    acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
+    desired_width = DEFAULT_CONFIG.get("frame_width", None)
+    desired_height = DEFAULT_CONFIG.get("frame_height", None)
 
     # Capture a frame from the source
     @abstractmethod
@@ -59,32 +55,42 @@ def _detect_person_worker(
             return
 
 
-# Abstract class for tracking
+# Class for handling video feed and object detection model usage
 class Tracker:
     task: IterativeTask | None = None
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = CONFIG.get("fps", 60)
-    camera_index = CONFIG["camera_index"]
-    acceptable_box_percent = CONFIG["acceptable_box_percent"]
-    desired_width: int | None = CONFIG.get("frame_width", None)
-    desired_height: int | None = CONFIG.get("frame_height", None)
+    fps = DEFAULT_CONFIG.get("fps", 60)
+    # camera_index = DEFAULT_CONFIG["camera_index"]
+    acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
+    desired_width: int | None = DEFAULT_CONFIG.get("frame_width", None)
+    desired_height: int | None = DEFAULT_CONFIG.get("frame_height", None)
     model = None
     _bboxes: list | None = None
     _frame = None
 
     def __init__(
         self,
+        connections,
         model=None,
         scheduler: Scheduler | None = None,
         source: str | None = None,
         video_buffer_size=1,
     ):
-        self.cap = cv2.VideoCapture(source or self.camera_index)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, video_buffer_size)  # Reduce buffer size
+        self.connections = connections
+        self.captures = dict()
+        # self.cap = cv2.VideoCapture(source or self.camera_index)
+        # self.cap.set(cv2.CAP_PROP_BUFFERSIZE, video_buffer_size)  # Reduce buffer size
+        self.video_buffer_size = video_buffer_size
         self.frame_delay = 1000 / self.fps
         self.scheduler = scheduler
         self.model = model
         self.start_video()
+
+    def add_capture(self, host: str, camera: str | int) -> None:
+        """Adds a new video capture for a given host."""
+        cap = cv2.VideoCapture(camera)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)  # Reduce buffer size
+        self.captures[host] = cap
 
     def start_detection_process(self) -> None:
         if hasattr(self, "_detection_process") and self._detection_process is not None:
@@ -145,7 +151,10 @@ class Tracker:
         self._bboxes = None
 
     def save_frame(self):
-        hasFrame, frame = self.cap.read()
+        if not self.captures:
+            return None
+        #TODO capture frames from each connection. for now just grabs the first connection
+        hasFrame, frame = self.captures[next(iter(self.captures))].read()
         if not hasFrame:
             return None
         self._frame = frame
@@ -285,6 +294,7 @@ class Tracker:
         if Tracker.task is not None:
             Tracker.task.cancel()
 
+    #NOTE: This function is never used, leaving it here for now
     def start(self) -> None:
         print("Starting Tracker")
         self.start_video()

@@ -60,7 +60,6 @@ class ManualInterface(tkinter.Tk):
         self.title("Talos Manual Interface")
         self.pressed_keys = set()  # keeps track of keys which are pressed down
         self.last_key_presses = {}
-        self.tracker = Tracker(scheduler=self.scheduler)
         # publisher = Publisher(TEMP_CONFIG["socket_host"], TEMP_CONFIG["socket_port"])
         # publisher.start_socket_connection(self.scheduler)
         # self.after("idle", self.start_director_loop)
@@ -68,6 +67,7 @@ class ManualInterface(tkinter.Tk):
         self.config = load_config()
         self.connections = {}
         self.active_connection = None
+        self.tracker = Tracker(self.connections, scheduler=self.scheduler)
 
         self.manual_mode = tkinter.BooleanVar(value=True)  # Control mode
         self.continuous_mode = tkinter.BooleanVar(value=True)  # continuous/discrete
@@ -233,25 +233,32 @@ class ManualInterface(tkinter.Tk):
         button.bind("<ButtonPress>", lambda event: self.start_move(direction))
         button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
 
-    def open_connection(self, hostname: str, port = None) -> None:
-        """Opens a new connection. Port is supplied only if opening a new connection not from config.
+    def open_connection(self, hostname: str, port = None, camera = None) -> None:
+        """Opens a new connection. Port and camera are supplied only if opening a new connection not from config.
 
         Args:
             socket_host (string): the host ip address of the socket connection
             socket_port (int): the port number of the socket connection
+            camera (int): the index of the camera to use for this connection
         """
         if hostname in self.connections:
             print(f"Connection to {hostname} already exists")
             return
-        if port is None: # port not supplied, get from config
+        # If port is not supplied, get it from config
+        if port is None:
             port = self.config[hostname]["socket_port"]
-        print(f"Opening connection to {hostname} on port {port}")
+        # If camera is not supplied, get it from config
+        if camera is None:
+            camera = self.config[hostname]["camera_index"]
+        print(f"Opening connection to {hostname} on port {port}, with the camera at {camera}")
         publisher = Publisher(hostname, port)
         self.connections[hostname] = ConnectionData(hostname, port, publisher)
         self.set_active_connection(hostname)
         self.update_connection_menu(new_selection=hostname)
+        self.tracker.add_capture(hostname, camera)
         publisher.start_socket_connection(self.scheduler)
-        self.after("idle", self.start_director_loop)
+        #TODO make director per-robot and start its loop here
+        # self.after("idle", self.start_director_loop)
 
     def open_all_configured(self) -> None:
         """Loads all connections from the config file."""

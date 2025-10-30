@@ -37,7 +37,7 @@ def load_config():
           config = yaml.safe_load(f)
     return config
 
-def add_config(socket_host: str, port: int):
+def add_config(socket_host: str, port: int, camera_index: int):
     """
     WARNING: Changes global CONFIG variable to reflect the new configuration, therefore this variables MUST be re-imported after calling this function.
 
@@ -57,6 +57,7 @@ def add_config(socket_host: str, port: int):
     if len(keys) >= 2:
         local_config_data[keys[0]] = socket_host
         local_config_data[keys[1]] = port
+        local_config_data[keys[2]] = camera_index
     else:
         raise ValueError("default_config.yaml has no socket_host and port fields")
 

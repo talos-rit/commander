@@ -9,6 +9,7 @@ class ConnectionData:
         self.host = host
         self.port = port
         self.publisher = publisher
+        self.fps = load_config().get(host, {}).get("fps", 60)
 
 class ConnectionManager(tkinter.Toplevel):
     def __init__(self, parent, connections):
@@ -75,10 +76,10 @@ class ConnectionManager(tkinter.Toplevel):
             self.parent.close_connection(hostname)
             self.render_list()
     
-    def add_connection(self, new_connection, write_config=True):
-        self.parent.open_connection(new_connection[0], new_connection[1])
+    def add_connection(self, host, port, camera, write_config=True):
+        self.parent.open_connection(host, port, camera)
         if write_config:
-            add_config(new_connection[0], new_connection[1])
+            add_config(host, port, camera)
         self.render_list()
     
     def add_from_config(self, hostname):
@@ -101,6 +102,10 @@ class ConnectionManager(tkinter.Toplevel):
       port_var = tkinter.StringVar()
       ttk.Entry(popup, textvariable=port_var).pack(fill="x", padx=20)
 
+      ttk.Label(popup, text="Camera Address:").pack(pady=(10, 5))
+      camera_var = tkinter.StringVar()
+      ttk.Entry(popup, textvariable=camera_var).pack(fill="x", padx=20)
+
       write_config_var = tkinter.BooleanVar(value=True)
       ttk.Checkbutton(
           popup,
@@ -113,10 +118,11 @@ class ConnectionManager(tkinter.Toplevel):
           nonlocal result
           host = host_var.get().strip()
           port_str = port_var.get().strip()
+          camera = camera_var.get().strip()
           write_config = write_config_var.get()
           
-          if not host or not port_str:
-            print("Host and port inputs are required.")
+          if not host or not port_str or not camera:
+            print("Host, port, and camera inputs are required.")
             return
 
           try:
@@ -127,9 +133,8 @@ class ConnectionManager(tkinter.Toplevel):
               print("Port must be an integer between 1 and 65535.")
               return
 
-          result = (host, port)
           popup.destroy()
-          self.add_connection(result, write_config)
+          self.add_connection(host, port, camera, write_config)
 
       ttk.Button(popup, text="Submit", command=submit).pack(pady=15)
       popup.bind("<Return>", lambda e: submit())
