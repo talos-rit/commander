@@ -1,18 +1,12 @@
-import os
+from os import path
 
 import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
 
+from assets import join_paths
 from tracking.tracker import ObjectModel
-
-# TODO: Move this into a config file
-DEFAULT_YOLO_MODEL_DIR = os.path.join(os.path.dirname(__file__), "yolo-pt")
-
-
-def create_pt_file_path(file_name, _dir=DEFAULT_YOLO_MODEL_DIR):
-    return os.path.join(_dir, file_name)
 
 
 class YOLOModel(ObjectModel):
@@ -23,18 +17,13 @@ class YOLOModel(ObjectModel):
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
     def __init__(
         self,
-        _yolo_pt_dir=DEFAULT_YOLO_MODEL_DIR,
+        _yolo_pt_dir=join_paths("yolo"),
     ):
         self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
 
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.object_detector = YOLO(
-            create_pt_file_path("yolo11m.pt", _dir=_yolo_pt_dir)
-        )
-
-        self.pose_detector = YOLO(
-            create_pt_file_path("yolo11m-pose.pt", _dir=_yolo_pt_dir)
-        )
+        self.object_detector = YOLO(path.join(_yolo_pt_dir, "yolo11m.pt"))
+        self.pose_detector = YOLO(path.join(_yolo_pt_dir, "yolo11m-pose.pt"))
         self.lost_counter = 0
 
     # Detect people in the frame
