@@ -476,7 +476,7 @@ class ManualInterface(tkinter.Tk):
             self.update_display(self.no_signal_display)
             return
 
-        img = self.tracker.create_imagetk(self.active_connection)
+        img = self.tracker.create_imagetk()
         if img is not None:
             self.update_display(img)
         self.after(20, self.display_loop)
