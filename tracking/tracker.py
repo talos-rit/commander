@@ -303,8 +303,7 @@ class Tracker:
         return frame
 
     def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage:
-        # Convert frame to tkinter image
-        # Convert from BGR to RGB
+        """Convert frame to tkinter image"""
         frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(frame_rgb)
 
