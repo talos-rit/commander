@@ -15,6 +15,7 @@ from utils import (
 )
 
 SHARED_MEM_FRAME_NAME = "frame"
+POLL_BBOX_CYCLE_INTERVAL_MS = 10
 
 
 class ObjectModel(ABC):
@@ -148,7 +149,7 @@ class Tracker:
         self._detection_process.start()
         add_termination_handler(self.stop)
         if self.scheduler:
-            self.scheduler.set_timeout(10, self.poll_bboxes)
+            self.scheduler.set_timeout(POLL_BBOX_CYCLE_INTERVAL_MS, self.poll_bboxes)
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
 
     def poll_bboxes(self) -> None:
@@ -164,7 +165,7 @@ class Tracker:
             and self._detection_process.is_alive()
             and self.scheduler
         ):
-            self.scheduler.set_timeout(10, self.poll_bboxes)
+            self.scheduler.set_timeout(POLL_BBOX_CYCLE_INTERVAL_MS, self.poll_bboxes)
         elif self._detection_process is None:
             print("detection process is None; clearing internal bbox cache")
             self._bboxes = None
