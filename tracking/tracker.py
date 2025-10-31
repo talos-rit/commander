@@ -321,7 +321,9 @@ class Tracker:
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
         return ImageTk.PhotoImage(image=pil_image)
 
-    def create_imagetk(self, active_connection, bboxes=None, frame=None) -> None | ImageTk.PhotoImage:
+    def create_imagetk(
+        self, active_connection, bboxes=None, frame=None
+    ) -> None | ImageTk.PhotoImage:
         """This adds bounding box to the frame
         and returns the tkimage created.
         If the frame is supplied that frame will be used,
@@ -348,7 +350,7 @@ class Tracker:
     def set_active_connection(self, connection: str) -> None:
         self.active_connection = connection
 
-    def remove_action_connection(self) -> None:
+    def remove_active_connection(self) -> None:
         self.active_connection = None
 
     def start_video(self) -> IterativeTask:
