@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  pull_request: # Uncomment this to test the action in your PR if you change this file
+  # pull_request: # Uncomment this to test the action in your PR if you change this file
 
 jobs:
   build:
@@ -35,7 +35,6 @@ jobs:
       - name: Build Executable
         run: |
           python pyinstaller_runner.py
-        # pyinstaller --onedir --debug all --add-data "config:config" --collect-data "..assets" talos.py
 
       # Step 5: Archive the build artifacts
       - name: Archive Build

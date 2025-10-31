@@ -84,5 +84,5 @@ if __name__ == "__main__":
         pyinstaller_opts.extend(['--add-data', f'{data_file[0]}:{data_file[1]}'])
 
     pyinstaller_opts.append('talos.py')
-    print(pyinstaller_opts)
+
     PyInstaller.__main__.run(pyinstaller_opts)
