@@ -321,7 +321,7 @@ class Tracker:
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
         return ImageTk.PhotoImage(image=pil_image)
 
-    def create_imagetk(self, bboxes=None, frame=None) -> None | ImageTk.PhotoImage:
+    def create_imagetk(self, active_connection, bboxes=None, frame=None) -> None | ImageTk.PhotoImage:
         """This adds bounding box to the frame
         and returns the tkimage created.
         If the frame is supplied that frame will be used,
