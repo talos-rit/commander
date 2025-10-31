@@ -15,7 +15,6 @@ from utils import (
 )
 
 SHARED_MEM_FRAME_NAME = "frame"
-SHARED_MEM_BBOX_NAME = "bboxes"
 
 
 class ObjectModel(ABC):
@@ -75,6 +74,7 @@ class Tracker:
     desired_width: int | None = DEFAULT_CONFIG.get("frame_width", None)
     desired_height: int | None = DEFAULT_CONFIG.get("frame_height", None)
     model = None
+    active_connection: str | None = None
     _bboxes: list | None = None
     _frames = dict()
 
@@ -120,7 +120,10 @@ class Tracker:
             print("Frame not found")
             return
 
-        (_, frame) = img
+        connection = img.get(self.active_connection, None)
+        if connection is None:
+            return
+        _, frame = connection
         self.shape = frame.shape
         self.dtype = frame.dtype
         self.model_stopper = Event()
@@ -170,9 +173,7 @@ class Tracker:
     def send_latest_frame(self) -> None:
         if hasattr(self, "_frames") and self._frames is not None:
             try:
-                #TODO: merge frames from all captures and send them together
-                # for now just send the first frame
-                first_frame = self._frames[next(iter(self._frames))]
+                first_frame = self._frames[next(iter(self._frames))][1]
                 np.copyto(self._frame_buf, first_frame)
             except Exception as e:
                 print("Exception raise while copying frame to shared memory:", e)
@@ -210,19 +211,20 @@ class Tracker:
         for host, cap in self.captures.items():
             hasFrame, frame = cap.read()
             if hasFrame:
-                frames[host] = frame
+                frames[host] = (True, frame)
         self._frames = frames
-        self.hasNewFrame = True
-        return self.hasNewFrame, self._frames
+        return self._frames
 
     def get_frame_shape(self) -> tuple[int, int]:
-        """returns: (height, width)"""
-        if not self._frames:
+        """returns: (height, weight)"""
+        if self._frames is None:
             self.save_frame()
         assert self._frames
         self.hasNewFrame = False
-        #TODO: figure out which video feed's frame shape is needed, probably by passing this function a hostname
-        frame = self._frames[next(iter(self._frames))] # Temporarily just grab the first one
+        # TODO: figure out which video feed's frame shape is needed, probably by passing this function a hostname
+        (_, frame) = self._frames[
+            next(iter(self._frames))
+        ]  # Temporarily just grab the first one
         frame_height = frame.shape[0]
         frame_width = frame.shape[1]
         return (frame_height, frame_width)
@@ -303,7 +305,7 @@ class Tracker:
     def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage:
         # Convert frame to tkinter image
         # Convert from BGR to RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(frame_rgb)
 
         dim = (self.desired_width, self.desired_height)
@@ -330,13 +332,24 @@ class Tracker:
             - bboxes
             - ImageTk.PhotoImage
         """
-        frame = frame or self._frames.get(active_connection, None)
+        if frame is None:
+            active_frame = self._frames.get(self.active_connection, None)
+            frame = active_frame[1] if active_frame is not None else None
         bboxes = bboxes or self._bboxes
         if frame is None:
             return None
-        if bboxes is not None:
-            self.draw_visuals(bboxes, frame)
+        # FIXME: this function needs to have bboxes be separated per connection
+        # if bboxes is not None:
+        #     self.draw_visuals(bboxes, frame)
+        if frame is None:
+            return None
         return self.conv_cv2_frame_to_tkimage(frame)
+
+    def set_active_connection(self, connection: str) -> None:
+        self.active_connection = connection
+
+    def remove_action_connection(self) -> None:
+        self.active_connection = None
 
     def start_video(self) -> IterativeTask:
         assert self.scheduler is not None
@@ -351,7 +364,7 @@ class Tracker:
         if Tracker.task is not None:
             Tracker.task.cancel()
 
-    #NOTE: This function is never used, leaving it here for now
+    # NOTE: This function is never used, leaving it here for now
     def start(self) -> None:
         print("Starting Tracker")
         self.start_video()
