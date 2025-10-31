@@ -83,7 +83,6 @@ class Tracker:
         connections,
         model=None,
         scheduler: Scheduler | None = None,
-        source: str | None = None,
         video_buffer_size=1,
     ):
         self.connections = connections
