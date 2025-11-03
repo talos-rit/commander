@@ -161,7 +161,7 @@ class Tracker:
         del self.captures[host]
 
     def start_detection_process(self) -> None:
-        if hasattr(self, "_detection_process") and self._detection_process is not None:
+        if self._detection_process is not None:
             return  # Already running
 
         total_shape = self.get_total_frame_shape()
@@ -203,6 +203,7 @@ class Tracker:
         elif self._detection_process is None:
             print("detection process is None; clearing internal bbox cache")
             self._bboxes = dict()
+            return
 
         raw_bboxes: None | list[tuple[int, int, int, int]] = None
 
@@ -236,7 +237,6 @@ class Tracker:
                         [max(0, x1 - dx), y1, max(0, x2 - dx), y2]
                     )
 
-        # store separated bboxes by host
         self._bboxes = bboxes_by_host
 
     def get_total_frame_shape(self):
