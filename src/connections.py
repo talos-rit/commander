@@ -2,7 +2,7 @@ import socket
 import threading
 import time
 
-from icd_config import CTypesInt, toBytes, toInt
+from src.icd_config import CTypesInt, toBytes, toInt
 from src.tkscheduler import Scheduler
 from src.utils import add_termination_handler
 

@@ -1,7 +1,7 @@
 import time
 
-from directors.base_director import BaseDirector
 from src.config import CONFIG as CONFIGS
+from src.directors.base_director import BaseDirector
 from src.publisher import Publisher
 from src.utils import (
     calculate_acceptable_box,

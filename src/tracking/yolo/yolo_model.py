@@ -3,10 +3,10 @@ from os import path
 import cv2
 import numpy as np
 import torch
-from ultralytics import YOLO
+from ultralytics import YOLO  # type: ignore
 
 from assets import join_paths
-from tracking.tracker import ObjectModel
+from src.tracking.tracker import ObjectModel
 
 
 class YOLOModel(ObjectModel):

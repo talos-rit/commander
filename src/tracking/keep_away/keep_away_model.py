@@ -6,12 +6,12 @@ import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from src.utils import calculate_acceptable_box
-from tracking.media_pipe.model_path import (
+from src.tracking.media_pipe.model_path import (
     path_efficientdet_lite0,
     path_pose_landmarker_lite,
 )
-from tracking.tracker import ObjectModel
+from src.tracking.tracker import ObjectModel
+from src.utils import calculate_acceptable_box
 
 
 class KeepAwayModel(ObjectModel):

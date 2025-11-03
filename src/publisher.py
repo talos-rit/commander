@@ -1,7 +1,7 @@
 from enum import IntEnum
 
-from connections import Connection
-from icd_config import Command, CTypesInt, toBytes
+from src.connections import Connection
+from src.icd_config import Command, CTypesInt, toBytes
 from src.tkscheduler import Scheduler
 
 
