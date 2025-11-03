@@ -171,7 +171,6 @@ class Tracker:
         if hasattr(self, "_detection_process") and self._detection_process is not None:
             return  # Already running
 
-        # TODO: add a frame starter
         total_shape = self.get_total_frame_shape()
         total_nbytes = self.get_nbytes_from_total_shape(total_shape)
 
