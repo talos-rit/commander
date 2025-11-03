@@ -27,7 +27,7 @@ class ObjectModel(ABC):
     """
 
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = DEFAULT_CONFIG.get("fps", 60)
+    fps = DEFAULT_CONFIG.get("fps", 30)
     camera_index = DEFAULT_CONFIG["camera_index"]
     acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
     desired_width = DEFAULT_CONFIG.get("frame_width", None)
@@ -114,7 +114,7 @@ class VideoConnection:
 # Class for handling video feed and object detection model usage
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = DEFAULT_CONFIG.get("fps", 60)
+    fps: int
     acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
     desired_width: int | None = DEFAULT_CONFIG.get("frame_width", None)
     desired_height: int | None = DEFAULT_CONFIG.get("frame_height", None)
@@ -123,7 +123,6 @@ class Tracker:
     frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
     active_connection: str | None = None
     _bboxes: dict[str, list] = dict()
-    _frames: dict = dict()
     _frame_mem: shared_memory.SharedMemory
     _frame_buf: np.ndarray
     _bbox_queue: Queue
@@ -137,11 +136,12 @@ class Tracker:
         video_buffer_size=1,
     ):
         self.video_buffer_size = video_buffer_size
-        self.frame_delay = 1000 / self.fps
         self.scheduler = scheduler
         self.model = model
         for host, conn in connections.items():
+            self.fps = max(self.fps, conn.fps)
             self.add_capture(host, conn.camera, conn.fps)
+        self.frame_delay = 1000 / self.fps
 
     def add_capture(self, host: str, camera: str | int, fps: int) -> None:
         """Adds a new video capture for a given host.
@@ -288,23 +288,26 @@ class Tracker:
         return h * w * c * np.dtype(np.uint8).itemsize
 
     def send_latest_frame(self) -> None:
-        if self._frames is not None:
-            try:
-                for host, dx in self.frame_order:
-                    vid = self.captures[host]
-                    if vid.shape is None or vid.frame is None:
-                        continue
-                    _, width = vid.shape[:2]
-                    self._frame_buf[:, dx : dx + width, ...] = vid.frame[:, :width, ...]
-            except Exception as e:
-                print("Exception raise while copying frame to shared memory:", e)
-                pass
         if (
             self._detection_process is not None
             and self._detection_process.is_alive()
             and self.scheduler
         ):
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
+
+        if 1 == len(self.frame_order):
+            (host, _) = self.frame_order[0]
+            vid = self.captures[host]
+            if vid.frame is not None:
+                np.copyto(self._frame_buf, vid.frame)
+            return
+
+        for host, dx in self.frame_order:
+            vid = self.captures[host]
+            if vid.shape is None or vid.frame is None:
+                continue
+            _, width = vid.shape[:2]
+            self._frame_buf[:, dx : dx + width, ...] = vid.frame[:, :width, ...]
 
     def stop_detection_process(self) -> bool:
         """Returns true if process properly closed"""
@@ -431,14 +434,16 @@ class Tracker:
             - bboxes
             - ImageTk.PhotoImage
         """
-        active_frame = self._frames.get(self.active_connection, None)
-        frame = active_frame[1] if active_frame is not None else None
-        if frame is None:
-            return None
+        if self.active_connection is None:
+            return
+        cap = self.captures.get(self.active_connection, None)
+        if cap is None:
+            return
+        active_frame = cap.frame
         if self.active_connection is not None:
             bboxes = self._bboxes.get(self.active_connection, None)
-            self.draw_visuals(bboxes, frame)
-        return self.conv_cv2_frame_to_tkimage(frame)
+            self.draw_visuals(bboxes, active_frame)
+        return self.conv_cv2_frame_to_tkimage(active_frame)
 
     def set_active_connection(self, connection: str) -> None:
         self.active_connection = connection
