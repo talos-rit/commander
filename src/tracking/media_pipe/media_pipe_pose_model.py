@@ -4,11 +4,11 @@ import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from tracking.media_pipe.model_path import (
+from src.tracking.media_pipe.model_path import (
     path_efficientdet_lite0,
     path_pose_landmarker_lite,
 )
-from tracking.tracker import ObjectModel
+from src.tracking.tracker import ObjectModel
 
 
 class MediaPipePoseModel(ObjectModel):

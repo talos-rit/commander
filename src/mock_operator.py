@@ -1,7 +1,7 @@
 import time
 
-from connections import CommandConnection
-from icd_config import CTypesInt, toBytes
+from src.connections import CommandConnection
+from src.icd_config import CTypesInt, toBytes
 
 
 class MockOperator:

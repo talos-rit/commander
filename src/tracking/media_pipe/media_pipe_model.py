@@ -3,8 +3,8 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from tracking.media_pipe.model_path import path_efficientdet_lite0
-from tracking.tracker import ObjectModel
+from src.tracking.media_pipe.model_path import path_efficientdet_lite0
+from src.tracking.tracker import ObjectModel
 
 
 class MediaPipeModel(ObjectModel):
