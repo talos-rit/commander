@@ -26,13 +26,6 @@ class ObjectModel(ABC):
     The reason why this is separated is due to the fact that this will be running in a separate process.
     """
 
-    speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = DEFAULT_CONFIG.get("fps", 30)
-    camera_index = DEFAULT_CONFIG["camera_index"]
-    acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
-    desired_width = DEFAULT_CONFIG.get("frame_width", None)
-    desired_height = DEFAULT_CONFIG.get("frame_height", None)
-
     # Capture a frame from the source
     @abstractmethod
     def detect_person(self, frame) -> list:  # bboxes
@@ -224,7 +217,7 @@ class Tracker:
         bboxes_by_host: dict = {host: [] for host, _ in self.frame_order}
 
         if 1 == len(self.frame_order):
-            host: str = list(bboxes_by_host.keys())[0]
+            (host, _) = self.frame_order[0]
             self._bboxes = {host: raw_bboxes}
             return
 
