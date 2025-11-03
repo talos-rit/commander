@@ -325,7 +325,7 @@ class Tracker:
         if conn is not None:
             return conn.shape
 
-    def get_bbox(self):  # -> list[Any] | None:
+    def get_bbox(self):
         return self._bboxes
 
     def draw_visuals(self, bounding_box, frame):  # -> Any:
