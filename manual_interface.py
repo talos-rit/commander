@@ -316,20 +316,8 @@ class ManualInterface(tkinter.Tk):
                 f"[ERROR] No connection found for active connection: {self.active_connection}"
             )
             return
-        publisher = connectionData.publisher
-        match direction:
-            case Direction.UP:
-                publisher.polar_pan_discrete(0, 10, 1000, 3000)
-                print("Polar pan discrete up")
-            case Direction.DOWN:
-                publisher.polar_pan_discrete(0, -10, 1000, 3000)
-                print("Polar pan discrete down")
-            case Direction.LEFT:
-                publisher.polar_pan_discrete(-10, 0, 1000, 3000)
-                print("Polar pan discrete left")
-            case Direction.RIGHT:
-                publisher.polar_pan_discrete(10, 0, 1000, 3000)
-                print("Polar pan discrete right")
+        publisher: Publisher = connectionData.publisher
+        publisher.move_in_direction_polar_discrete(direction)
 
     def stop_move(self, direction: Direction) -> None:
         """Stops a movement going the current direction.
