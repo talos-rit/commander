@@ -18,6 +18,7 @@ class MediaPipePoseModel(ObjectModel):
     lost_threshold = 100
     speaker_color = None
     color_threshold = 15
+    speaker_bbox: tuple[int, int, int, int] | None = None
 
     def __init__(
         self,

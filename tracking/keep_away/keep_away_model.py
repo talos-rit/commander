@@ -22,6 +22,7 @@ class KeepAwayModel(ObjectModel):
     keep_away_mode = False
     countdown_start = None
     game_over = True
+    speaker_bbox: tuple[int, int, int, int] | None = None
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
     def __init__(self):
