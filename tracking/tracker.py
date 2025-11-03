@@ -107,7 +107,7 @@ class VideoConnection:
 # Class for handling video feed and object detection model usage
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps: int
+    fps: int = DEFAULT_CONFIG.get("fps", 30)
     acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
     desired_width: int | None = DEFAULT_CONFIG.get("frame_width", None)
     desired_height: int | None = DEFAULT_CONFIG.get("frame_height", None)
@@ -119,7 +119,7 @@ class Tracker:
     _frame_mem: shared_memory.SharedMemory
     _frame_buf: np.ndarray
     _bbox_queue: Queue
-    _detection_process: Process | None
+    _detection_process: Process | None = None
 
     def __init__(
         self,
@@ -435,7 +435,8 @@ class Tracker:
         active_frame = cap.frame
         if self.active_connection is not None:
             bboxes = self._bboxes.get(self.active_connection, None)
-            self.draw_visuals(bboxes, active_frame)
+            if bboxes is not None:
+                self.draw_visuals(bboxes, active_frame)
         return self.conv_cv2_frame_to_tkimage(active_frame)
 
     def set_active_connection(self, connection: str) -> None:
