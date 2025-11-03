@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from tkscheduler import IterativeTask, Scheduler
-from utils import add_termination_handler
+from src.tkscheduler import IterativeTask, Scheduler
+from src.utils import add_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
 

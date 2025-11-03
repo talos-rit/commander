@@ -2,7 +2,7 @@ from enum import IntEnum
 
 from connections import Connection
 from icd_config import Command, CTypesInt, toBytes
-from tkscheduler import Scheduler
+from src.tkscheduler import Scheduler
 
 
 class Direction(IntEnum):

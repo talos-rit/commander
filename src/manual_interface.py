@@ -6,12 +6,12 @@ from threading import Thread
 import customtkinter
 from PIL import Image, ImageDraw, ImageTk
 
-from config import CONFIG, load_config
 from connection_manager import ConnectionData, ConnectionManager
-from publisher import Direction, Publisher
-from tkscheduler import Scheduler
+from src.config import CONFIG, load_config
+from src.publisher import Direction, Publisher
+from src.tkscheduler import Scheduler
+from src.utils import start_termination_guard, terminate
 from tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
-from utils import start_termination_guard, terminate
 
 # Temporary hardcoded index to until config can be passed in on initialization
 TEMP_CONFIG = CONFIG["unctalos.student.rit.edu"]

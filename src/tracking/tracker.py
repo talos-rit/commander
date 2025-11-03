@@ -6,9 +6,9 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from config import DEFAULT_CONFIG
-from tkscheduler import IterativeTask, Scheduler
-from utils import (
+from src.config import DEFAULT_CONFIG
+from src.tkscheduler import IterativeTask, Scheduler
+from src.utils import (
     add_termination_handler,
     calculate_acceptable_box,
     calculate_center_bbox,

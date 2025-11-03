@@ -3,8 +3,8 @@ import multiprocessing
 
 import cv2
 
-from directors.continuous_director import ContinuousDirector
-from manual_interface import ManualInterface
+from src.directors.continuous_director import ContinuousDirector
+from src.manual_interface import ManualInterface
 
 
 def main() -> None:
@@ -29,7 +29,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.no_interface == "true":
-        from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
+        raise NotImplementedError("No interface feature is currently unsupported")
+        from src.tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
 
         tracker = MediaPipePoseModel(None, source=args.source)
         # tracker = MediaPipeTracker(args.source, get_file_path("./config.yaml"))

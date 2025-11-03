@@ -1,12 +1,13 @@
 import time
 
-from config import CONFIG as CONFIGS
 from directors.base_director import BaseDirector
-from publisher import Publisher
-from utils import calculate_acceptable_box, calculate_center_bbox
+from src.config import CONFIG as CONFIGS
+from src.publisher import Publisher
+from src.utils import calculate_acceptable_box, calculate_center_bbox
 
 # Temporary hardcoded index to until config can be passed in on initialization
 CONFIG = CONFIGS["unctalos.student.rit.edu"]
+
 
 class ContinuousDirector(BaseDirector):
     confirmation_delay = CONFIG["confirmation_delay"]

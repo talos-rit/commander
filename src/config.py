@@ -1,17 +1,19 @@
 import os
+
 import yaml
 
-from utils import get_file_path
+from src.utils import get_file_path
 
-CONFIG_PATH = get_file_path(os.path.join(
-    os.path.dirname(__file__), "config/config.local.yaml"
-))
-DEFAULT_PATH = get_file_path(os.path.join(
-    os.path.dirname(__file__), "config/default_config.yaml"
-))
-LOCAL_DEFAULT_PATH = get_file_path(os.path.join(
-    os.path.dirname(__file__), "config/default_config.local.yaml"
-))
+CONFIG_PATH = get_file_path(
+    os.path.join(os.path.dirname(__file__), "config/config.local.yaml")
+)
+DEFAULT_PATH = get_file_path(
+    os.path.join(os.path.dirname(__file__), "config/default_config.yaml")
+)
+LOCAL_DEFAULT_PATH = get_file_path(
+    os.path.join(os.path.dirname(__file__), "config/default_config.local.yaml")
+)
+
 
 def load_default_config():
     """
@@ -26,6 +28,7 @@ def load_default_config():
             default_config = yaml.safe_load(f)
     return default_config
 
+
 def load_config():
     """
     Load the configuration from config/config.local.yaml if it exists,
@@ -34,8 +37,9 @@ def load_config():
     config = dict()
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, "r") as f:
-          config = yaml.safe_load(f)
+            config = yaml.safe_load(f)
     return config
+
 
 def add_config(socket_host: str, port: int, camera_index: int):
     """
@@ -47,7 +51,9 @@ def add_config(socket_host: str, port: int, camera_index: int):
     Does not overwrite existing configurations.
     """
     base_dir = os.path.dirname(__file__)
-    local_config_path = get_file_path(os.path.join(base_dir, "config/config.local.yaml"))
+    local_config_path = get_file_path(
+        os.path.join(base_dir, "config/config.local.yaml")
+    )
 
     # Load the default configuration
     local_config_data = load_default_config()
@@ -66,10 +72,12 @@ def add_config(socket_host: str, port: int, camera_index: int):
     if os.path.exists(local_config_path):
         with open(local_config_path, "r") as f:
             config = yaml.safe_load(f) or {}
-    
+
     # Cancel if overwriting an existing configuration
     if config.get(socket_host):
-        print(f"[WARNING] Configuration for '{socket_host}' already exists in config.local.yaml, not overwriting")
+        print(
+            f"[WARNING] Configuration for '{socket_host}' already exists in config.local.yaml, not overwriting"
+        )
         return
 
     # Add the new configuration and write back to file
@@ -82,6 +90,7 @@ def add_config(socket_host: str, port: int, camera_index: int):
     CONFIG = load_config()
 
     return config
+
 
 # Set global variables
 CONFIG = load_config()
