@@ -11,8 +11,9 @@ class BaseDirector(ABC):
     scheduler: Scheduler | None
     control_task: IterativeTask | None = None
 
-    def __init__(self, tracker, scheduler: Scheduler | None = None):
+    def __init__(self, tracker, connections, scheduler: Scheduler | None = None):
         self.tracker = tracker
+        self.connections = connections
         self.scheduler = scheduler
         self.frame_shape = self.tracker.get_frame_shape()
 

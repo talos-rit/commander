@@ -46,9 +46,8 @@ class ManualInterface(tkinter.Tk):
     pressed_keys: set[Direction] = set()
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
 
-    # Flags for director loop
+    # Flags for display loop
     run_display_loop = False
-    director_thread = None
     director = None  # BaseDirector
 
     def __init__(self) -> None:
@@ -492,7 +491,7 @@ class ManualInterface(tkinter.Tk):
             return
         print(f"Entering {option}")
         model_class, director_class = USABLE_MODELS[option]
-        self.director = director_class(self.tracker, self.scheduler)
+        self.director = director_class(self.tracker, self.connections, self.scheduler)
         self.tracker.swap_model(model_class)
 
     # def toggle_continuous_mode(self) -> None:
