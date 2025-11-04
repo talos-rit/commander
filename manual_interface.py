@@ -61,7 +61,7 @@ class ManualInterface(tkinter.Tk):
         self.last_key_presses = {}
 
         self.config = load_config()
-        self.connections = {}
+        self.connections = dict()
         self.active_connection = None
         self.tracker = Tracker(self.connections, scheduler=self.scheduler)
         self.no_signal_display = self.draw_no_signal_display()
@@ -259,10 +259,11 @@ class ManualInterface(tkinter.Tk):
             f"Opening connection to {hostname} on port {port}, with the camera at {camera}"
         )
         publisher = Publisher(hostname, port)
-        self.connections[hostname] = ConnectionData(hostname, port, publisher)
+        conn = ConnectionData(hostname, port, camera, publisher)
+        self.connections[hostname] = conn
         self.set_active_connection(hostname)
         self.update_connection_menu(new_selection=hostname)
-        self.tracker.add_capture(hostname, camera)
+        self.tracker.add_capture(hostname, camera, conn.fps)
         publisher.start_socket_connection(self.scheduler)
         if not self.run_display_loop:
             self.after("idle", self.start_display_loop)
