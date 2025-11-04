@@ -26,7 +26,7 @@ You can also opt in to install several other object detection models.
     * Run `uv sync --extra yolo`
     * This will add the yolo model option in the model dropdown menu
 3. all
-    * Run `uv sync --extra all`
+    * Run `uv sync --all-extras`
     * This will add all of the extra model options in the dropdown menu
 
 ### Creating an executable

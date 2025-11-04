@@ -24,8 +24,12 @@ class BaseDirector(ABC):
 
     def track_obj(self) -> Any | None:
         bbox = self.tracker.get_bbox()
-        if bbox is not None:
+        if bbox is not None and len(bbox) > 0:
             return self.process_frame(bbox, self.frame_shape)
+        else:
+            print(
+                "Boundary box not found. Make sure the object recognition is running."
+            )
 
     def start_auto_control(self) -> None:
         if self.scheduler is not None:
