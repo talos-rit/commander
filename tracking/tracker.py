@@ -79,7 +79,14 @@ class VideoConnection:
         if self.cap is None:
             self.cap = cv2.VideoCapture(self.src)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
-        _, frame = self.cap.read()
+        frame = None
+        for _ in range(6):
+            ret, frame = self.cap.read()
+            if ret and frame is not None:
+                break
+        else:
+            print("Unable to pull frame from camera")
+            return
         self.frame = frame
         self.shape = frame.shape
         self.dtype = frame.dtype
