@@ -418,8 +418,10 @@ class Tracker:
             )
         return frame
 
-    def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage:
+    def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
         """Convert frame to tkinter image"""
+        if frame is None:
+            return None
         frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(frame_rgb)
 
