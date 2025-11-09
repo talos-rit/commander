@@ -23,7 +23,10 @@ class Scheduler:
         self.root = root
 
     def set_timeout(self, ms, func, *args):
-        self.root.after(int(ms), func, *args)
+        if isinstance(ms, str) and ms.lower() == "idle":
+            self.root.after_idle(func, *args)
+        else:
+            self.root.after(int(ms), func, *args)
 
     def set_interval(self, ms, func, *args):
         return IterativeTask(self.root, int(ms), func, *args)
