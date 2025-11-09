@@ -2,6 +2,7 @@ import time
 import tkinter
 from enum import StrEnum
 from threading import Thread
+from typing import Literal
 
 import customtkinter
 from PIL import Image, ImageDraw, ImageTk
@@ -42,13 +43,11 @@ class ManualInterface(tkinter.Tk):
     """
 
     scheduler: Scheduler
+    director = None 
+    run_display_loop = False # Flag for display loop
 
     pressed_keys: set[Direction] = set()
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
-
-    # Flags for display loop
-    run_display_loop = False
-    director = None  # BaseDirector
 
     def __init__(self) -> None:
         """Constructor sets up tkinter manual interface, including buttons and labels"""
@@ -62,11 +61,10 @@ class ManualInterface(tkinter.Tk):
 
         self.config = load_config()
         self.connections = dict()
-        self.active_connection = None
+        self.active_connection: None | str = None
         self.tracker = Tracker(self.connections, scheduler=self.scheduler)
         self.no_signal_display = self.draw_no_signal_display()
 
-        self.manual_mode = tkinter.BooleanVar(value=True)  # Control mode
         self.continuous_mode = tkinter.BooleanVar(value=True)  # continuous/discrete
         self.toggle_group = tkinter.Frame(self)
         self.toggle_group.grid(row=1, column=0)
@@ -78,6 +76,7 @@ class ManualInterface(tkinter.Tk):
             command=self.toggle_command_mode,
         )
         self.automatic_button.pack(side="top", anchor="w", pady=5)
+        self.automatic_button.configure(state="disabled")
 
         self.cont_toggle_button = customtkinter.CTkSwitch(
             self.toggle_group,
@@ -148,6 +147,7 @@ class ManualInterface(tkinter.Tk):
         self.bind_button(self.right_button, Direction.RIGHT)
 
         self.setup_keyboard_controls()
+        self.toggle_controls("disabled")
 
         # Setting up integrated video
         # Create a label that will display video frames.
@@ -167,10 +167,11 @@ class ManualInterface(tkinter.Tk):
             font=("Cascadia Code", 16),
         ).pack(side="top", anchor="w")
 
+        options = ["None"] + MODEL_OPTIONS
         customtkinter.CTkOptionMenu(
             self.model_frame,
             variable=tkinter.StringVar(value="None"),
-            values=MODEL_OPTIONS,
+            values=options,
             command=self.set_mode,
             width=150,
             button_color="#4c4c4c",
@@ -263,9 +264,16 @@ class ManualInterface(tkinter.Tk):
         self.connections[hostname] = conn
         self.set_active_connection(hostname)
         self.update_connection_menu(new_selection=hostname)
-        self.tracker.add_capture(hostname, camera, conn.fps)
+        frame_shape = self.tracker.add_capture(hostname, camera, conn.fps)
+        conn.set_frame_shape(frame_shape)
         publisher.start_socket_connection(self.scheduler)
+        if self.director is not None:
+            self.tracker.start_detection_process()
+            if frame_shape is not None:
+                self.director.frame_shapes[hostname] = frame_shape
+            self.automatic_button.configure(state="normal")
         if not self.run_display_loop:
+            self.toggle_controls("normal")
             self.after("idle", self.start_display_loop)
 
     def open_all_configured(self) -> None:
@@ -288,6 +296,10 @@ class ManualInterface(tkinter.Tk):
         self.set_active_connection(None)
         if not self.connections:
             self.run_display_loop = False
+            self.automatic_button.configure(state="disabled")
+            self.toggle_controls("disabled")
+            if self.director is not None:
+                self.director.stop_auto_control()
         self.update_connection_menu()
 
     def start_move(self, direction: Direction) -> None:
@@ -296,7 +308,7 @@ class ManualInterface(tkinter.Tk):
         Args:
             direction (string): global variables for directional commands are provided at the top of this file
         """
-        if not self.manual_mode.get() or self.active_connection is None:
+        if not self.get_active_connection().manual or self.active_connection is None:
             return
         self.last_key_presses[direction] = time.time()
 
@@ -325,7 +337,7 @@ class ManualInterface(tkinter.Tk):
         Args:
             direction (string): global variables for directional commands are provided at the top of this file
         """
-        if not (self.manual_mode.get() and direction in self.pressed_keys):
+        if not (self.get_active_connection().manual and direction in self.pressed_keys):
             return
         if direction in self.last_key_presses:
             last_pressed_time = self.last_key_presses[direction]
@@ -407,7 +419,7 @@ class ManualInterface(tkinter.Tk):
 
     def move_home(self) -> None:
         """Moves the robotic arm from its current location to its home position"""
-        connectionData = self.connections.get(self.active_connection)
+        connectionData = self.get_active_connection()
         if connectionData is None:
             print(
                 f"[ERROR] No connection found for active connection: {self.active_connection}"
@@ -424,6 +436,13 @@ class ManualInterface(tkinter.Tk):
         if option is None and self.connections:
             self.active_connection = self.connections[next(iter(self.connections))]
         self.active_connection = option
+        if self.active_connection is not None:
+            self.automatic_button.deselect() if self.get_active_connection().manual else self.automatic_button.select()
+        else:
+            self.automatic_button.deselect()
+
+    def get_active_connection(self) -> ConnectionData:
+        return self.connections[self.active_connection]
 
     def update_connection_menu(self, new_selection=None):
         """Refresh dropdown menu to show the latest connections"""
@@ -453,7 +472,6 @@ class ManualInterface(tkinter.Tk):
     def start_display_loop(self) -> None:
         self.run_display_loop = True
         self.last_mode = None
-        self.change_model()  # start model
         if self.active_connection is not None:
             self.tracker.set_active_connection(self.active_connection)
         self.after(0, self.display_loop)
@@ -485,15 +503,22 @@ class ManualInterface(tkinter.Tk):
             self.tracker.stop_detection_process()
             self.director.stop_auto_control()
             self.director = None
-        if option is None or option not in USABLE_MODELS:
+        if option is None:
+            print("Disabling model")
+            self.automatic_button.configure(state="disabled")
+            self.tracker.swap_model(None)
+            return
+        if option not in USABLE_MODELS:
             print(
-                f"Model option was None or Not found skipping initialization... (found {option})"
+                f"Model option was not found skipping initialization... (found {option})"
             )
             return
         print(f"Entering {option}")
         model_class, director_class = USABLE_MODELS[option]
         self.director = director_class(self.tracker, self.connections, self.scheduler)
         self.tracker.swap_model(model_class)
+        if self.connections:
+            self.automatic_button.configure(state="normal")
 
     # def toggle_continuous_mode(self) -> None:
     #     self.continuous_mode = not self.continuous_mode
@@ -507,18 +532,14 @@ class ManualInterface(tkinter.Tk):
         """Toggles command mode between manual mode and automatic mode.
         Disables all other controls when in automatic mode.
         """
-        self.manual_mode.set(not self.manual_mode.get())
+        connection = self.get_active_connection()
+        connection.set_manual(not connection.manual)
 
-        if self.manual_mode.get():
+        if connection.manual:
             if self.director is not None:
                 self.director.stop_auto_control()
 
-            self.up_button.config(state="normal")
-            self.down_button.config(state="normal")
-            self.left_button.config(state="normal")
-            self.right_button.config(state="normal")
-
-            self.home_button.config(state="normal")
+            self.toggle_controls("normal")
 
             self.run_display_loop = False
             self.pressed_keys = set()
@@ -529,12 +550,7 @@ class ManualInterface(tkinter.Tk):
         else:
             print("director not found")
 
-        self.up_button.config(state="disabled")
-        self.down_button.config(state="disabled")
-        self.left_button.config(state="disabled")
-        self.right_button.config(state="disabled")
-
-        self.home_button.config(state="disabled")
+        self.toggle_controls("disabled")
 
         self.pressed_keys = {
             Direction.UP,
@@ -542,6 +558,21 @@ class ManualInterface(tkinter.Tk):
             Direction.LEFT,
             Direction.RIGHT,
         }
+
+    def toggle_controls(self, state: Literal['normal', 'active', 'disabled']) -> None:
+        """Enables or disables all manual control buttons.
+
+        Args:
+            state (string): "normal" or "disabled", the state to set all buttons to.
+        """
+        if state not in ("normal", "active", "disabled"):
+            raise ValueError(f"Invalid state: {state!r}")
+
+        self.up_button.config(state=state)
+        self.down_button.config(state=state)
+        self.left_button.config(state=state)
+        self.right_button.config(state=state)
+        self.home_button.config(state=state)
 
     def destroy(self):
         terminate(0, 0)

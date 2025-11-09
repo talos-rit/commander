@@ -77,7 +77,12 @@ class VideoConnection:
 
     def __post_init__(self):
         if self.cap is None:
-            self.cap = cv2.VideoCapture(self.src)
+            source = None
+            try:
+                source = int(self.src)
+            except ValueError:
+                source = self.src
+            self.cap = cv2.VideoCapture(source)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
         frame = None
         for _ in range(6):
@@ -140,12 +145,19 @@ class Tracker:
         self.model = model
         for host, conn in connections.items():
             self.fps = max(self.fps, conn.fps)
-            self.add_capture(host, conn.camera, conn.fps)
+            frame_shape = self.add_capture(host, conn.camera, conn.fps)
+            conn.set_frame_shape(frame_shape)
         self.frame_delay = 1000 / self.fps
 
-    def add_capture(self, host: str, camera: str | int, fps: int) -> None:
+    def add_capture(self, host: str, camera: str | int, fps: int) -> tuple | None:
         """Adds a new video capture for a given host.
         If the detection process is running this will restart it.
+        Parameters:
+        - host: unique identifier for the video source
+        - camera: video source (file path or camera index)
+        - fps: frames per second for the video source
+        Returns:
+        - frame_shape: the frame shape of the video source
         """
         restart = False
         if self._detection_process:
@@ -156,6 +168,7 @@ class Tracker:
         conn.start()
         if restart:
             self.start_detection_process()
+        return conn.shape
 
     def remove_capture(self, host: str | None = None) -> None:
         """Releases video capture for a given host if not all video capture is closed."""
@@ -260,7 +273,7 @@ class Tracker:
             max_height = max(max_height, shape[0])
             self.frame_order.append((host, total_width))
             total_width = total_width + shape[1]
-        return (max_height, total_width)
+        return (max_height, total_width, 3)
 
     def get_nbytes_from_total_shape(self, shape):
         """Given total frame shape, calculate nbytes for shared memory.
@@ -332,7 +345,7 @@ class Tracker:
         if conn is not None:
             return conn.shape
 
-    def get_bbox(self):
+    def get_bboxes(self):
         return self._bboxes
 
     def draw_visuals(self, bounding_box, frame):  # -> Any:
@@ -466,4 +479,5 @@ class Tracker:
             print("Failed to stop detection model")
             return
         self.model = new_model
-        self.start_detection_process()
+        if self.captures: # do not start detection process if there are no captures
+            self.start_detection_process()

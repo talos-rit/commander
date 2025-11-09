@@ -13,23 +13,32 @@ class BaseDirector(ABC):
 
     def __init__(self, tracker, connections, scheduler: Scheduler | None = None):
         self.tracker = tracker
-        self.connections = connections
         self.scheduler = scheduler
-        self.frame_shape = self.tracker.get_frame_shape()
+        self.frame_shapes: dict[str, tuple] = dict()
+        for conn in connections.values():
+            shape = conn.shape
+            if shape is not None:
+                self.frame_shapes[conn.host] = shape
+            else:
+                print(
+                    f"Warning: Connection {conn.host} has no frame shape set. "
+                    "Make sure the video capture is properly initialized."
+                )
 
     # Processes the bounding box and sends commands
     @abstractmethod
-    def process_frame(self, bounding_box: list, frame_shape) -> Any:
+    def process_frame(self, bounding_box: list, frame_shape: tuple) -> Any:
         raise NotImplementedError("Subclasses must implement this method.")
 
     def track_obj(self) -> Any | None:
-        bbox = self.tracker.get_bbox()
-        if bbox is not None and len(bbox) > 0:
-            return self.process_frame(bbox, self.frame_shape)
-        else:
-            print(
-                "Boundary box not found. Make sure the object recognition is running."
-            )
+        bboxes = self.tracker.get_bboxes()
+        for host, bbox in bboxes.items():
+            if bbox is not None and len(bbox) > 0:
+                return self.process_frame(bbox, self.frame_shapes[host])
+            else:
+                print(
+                    "Boundary box not found. Make sure the object recognition is running."
+                )
 
     def start_auto_control(self) -> None:
         if self.scheduler is not None:
