@@ -196,6 +196,9 @@ class ManualInterface(tkinter.Tk):
         self.manageConnectionsButton.grid(row=2, column=6, padx=10)
 
         self.selectedConnection = tkinter.StringVar(value="None")
+        self.selectedConnection.trace_add(
+            "write", lambda *args: self.set_active_connection(self.selectedConnection.get())
+        )
         initial_options = self.connections if self.connections else ["None"]
 
         self.connectionMenu = tkinter.OptionMenu(
@@ -263,7 +266,6 @@ class ManualInterface(tkinter.Tk):
         conn = ConnectionData(hostname, port, camera, publisher)
         self.connections[hostname] = conn
         self.set_active_connection(hostname)
-        self.update_connection_menu(new_selection=hostname)
         frame_shape = self.tracker.add_capture(hostname, camera, conn.fps)
         conn.set_frame_shape(frame_shape)
         publisher.start_socket_connection(self.scheduler)
@@ -271,10 +273,6 @@ class ManualInterface(tkinter.Tk):
             self.tracker.start_detection_process()
             if frame_shape is not None:
                 self.director.frame_shapes[hostname] = frame_shape
-            self.automatic_button.configure(state="normal")
-        if not self.run_display_loop:
-            self.toggle_controls("normal")
-            self.after("idle", self.start_display_loop)
 
     def open_all_configured(self) -> None:
         """Loads all connections from the config file."""
@@ -293,14 +291,13 @@ class ManualInterface(tkinter.Tk):
         self.tracker.remove_capture(hostname)
         self.connections[hostname].publisher.close_connection()
         self.connections.pop(hostname)
-        self.set_active_connection(None)
+        if self.active_connection == hostname:
+            self.remove_active_connection()
+        else:
+            self.update_connection_menu()
         if not self.connections:
-            self.run_display_loop = False
-            self.automatic_button.configure(state="disabled")
-            self.toggle_controls("disabled")
             if self.director is not None:
                 self.director.stop_auto_control()
-        self.update_connection_menu()
 
     def start_move(self, direction: Direction) -> None:
         """Moves the robotic arm a static number of degrees per second.
@@ -445,13 +442,38 @@ class ManualInterface(tkinter.Tk):
         ConnectionManager(self, self.connections)
 
     def set_active_connection(self, option) -> None:
-        if option is None and self.connections:
-            self.active_connection = self.connections[next(iter(self.connections))]
+        if option == self.active_connection or option == "None":
+            return
         self.active_connection = option
-        if self.active_connection is not None:
-            self.automatic_button.deselect() if self.get_active_connection().manual else self.automatic_button.select()
+        self.tracker.set_active_connection(option)
+        self.update_ui()
+    
+    def remove_active_connection(self) -> None:
+        if self.connections:
+            self.set_active_connection(self.connections[next(iter(self.connections))].host)
         else:
+            self.active_connection = None
+            self.tracker.remove_active_connection()
+            self.update_ui()
+    
+    def update_ui(self) -> None:
+        if not self.connections:
+            self.toggle_controls("disabled")
             self.automatic_button.deselect()
+            self.automatic_button.configure(state="disabled")
+            self.run_display_loop = False
+            self.update_connection_menu()
+        else:
+            if self.get_active_connection().manual:
+                self.toggle_controls("normal")
+                self.automatic_button.deselect()
+            else:
+                self.toggle_controls("disabled")
+                self.automatic_button.select()
+            self.update_connection_menu(self.active_connection)
+            if not self.run_display_loop:
+                print("STARTING DISPLAY LOOP")
+                self.after("idle", self.start_display_loop)
 
     def get_active_connection(self) -> ConnectionData:
         return self.connections[self.active_connection]
@@ -483,9 +505,6 @@ class ManualInterface(tkinter.Tk):
 
     def start_display_loop(self) -> None:
         self.run_display_loop = True
-        self.last_mode = None
-        if self.active_connection is not None:
-            self.tracker.set_active_connection(self.active_connection)
         self.after(0, self.display_loop)
 
     def display_loop(self) -> None:
@@ -497,6 +516,8 @@ class ManualInterface(tkinter.Tk):
         img = self.tracker.create_imagetk()
         if img is not None:
             self.update_display(img)
+        else:
+            self.update_display(self.no_signal_display)
         self.after(20, self.display_loop)
 
     def set_mode(self, new_mode) -> None:
@@ -553,7 +574,6 @@ class ManualInterface(tkinter.Tk):
 
             self.toggle_controls("normal")
 
-            self.run_display_loop = False
             self.pressed_keys = set()
             return
 
