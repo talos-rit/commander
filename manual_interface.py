@@ -270,9 +270,8 @@ class ManualInterface(tkinter.Tk):
         conn.set_frame_shape(frame_shape)
         publisher.start_socket_connection(self.scheduler)
         if self.director is not None:
-            self.tracker.start_detection_process()
             if frame_shape is not None:
-                self.director.frame_shapes[hostname] = frame_shape
+                self.director.add_control_feed(hostname, conn.manual, frame_shape)
 
     def open_all_configured(self) -> None:
         """Loads all connections from the config file."""
@@ -295,9 +294,8 @@ class ManualInterface(tkinter.Tk):
             self.remove_active_connection()
         else:
             self.update_connection_menu()
-        if not self.connections:
-            if self.director is not None:
-                self.director.stop_auto_control()
+        if self.director is not None:
+            self.director.remove_control_feed(hostname)
 
     def start_move(self, direction: Direction) -> None:
         """Moves the robotic arm a static number of degrees per second.
@@ -464,6 +462,8 @@ class ManualInterface(tkinter.Tk):
             self.run_display_loop = False
             self.update_connection_menu()
         else:
+            if self.director is not None:
+                self.automatic_button.configure(state="normal")
             if self.get_active_connection().manual:
                 self.toggle_controls("normal")
                 self.automatic_button.deselect()
@@ -472,7 +472,6 @@ class ManualInterface(tkinter.Tk):
                 self.automatic_button.select()
             self.update_connection_menu(self.active_connection)
             if not self.run_display_loop:
-                print("STARTING DISPLAY LOOP")
                 self.after("idle", self.start_display_loop)
 
     def get_active_connection(self) -> ConnectionData:
@@ -533,7 +532,6 @@ class ManualInterface(tkinter.Tk):
 
     def change_model(self, option: str | None = None) -> None:
         if self.director is not None:
-            self.tracker.stop_detection_process()
             self.director.stop_auto_control()
             self.director = None
         if option is None:
@@ -570,7 +568,7 @@ class ManualInterface(tkinter.Tk):
 
         if connection.manual:
             if self.director is not None:
-                self.director.stop_auto_control()
+                self.director.update_control_feed(connection.host, True)
 
             self.toggle_controls("normal")
 
@@ -578,7 +576,7 @@ class ManualInterface(tkinter.Tk):
             return
 
         if self.director is not None:
-            self.director.start_auto_control()
+            self.director.update_control_feed(connection.host, False)
         else:
             print("director not found")
 

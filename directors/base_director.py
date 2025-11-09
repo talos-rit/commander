@@ -1,11 +1,18 @@
 from abc import ABC, abstractmethod
 from typing import Any
+from dataclasses import dataclass
 
 from tkscheduler import IterativeTask, Scheduler
 from utils import add_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
 
+
+@dataclass
+class ControlFeed:
+    host: str
+    manual: bool
+    frame_shape: tuple
 
 class BaseDirector(ABC):
     scheduler: Scheduler | None
@@ -14,16 +21,34 @@ class BaseDirector(ABC):
     def __init__(self, tracker, connections, scheduler: Scheduler | None = None):
         self.tracker = tracker
         self.scheduler = scheduler
-        self.frame_shapes: dict[str, tuple] = dict()
+        self.control_feeds: dict[str, ControlFeed] = dict()
         for conn in connections.values():
             shape = conn.shape
             if shape is not None:
-                self.frame_shapes[conn.host] = shape
+                self.control_feeds[conn.host] = ControlFeed(
+                    host=conn.host, manual=conn.manual, frame_shape=shape
+                )
             else:
                 print(
                     f"Warning: Connection {conn.host} has no frame shape set. "
                     "Make sure the video capture is properly initialized."
                 )
+        if self.control_feeds:
+            self.start_auto_control()
+
+    def add_control_feed(self, host: str, manual: bool, frame_shape: tuple) -> None:
+        self.control_feeds[host] = ControlFeed(
+            host=host, manual=manual, frame_shape=frame_shape
+        )
+        if self.scheduler is not None and self.control_task is None:
+            self.start_auto_control()
+
+    def remove_control_feed(self, host: str) -> None:
+        if host in self.control_feeds:
+            del self.control_feeds[host]
+
+    def update_control_feed(self, host: str, manual: bool) -> None:
+        self.control_feeds[host].manual = manual
 
     # Processes the bounding box and sends commands
     @abstractmethod
@@ -34,7 +59,9 @@ class BaseDirector(ABC):
         bboxes = self.tracker.get_bboxes()
         for host, bbox in bboxes.items():
             if bbox is not None and len(bbox) > 0:
-                return self.process_frame(bbox, self.frame_shapes[host])
+                if self.control_feeds[host].manual:
+                    continue  # skip manual feeds
+                return self.process_frame(bbox, self.control_feeds[host].frame_shape)
             else:
                 print(
                     "Boundary box not found. Make sure the object recognition is running."

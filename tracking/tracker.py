@@ -163,6 +163,9 @@ class Tracker:
         if self._detection_process:
             restart = True
             self.stop_detection_process()
+        elif self.model is not None:
+            restart = True
+            #if the detection process was not running because there were no captures, start after adding the first capture
         conn = VideoConnection(src=camera, fps=fps, scheduler=self.scheduler)
         self.captures[host] = conn
         conn.start()
@@ -481,5 +484,5 @@ class Tracker:
             print("Failed to stop detection model")
             return
         self.model = new_model
-        if self.captures: # do not start detection process if there are no captures
+        if self.captures and self.model is not None: # do not start detection process if there are no captures, or if model is None
             self.start_detection_process()
