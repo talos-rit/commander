@@ -266,9 +266,6 @@ class ManualInterface(tkinter.Tk):
         # If camera is not supplied, get it from config
         if camera is None:
             camera = self.config[hostname]["camera_index"]
-        print(
-            f"Opening connection to {hostname} on port {port}, with the camera at {camera}"
-        )
         publisher = Publisher(hostname, port)
         conn = ConnectionData(hostname, port, camera, publisher)
         self.connections[hostname] = conn
@@ -285,7 +282,6 @@ class ManualInterface(tkinter.Tk):
     def open_all_configured(self) -> None:
         """Loads all connections from the config file."""
         for i, hostname in enumerate(self.config):
-            print("Adding connection for", hostname)
             self.scheduler.set_timeout(
                 i * 5000, lambda hostname=hostname: self.open_connection(hostname)
             )
@@ -552,7 +548,6 @@ class ManualInterface(tkinter.Tk):
         self.tracker.swap_model(model_class)
         if self.connections:
             self.automatic_button.configure(state="normal")
-        print(f"{option} initialized")
 
     # def toggle_continuous_mode(self) -> None:
     #     self.continuous_mode = not self.continuous_mode
