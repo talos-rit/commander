@@ -66,12 +66,11 @@ def _detect_person_worker(
 @dataclass
 class VideoConnection:
     src: str | int
-    fps: int = field(default=30)
+    fps: int = field(default=10)
     shape: tuple | None = field(default=None)
     dtype: np.dtype | None = field(default=None)
     cap: cv2.VideoCapture | None = field(default=None, repr=False)
     scheduler: Scheduler | None = field(default=None, repr=False)
-    frame: np.ndarray | None = field(default=None, repr=False)
     task: IterativeTask | None = field(default=None, repr=False)
     video_buffer_size: int = field(default=1)
 
@@ -84,6 +83,7 @@ class VideoConnection:
                 source = self.src
             self.cap = cv2.VideoCapture(source)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
+            add_termination_handler(self.close)
         frame = None
         for _ in range(6):
             ret, frame = self.cap.read()
@@ -92,26 +92,16 @@ class VideoConnection:
         else:
             print("Unable to pull frame from camera")
             return
-        self.frame = frame
         self.shape = frame.shape
         self.dtype = frame.dtype
 
-    def update_frame(self):
+    @property
+    def frame(self) -> np.ndarray | None:
         if self.cap is not None:
             _, frame = self.cap.read()
-            self.frame = frame
-
-    def start(self):
-        if self.scheduler is None:
-            raise ValueError("Scheduler is not set for Connection")
-        self.task = self.scheduler.set_interval(1000 / self.fps, self.update_frame)
-
-    def stop(self):
-        if self.task is not None:
-            self.task.cancel()
+            return frame
 
     def close(self):
-        self.stop()
         if self.cap is not None:
             self.cap.release()
 
@@ -120,8 +110,8 @@ class VideoConnection:
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
     config: dict = load_config()
-    max_fps = 1 # this will be set dynamically based on captures
-    frame_delay: float = 0.0 # same as above
+    max_fps = 1  # this will be set dynamically based on captures
+    frame_delay: float = 0.0  # same as above
     model = None
     captures: dict[str, VideoConnection] = dict()
     frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
@@ -164,11 +154,10 @@ class Tracker:
             self.stop_detection_process()
         elif self.model is not None:
             restart = True
-            #if the detection process was not running because there were no captures, start after adding the first capture
+        # if the detection process was not running because there were no captures, start after adding the first capture
         conn = VideoConnection(src=camera, fps=fps, scheduler=self.scheduler)
         self.captures[host] = conn
         self.update_max_fps()
-        conn.start()
         if restart:
             self.start_detection_process()
         return conn.shape
@@ -322,16 +311,18 @@ class Tracker:
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
             vid = self.captures[host]
-            if vid.frame is not None:
-                np.copyto(self._frame_buf, vid.frame)
+            new_frame = vid.frame
+            if new_frame is not None:
+                np.copyto(self._frame_buf, new_frame)
             return
 
         for host, dx in self.frame_order:
             vid = self.captures[host]
-            if vid.shape is None or vid.frame is None:
+            new_frame = vid.frame
+            if vid.shape is None or new_frame is None:
                 continue
             _, width = vid.shape[:2]
-            self._frame_buf[:, dx : dx + width, ...] = vid.frame[:, :width, ...]
+            self._frame_buf[:, dx : dx + width, ...] = new_frame[:, :width, ...]
 
     def stop_detection_process(self) -> bool:
         """Returns true if process properly closed"""
@@ -431,9 +422,13 @@ class Tracker:
 
     def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
         """Convert frame to tkinter image"""
-        #Load config values
-        desired_height: int | None = self.config[self.active_connection].get("frame_height", None)
-        desired_width: int | None = self.config[self.active_connection].get("frame_width", None)
+        # Load config values
+        desired_height: int | None = self.config[self.active_connection].get(
+            "frame_height", None
+        )
+        desired_width: int | None = self.config[self.active_connection].get(
+            "frame_width", None
+        )
         if frame is None:
             return None
         frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
@@ -495,5 +490,7 @@ class Tracker:
             print("Failed to stop detection model")
             return
         self.model = new_model
-        if self.captures and self.model is not None: # do not start detection process if there are no captures, or if model is None
+        if (
+            self.captures and self.model is not None
+        ):  # do not start detection process if there are no captures, or if model is None
             self.start_detection_process()
