@@ -70,7 +70,6 @@ class VideoConnection:
     shape: tuple | None = field(default=None)
     dtype: np.dtype | None = field(default=None)
     cap: cv2.VideoCapture | None = field(default=None, repr=False)
-    scheduler: Scheduler | None = field(default=None, repr=False)
     task: IterativeTask | None = field(default=None, repr=False)
     video_buffer_size: int = field(default=1)
 
@@ -155,9 +154,9 @@ class Tracker:
         elif self.model is not None:
             restart = True
         # if the detection process was not running because there were no captures, start after adding the first capture
-        conn = VideoConnection(src=camera, fps=fps, scheduler=self.scheduler)
+        conn = VideoConnection(src=camera, fps=fps)
         self.captures[host] = conn
-        self.update_max_fps()
+        # self.update_max_fps()
         if restart:
             self.start_detection_process()
         return conn.shape
@@ -171,7 +170,7 @@ class Tracker:
         if host in self.captures:
             self.captures[host].close()
         del self.captures[host]
-        self.update_max_fps()
+        # self.update_max_fps()
 
     def update_max_fps(self) -> None:
         """Updates the max fps based on current captures."""
@@ -301,6 +300,7 @@ class Tracker:
         return h * w * c * np.dtype(np.uint8).itemsize
 
     def send_latest_frame(self) -> None:
+        print("Sending latest frame to detection process")
         if (
             self._detection_process is not None
             and self._detection_process.is_alive()

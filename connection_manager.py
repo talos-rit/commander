@@ -159,7 +159,7 @@ class ConnectionManager(tkinter.Toplevel):
             except ValueError:
                 print("Port must be an integer between 1 and 65535.")
                 return
-            
+
             camera = int(camera_str) if camera_str.isdigit() else camera_str
 
             popup.destroy()
