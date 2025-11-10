@@ -283,8 +283,6 @@ class ManualInterface(tkinter.Tk):
             self.scheduler.set_timeout(
                 i * 5000, lambda hostname=hostname: self.open_connection(hostname)
             )
-            # self.open_connection(hostname)
-            # print(f"Connection to {hostname} added")
 
     def close_connection(self, hostname: str) -> None:
         """Closes an existing connection.
@@ -548,6 +546,7 @@ class ManualInterface(tkinter.Tk):
         self.tracker.swap_model(model_class)
         if self.connections:
             self.automatic_button.configure(state="normal")
+        print(f"{option} initialized")
 
     # def toggle_continuous_mode(self) -> None:
     #     self.continuous_mode = not self.continuous_mode
