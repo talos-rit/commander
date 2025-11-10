@@ -279,7 +279,7 @@ class ManualInterface(tkinter.Tk):
     def open_all_configured(self) -> None:
         """Loads all connections from the config file."""
         for hostname in self.config:
-            self.scheduler.set_timeout(0, lambda: self.open_connection(hostname))
+            self.scheduler.set_timeout(10, lambda: self.open_connection(hostname))
             # print("Adding connection for", hostname)
             # self.open_connection(hostname)
             # print(f"Connection to {hostname} added")
