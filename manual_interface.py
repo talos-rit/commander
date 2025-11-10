@@ -271,7 +271,7 @@ class ManualInterface(tkinter.Tk):
         publisher.start_socket_connection(self.scheduler)
         if self.director is not None:
             if frame_shape is not None:
-                self.director.add_control_feed(hostname, conn.manual, frame_shape)
+                self.director.add_control_feed(hostname, conn.manual, frame_shape, publisher=publisher)
 
     def open_all_configured(self) -> None:
         """Loads all connections from the config file."""

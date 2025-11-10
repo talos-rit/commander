@@ -3,6 +3,7 @@ from typing import Any
 from dataclasses import dataclass
 
 from tkscheduler import IterativeTask, Scheduler
+from publisher import Publisher
 from utils import add_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
@@ -13,6 +14,7 @@ class ControlFeed:
     host: str
     manual: bool
     frame_shape: tuple
+    publisher: Publisher
 
 class BaseDirector(ABC):
     scheduler: Scheduler | None
@@ -26,7 +28,7 @@ class BaseDirector(ABC):
             shape = conn.shape
             if shape is not None:
                 self.control_feeds[conn.host] = ControlFeed(
-                    host=conn.host, manual=conn.manual, frame_shape=shape
+                    host=conn.host, manual=conn.manual, frame_shape=shape, publisher=conn.publisher
                 )
             else:
                 print(
@@ -36,9 +38,9 @@ class BaseDirector(ABC):
         if self.control_feeds:
             self.start_auto_control()
 
-    def add_control_feed(self, host: str, manual: bool, frame_shape: tuple) -> None:
+    def add_control_feed(self, host: str, manual: bool, frame_shape: tuple, publisher: Publisher) -> None:
         self.control_feeds[host] = ControlFeed(
-            host=host, manual=manual, frame_shape=frame_shape
+            host=host, manual=manual, frame_shape=frame_shape, publisher=publisher
         )
         if self.scheduler is not None and self.control_task is None:
             self.start_auto_control()
@@ -52,7 +54,7 @@ class BaseDirector(ABC):
 
     # Processes the bounding box and sends commands
     @abstractmethod
-    def process_frame(self, bounding_box: list, frame_shape: tuple) -> Any:
+    def process_frame(self, hostname: str, bounding_box: list, frame_shape: tuple, publisher: Publisher) -> Any:
         raise NotImplementedError("Subclasses must implement this method.")
 
     def track_obj(self) -> Any | None:
@@ -61,10 +63,10 @@ class BaseDirector(ABC):
             if bbox is not None and len(bbox) > 0:
                 if self.control_feeds[host].manual:
                     continue  # skip manual feeds
-                return self.process_frame(bbox, self.control_feeds[host].frame_shape)
+                return self.process_frame(host, bbox, self.control_feeds[host].frame_shape, self.control_feeds[host].publisher)
             else:
                 print(
-                    "Boundary box not found. Make sure the object recognition is running."
+                    "[NOTICE]Boundary box not found. Make sure the object recognition is running."
                 )
 
     def start_auto_control(self) -> None:

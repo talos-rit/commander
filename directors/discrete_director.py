@@ -1,6 +1,6 @@
 import time
 
-from config import CONFIG as CONFIGS
+from config import load_config
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import (
@@ -8,21 +8,21 @@ from utils import (
     calculate_center_bbox,
 )
 
-# Temporary hardcoded index to until config can be passed in on initialization
-CONFIG = CONFIGS["unctalos.student.rit.edu"]
 
 class DiscreteDirector(BaseDirector):
-    horizontal_field_of_view = CONFIG["horizontal_field_of_view"]
-    vertical_field_of_view = CONFIG["vertical_field_of_view"]
-    confirmation_delay = CONFIG["confirmation_delay"]
-    command_delay = CONFIG["command_delay"]
+    config = load_config()
     last_command_time = 0  # Track the time of the last command
 
     # Time when the person first moved outside the box
     movement_detection_start_time = None
 
     # This method is called to process each frame
-    def process_frame(self, bounding_box: list, frame_shape):
+    def process_frame(self, hostname: str, bounding_box: list, frame_shape, publisher: Publisher):
+        # Load config values
+        horizontal_field_of_view = self.config[hostname]["horizontal_field_of_view"]
+        vertical_field_of_view = self.config[hostname]["vertical_field_of_view"]
+        confirmation_delay = self.config[hostname]["confirmation_delay"]
+        command_delay = self.config[hostname]["command_delay"]
         # Do something with the frame
 
         # Getting frame width and frame height
@@ -58,7 +58,7 @@ class DiscreteDirector(BaseDirector):
             # Check if they've been outside for at least the confirmation delay
             if (
                 current_time - self.movement_detection_start_time
-                < self.confirmation_delay
+                < confirmation_delay
             ):
                 return
 
@@ -80,29 +80,29 @@ class DiscreteDirector(BaseDirector):
                 change_in_y = bbox_center_y - acceptable_box_bottom
 
             if change_in_x != 0 and (
-                current_time - self.last_command_time >= self.command_delay
+                current_time - self.last_command_time >= command_delay
                 or self.last_command_time == 0
             ):
-                horizontal_dpp = self.horizontal_field_of_view / frame_width
+                horizontal_dpp = horizontal_field_of_view / frame_width
                 rotation = -(change_in_x * horizontal_dpp)
                 print(rotation)
                 rotation = int(round(rotation))
-                Publisher.polar_pan_discrete(rotation, 0, 0, 3000)
+                publisher.polar_pan_discrete(rotation, 0, 0, 3000)
                 self.last_command_time = current_time
                 self.movement_detection_start_time = None
 
             if change_in_y == 0:
                 return
             if (
-                current_time - self.last_command_time >= self.command_delay
+                current_time - self.last_command_time >= command_delay
                 or self.last_command_time == 0
             ):
-                vertical_dpp = self.vertical_field_of_view / frame_height
+                vertical_dpp = vertical_field_of_view / frame_height
                 rotation = change_in_y * vertical_dpp
                 print(rotation)
                 rotation = int(round(rotation))
-                # Publisher.rotate_altitude(rotation)
-                # Publisher.polar_pan_discrete(0, rotation, 0, 3000)
+                # publisher.rotate_altitude(rotation)
+                # publisher.polar_pan_discrete(0, rotation, 0, 3000)
                 self.last_command_time = current_time
                 self.movement_detection_start_time = None
         else:

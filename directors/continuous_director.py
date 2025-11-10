@@ -1,28 +1,27 @@
 import time
 
-from config import CONFIG as CONFIGS
+from config import load_config
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import calculate_acceptable_box, calculate_center_bbox
 
-# Temporary hardcoded index to until config can be passed in on initialization
-CONFIG = CONFIGS["unctalos.student.rit.edu"]
 
 class ContinuousDirector(BaseDirector):
-    confirmation_delay = CONFIG["confirmation_delay"]
-    command_delay = CONFIG["command_delay"]
+    config = load_config()
     last_command_stop = False  # bool to ensure only one polar_pan_continuous_stop command is sent at a time
     last_command_time = 0  # Track the time of the last command
     # Time when the person first moved outside the box
     movement_detection_start_time = None
 
     # This method is called to process each frame
-    def process_frame(self, bounding_box: list, frame_shape):
+    def process_frame(self, hostname: str, bounding_box: list, frame_shape, publisher: Publisher):
         """
         Based on received bounding box, this method tells the arm where to move the keep the subject in the acceptable box..
         It does this by continuously sending polar pan start and a direction until the subject is in the acceptable box.
         Then it sends a polar pan stop.
         """
+        # Load config values
+        confirmation_delay = self.config[hostname]["confirmation_delay"]
         frame_height = frame_shape[0]
         frame_width = frame_shape[1]
 
@@ -64,7 +63,7 @@ class ContinuousDirector(BaseDirector):
             # Check if they've been outside for at least the confirmation delay
             if (
                 current_time - self.movement_detection_start_time
-                < self.confirmation_delay
+                < confirmation_delay
             ):
                 return
             change_in_x = 0
@@ -91,27 +90,27 @@ class ContinuousDirector(BaseDirector):
                 change_in_y = average - center_bottom
 
             if change_in_x > 0:
-                Publisher.polar_pan_continuous_start(-1, 0)
+                publisher.polar_pan_continuous_start(-1, 0)
                 # print("start")
                 self.last_command_stop = False
             elif change_in_x < 0:
-                Publisher.polar_pan_continuous_start(1, 0)
+                publisher.polar_pan_continuous_start(1, 0)
                 # print("start")
                 self.last_command_stop = False
             elif change_in_y < 0:
-                Publisher.polar_pan_continuous_start(0, 1)
+                publisher.polar_pan_continuous_start(0, 1)
                 # print("start")
                 self.last_command_stop = False
             elif change_in_y > 0:
-                Publisher.polar_pan_continuous_start(0, -1)
+                publisher.polar_pan_continuous_start(0, -1)
                 # print("start")
                 self.last_command_stop = False
             elif not self.last_command_stop:
-                Publisher.polar_pan_continuous_stop()
+                publisher.polar_pan_continuous_stop()
                 self.last_command_stop = True
             return
         if not self.last_command_stop:
-            Publisher.polar_pan_continuous_stop()
+            publisher.polar_pan_continuous_stop()
             print("Stop")
             self.last_command_stop = True
 
