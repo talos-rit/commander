@@ -12,7 +12,12 @@ from connection_manager import ConnectionData, ConnectionManager
 from publisher import Direction, Publisher
 from tkscheduler import Scheduler
 from tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
-from utils import start_termination_guard, terminate
+from utils import (
+    add_termination_handler,
+    remove_termination_handler,
+    start_termination_guard,
+    terminate,
+)
 
 # Temporary hardcoded index to until config can be passed in on initialization
 TEMP_CONFIG = CONFIG["unctalos.student.rit.edu"]
@@ -45,14 +50,15 @@ class ManualInterface(tkinter.Tk):
     scheduler: Scheduler
     director = None
     run_display_loop = False  # Flag for display loop
-
     pressed_keys: set[Direction] = set()
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
+    _term: int | None = None
 
     def __init__(self) -> None:
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
         start_termination_guard()
+        self._term = add_termination_handler(super().destroy)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.scheduler = Scheduler(self)
         self.title("Talos Manual Interface")
@@ -614,5 +620,10 @@ class ManualInterface(tkinter.Tk):
         self.home_button.config(state=state)
 
     def destroy(self):
+        if self._term is not None:
+            # This only gets called by the tkinter, so we can safely remove the termination handler here
+            # to prevent double calls
+            remove_termination_handler(self._term)
+            self._term = None
         terminate(0, 0)
         super().destroy()

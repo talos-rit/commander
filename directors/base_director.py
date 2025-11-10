@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
 
-from tkscheduler import IterativeTask, Scheduler
 from publisher import Publisher
-from utils import add_termination_handler
+from tkscheduler import IterativeTask, Scheduler
+from utils import add_termination_handler, remove_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
 
@@ -16,9 +16,11 @@ class ControlFeed:
     frame_shape: tuple
     publisher: Publisher
 
+
 class BaseDirector(ABC):
     scheduler: Scheduler | None
     control_task: IterativeTask | None = None
+    _term: int | None = None
 
     def __init__(self, tracker, connections, scheduler: Scheduler | None = None):
         self.tracker = tracker
@@ -28,7 +30,10 @@ class BaseDirector(ABC):
             shape = conn.shape
             if shape is not None:
                 self.control_feeds[conn.host] = ControlFeed(
-                    host=conn.host, manual=conn.manual, frame_shape=shape, publisher=conn.publisher
+                    host=conn.host,
+                    manual=conn.manual,
+                    frame_shape=shape,
+                    publisher=conn.publisher,
                 )
             else:
                 print(
@@ -38,7 +43,9 @@ class BaseDirector(ABC):
         if self.control_feeds:
             self.start_auto_control()
 
-    def add_control_feed(self, host: str, manual: bool, frame_shape: tuple, publisher: Publisher) -> None:
+    def add_control_feed(
+        self, host: str, manual: bool, frame_shape: tuple, publisher: Publisher
+    ) -> None:
         self.control_feeds[host] = ControlFeed(
             host=host, manual=manual, frame_shape=frame_shape, publisher=publisher
         )
@@ -54,7 +61,13 @@ class BaseDirector(ABC):
 
     # Processes the bounding box and sends commands
     @abstractmethod
-    def process_frame(self, hostname: str, bounding_box: list, frame_shape: tuple, publisher: Publisher) -> Any:
+    def process_frame(
+        self,
+        hostname: str,
+        bounding_box: list,
+        frame_shape: tuple,
+        publisher: Publisher,
+    ) -> Any:
         raise NotImplementedError("Subclasses must implement this method.")
 
     def track_obj(self) -> Any | None:
@@ -63,7 +76,12 @@ class BaseDirector(ABC):
             if bbox is not None and len(bbox) > 0:
                 if self.control_feeds[host].manual:
                     continue  # skip manual feeds
-                return self.process_frame(host, bbox, self.control_feeds[host].frame_shape, self.control_feeds[host].publisher)
+                return self.process_frame(
+                    host,
+                    bbox,
+                    self.control_feeds[host].frame_shape,
+                    self.control_feeds[host].publisher,
+                )
             else:
                 print(
                     "[NOTICE]Boundary box not found. Make sure the object recognition is running."
@@ -74,7 +92,7 @@ class BaseDirector(ABC):
             self.control_task = self.scheduler.set_interval(
                 1000 / DIRECTOR_CONTROL_RATE, self.track_obj
             )
-            add_termination_handler(self.stop_auto_control)
+            self._term = add_termination_handler(self.stop_auto_control)
         else:
             # TODO: implement this
             raise NotImplementedError("No GUI mode not implemented")
@@ -82,3 +100,6 @@ class BaseDirector(ABC):
     def stop_auto_control(self) -> None:
         if self.control_task is not None:
             self.control_task.cancel()
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
