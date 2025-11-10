@@ -1,9 +1,9 @@
 # This is the default configuration for new connections to the system.
-# This file is not used directly for any connections, only as a template for new configurations 
+# This file is not used directly for any connections, only as a template for new configurations
 # that are added to config.local.yaml via config.py
 
 # The host, port, and camera index have placeholder values in this file that will be replaced when adding a new connection.
-socket_host: "default_host"
+socket_host: 'default_host'
 socket_port: 8080
 camera_index: 0
 # Link to camera feed to be used for video capture
@@ -15,6 +15,6 @@ horizontal_field_of_view: 89 # horizontal FOV of camera being used
 confirmation_delay: 0.25 # Amount of time subject is outside of acceptable box before a command is sent
 
 command_delay: 0.25 # Wait time before another command can be sent (while in discrete director mode)
-fps: 30 # Frame rate to update the gui video
+fps: 60 # Frame rate to update the gui video
 frame_width: 500 # Desired width of the video frame
 # frame_height: 400 # auto calculate if commented out

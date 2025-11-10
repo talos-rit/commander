@@ -43,8 +43,8 @@ class ManualInterface(tkinter.Tk):
     """
 
     scheduler: Scheduler
-    director = None 
-    run_display_loop = False # Flag for display loop
+    director = None
+    run_display_loop = False  # Flag for display loop
 
     pressed_keys: set[Direction] = set()
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
@@ -197,7 +197,8 @@ class ManualInterface(tkinter.Tk):
 
         self.selectedConnection = tkinter.StringVar(value="None")
         self.selectedConnection.trace_add(
-            "write", lambda *args: self.set_active_connection(self.selectedConnection.get())
+            "write",
+            lambda *args: self.set_active_connection(self.selectedConnection.get()),
         )
         initial_options = self.connections if self.connections else ["None"]
 
@@ -271,12 +272,17 @@ class ManualInterface(tkinter.Tk):
         publisher.start_socket_connection(self.scheduler)
         if self.director is not None:
             if frame_shape is not None:
-                self.director.add_control_feed(hostname, conn.manual, frame_shape, publisher=publisher)
+                self.director.add_control_feed(
+                    hostname, conn.manual, frame_shape, publisher=publisher
+                )
 
     def open_all_configured(self) -> None:
         """Loads all connections from the config file."""
         for hostname in self.config:
-            self.open_connection(hostname)
+            self.scheduler.set_timeout(0, lambda: self.open_connection(hostname))
+            # print("Adding connection for", hostname)
+            # self.open_connection(hostname)
+            # print(f"Connection to {hostname} added")
 
     def close_connection(self, hostname: str) -> None:
         """Closes an existing connection.
@@ -433,15 +439,17 @@ class ManualInterface(tkinter.Tk):
         self.active_connection = option
         self.tracker.set_active_connection(option)
         self.update_ui()
-    
+
     def remove_active_connection(self) -> None:
         if self.connections:
-            self.set_active_connection(self.connections[next(iter(self.connections))].host)
+            self.set_active_connection(
+                self.connections[next(iter(self.connections))].host
+            )
         else:
             self.active_connection = None
             self.tracker.remove_active_connection()
             self.update_ui()
-    
+
     def update_ui(self) -> None:
         if not self.connections:
             self.toggle_controls("disabled")
@@ -577,7 +585,7 @@ class ManualInterface(tkinter.Tk):
             Direction.RIGHT,
         }
 
-    def toggle_controls(self, state: Literal['normal', 'active', 'disabled']) -> None:
+    def toggle_controls(self, state: Literal["normal", "active", "disabled"]) -> None:
         """Enables or disables all manual control buttons.
 
         Args:
