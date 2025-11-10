@@ -4,7 +4,7 @@ import time
 
 from icd_config import CTypesInt, toBytes, toInt
 from tkscheduler import Scheduler
-from utils import add_termination_handler
+from utils import add_termination_handler, remove_termination_handler
 
 
 class Connection:
@@ -14,6 +14,7 @@ class Connection:
     command_count = 0
     thread: threading.Thread | None = None
     schedule: Scheduler | None = None
+    _term: int | None = None
 
     def __init__(
         self, host, port, schedule: Scheduler | None = None, connect_on_init=True
@@ -30,7 +31,7 @@ class Connection:
     def connect_on_thread(self):
         self.thread = threading.Thread(target=self.connect, daemon=True)
         self.thread.start()
-        add_termination_handler(self.close)
+        self._term = add_termination_handler(self.close)
 
     def connect(self):
         self.is_running = True
@@ -62,6 +63,9 @@ class Connection:
         self.is_running = False
         if self.thread is not None:
             self.thread.join()
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
         self.socket.close()
         print("Socket closed cleanly")
 

@@ -14,6 +14,7 @@ from utils import (
     add_termination_handler,
     calculate_acceptable_box,
     calculate_center_bbox,
+    remove_termination_handler,
 )
 
 SHARED_MEM_FRAME_NAME = "frame"
@@ -72,6 +73,7 @@ class VideoConnection:
     cap: cv2.VideoCapture | None = field(default=None, repr=False)
     task: IterativeTask | None = field(default=None, repr=False)
     video_buffer_size: int = field(default=1)
+    _term: int | None = field(default=None)
 
     def __post_init__(self):
         if self.cap is None:
@@ -82,7 +84,7 @@ class VideoConnection:
                 source = self.src
             self.cap = cv2.VideoCapture(source)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
-            add_termination_handler(self.close)
+            self._term = add_termination_handler(self.close)
         frame = None
         for _ in range(6):
             ret, frame = self.cap.read()
@@ -103,6 +105,9 @@ class VideoConnection:
     def close(self):
         if self.cap is not None:
             self.cap.release()
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
 
 
 # Class for handling video feed and object detection model usage
@@ -120,6 +125,7 @@ class Tracker:
     _frame_buf: np.ndarray
     _bbox_queue: Queue
     _detection_process: Process | None = None
+    _term: int | None = None
 
     def __init__(
         self,
@@ -207,7 +213,7 @@ class Tracker:
             daemon=True,
         )
         self._detection_process.start()
-        add_termination_handler(self.stop)
+        self._term = add_termination_handler(self.stop)
         print("Detection process started.")
         if self.scheduler:
             self.scheduler.set_timeout(self.frame_delay, self.poll_bboxes)
@@ -482,6 +488,9 @@ class Tracker:
 
     def stop(self) -> bool:
         print("Stopping Tracker")
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
         self.remove_capture()
         for _ in range(6):
             if self.stop_detection_process():
