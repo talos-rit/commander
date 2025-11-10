@@ -182,7 +182,7 @@ class Tracker:
     def start_detection_process(self) -> None:
         if self._detection_process is not None:
             return  # Already running
-
+        print("Starting detection process...")
         total_shape = self.get_total_frame_shape()
         total_nbytes = self.get_nbytes_from_total_shape(total_shape)
 
@@ -208,17 +208,19 @@ class Tracker:
         )
         self._detection_process.start()
         add_termination_handler(self.stop)
+        print("Detection process started.")
         if self.scheduler:
-            self.scheduler.set_timeout("idle", self.poll_bboxes)
+            self.scheduler.set_timeout(self.frame_delay, self.poll_bboxes)
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
 
     def poll_bboxes(self) -> None:
+        print("Polling bounding boxes from detection process")
         if (
             self._detection_process is not None
             and self._detection_process.is_alive()
             and self.scheduler
         ):
-            self.scheduler.set_timeout("idle", self.poll_bboxes)
+            self.scheduler.set_timeout(self.frame_delay, self.poll_bboxes)
         elif self._detection_process is None:
             print("detection process is None; clearing internal bbox cache")
             self._bboxes = dict()
@@ -307,6 +309,8 @@ class Tracker:
             and self.scheduler
         ):
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
+
+        print("Updating frame buffer...")
 
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
