@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from config import DEFAULT_CONFIG
+from config import load_config
 from manual_interface import ConnectionData
 from tkscheduler import IterativeTask, Scheduler
 from utils import (
@@ -119,10 +119,9 @@ class VideoConnection:
 # Class for handling video feed and object detection model usage
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps: int = DEFAULT_CONFIG.get("fps", 30)
-    acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
-    desired_width: int | None = DEFAULT_CONFIG.get("frame_width", None)
-    desired_height: int | None = DEFAULT_CONFIG.get("frame_height", None)
+    config: dict = load_config()
+    max_fps = 1 # this will be set dynamically based on captures
+    frame_delay: float = 0.0 # same as above
     model = None
     captures: dict[str, VideoConnection] = dict()
     frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
@@ -144,10 +143,10 @@ class Tracker:
         self.scheduler = scheduler
         self.model = model
         for host, conn in connections.items():
-            self.fps = max(self.fps, conn.fps)
+            self.max_fps = max(self.max_fps, conn.fps)
             frame_shape = self.add_capture(host, conn.camera, conn.fps)
             conn.set_frame_shape(frame_shape)
-        self.frame_delay = 1000 / self.fps
+        self.frame_delay = 1000 / self.max_fps
 
     def add_capture(self, host: str, camera: str | int, fps: int) -> tuple | None:
         """Adds a new video capture for a given host.
@@ -168,6 +167,7 @@ class Tracker:
             #if the detection process was not running because there were no captures, start after adding the first capture
         conn = VideoConnection(src=camera, fps=fps, scheduler=self.scheduler)
         self.captures[host] = conn
+        self.update_max_fps()
         conn.start()
         if restart:
             self.start_detection_process()
@@ -182,6 +182,14 @@ class Tracker:
         if host in self.captures:
             self.captures[host].close()
         del self.captures[host]
+        self.update_max_fps()
+
+    def update_max_fps(self) -> None:
+        """Updates the max fps based on current captures."""
+        self.max_fps = 0
+        for conn in self.captures.values():
+            self.max_fps = max(self.max_fps, conn.fps)
+        self.frame_delay = 1000 / self.max_fps
 
     def start_detection_process(self) -> None:
         if self._detection_process is not None:
@@ -423,15 +431,18 @@ class Tracker:
 
     def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
         """Convert frame to tkinter image"""
+        #Load config values
+        desired_height: int | None = self.config[self.active_connection].get("frame_height", None)
+        desired_width: int | None = self.config[self.active_connection].get("frame_width", None)
         if frame is None:
             return None
         frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(frame_rgb)
 
-        dim = (self.desired_width, self.desired_height)
-        if self.desired_height is None:
+        dim = (desired_width, desired_height)
+        if desired_height is None:
             # Set desired dimensions (adjust these values as needed)
-            new_width = self.desired_width or 500
+            new_width = desired_width or 500
             aspect_ratio = float(frame.shape[1]) / float(frame.shape[0])
             new_height = int(new_width / aspect_ratio)
 
