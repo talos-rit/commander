@@ -55,6 +55,7 @@ class Publisher:
     def start_socket_connection(self, schedule: Scheduler | None = None):
         self.connection.schedule = schedule
         self.connection.connect_on_thread()
+        print(f"Started socket connection to {self.connection.host}:{self.connection.port}")
 
     def close_connection(self):
         self.connection.close()

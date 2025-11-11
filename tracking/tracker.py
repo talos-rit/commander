@@ -163,6 +163,7 @@ class Tracker:
         # if the detection process was not running because there were no captures, start after adding the first capture
         conn = VideoConnection(src=camera, fps=fps)
         self.captures[host] = conn
+        self.frame_order.append((host, 0))
         # self.update_max_fps()
         if restart:
             self.start_detection_process()
@@ -176,7 +177,10 @@ class Tracker:
             return
         if host in self.captures:
             self.captures[host].close()
+        self.frame_order = [fo for fo in self.frame_order if fo[0] != host]
         del self.captures[host]
+        if not self.captures:
+            self.stop_detection_process()
         # self.update_max_fps()
 
     def update_max_fps(self) -> None:

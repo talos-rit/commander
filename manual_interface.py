@@ -531,8 +531,9 @@ class ManualInterface(tkinter.Tk):
 
     def set_mode(self, new_mode) -> None:
         if new_mode == "None":
-            return self.change_model(None)
-        self.change_model(new_mode)
+            self.change_model(None)
+        else:      
+            self.change_model(new_mode)
 
     def update_display(self, img: ImageTk.PhotoImage) -> None:
         self.video_label.config(image=img)
