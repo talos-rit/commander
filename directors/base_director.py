@@ -55,6 +55,8 @@ class BaseDirector(ABC):
     def remove_control_feed(self, host: str) -> None:
         if host in self.control_feeds:
             del self.control_feeds[host]
+        if not self.control_feeds:
+            self.stop_auto_control()
 
     def update_control_feed(self, host: str, manual: bool) -> None:
         self.control_feeds[host].manual = manual
@@ -73,7 +75,7 @@ class BaseDirector(ABC):
     def track_obj(self) -> Any | None:
         bboxes = self.tracker.get_bboxes()
         for host, bbox in bboxes.items():
-            if bbox is not None and len(bbox) > 0:
+            if host in self.control_feeds and bbox is not None and len(bbox) > 0:
                 if self.control_feeds[host].manual:
                     continue  # skip manual feeds
                 return self.process_frame(
