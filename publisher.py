@@ -48,7 +48,9 @@ class Publisher:
     CHAR_ENCODING = "utf-8"
 
     def __init__(self, socket_host: str, socket_port: int):
-        self.connection = Connection(host=socket_host, port=socket_port)
+        self.connection = Connection(
+            host=socket_host, port=socket_port, connect_on_init=False
+        )
 
     def start_socket_connection(self, schedule: Scheduler | None = None):
         self.connection.schedule = schedule
