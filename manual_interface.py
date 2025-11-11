@@ -7,7 +7,7 @@ from typing import Literal
 import customtkinter
 from PIL import Image, ImageDraw, ImageTk
 
-from config import CONFIG, load_config
+from config import load_config
 from connection_manager import ConnectionData, ConnectionManager
 from publisher import Direction, Publisher
 from tkscheduler import Scheduler
@@ -18,9 +18,6 @@ from utils import (
     start_termination_guard,
     terminate,
 )
-
-# Temporary hardcoded index to until config can be passed in on initialization
-TEMP_CONFIG = CONFIG["unctalos.student.rit.edu"]
 
 
 class ButtonText(StrEnum):
