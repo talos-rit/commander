@@ -542,6 +542,7 @@ class ManualInterface(tkinter.Tk):
 
     def change_model(self, option: str | None = None) -> None:
         if self.director is not None:
+            print("Stopping previous model")
             self.director.stop_auto_control()
             self.director = None
         if option is None:

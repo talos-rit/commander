@@ -35,13 +35,13 @@ class Connection:
 
     def connect(self):
         self.is_running = True
-        while self.is_running:
+        for attempt in range(5):
             try:
                 self.socket.connect((self.host, self.port))
                 print(f"Bound to socket: {self.host}:{self.port}")
                 break
             except OSError as e:
-                print(f"[Connection]: Bind failed, retrying in 5s {e}")
+                print(f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}")
                 time.sleep(5)
         else:
             return  # Exit only if is_running was set to False

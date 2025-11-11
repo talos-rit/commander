@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from multiprocessing import Event, Process, Queue, shared_memory
-from queue import Empty
+from queue import Empty, Full
 
 import cv2
 import numpy as np
@@ -45,13 +45,14 @@ def _detect_person_worker(
         return
     shm = shared_memory.SharedMemory(name=SHARED_MEM_FRAME_NAME)
     frame = np.ndarray(frame_shape, dtype=frame_dtype, buffer=shm.buf)
-    last_frame = np.zeros(frame_shape, frame_dtype)
     model: ObjectModel = model_class()
     try:
         while not stopper.is_set():
-            np.copyto(last_frame, frame)  # visual artifact is not critical
             bboxes = model.detect_person(frame=frame)
-            bbox_queue.put(bboxes)
+            try:
+                bbox_queue.put_nowait(bboxes)
+            except Full:
+                pass
     except KeyboardInterrupt:
         pass
     except ValueError:
@@ -308,15 +309,12 @@ class Tracker:
         return h * w * c * np.dtype(np.uint8).itemsize
 
     def send_latest_frame(self) -> None:
-        print("Sending latest frame to detection process")
         if (
             self._detection_process is not None
             and self._detection_process.is_alive()
             and self.scheduler
         ):
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
-
-        print("Updating frame buffer...")
 
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
@@ -326,17 +324,30 @@ class Tracker:
                 np.copyto(self._frame_buf, new_frame)
             return
 
-        for host, dx in self.frame_order:
-            vid = self.captures[host]
-            new_frame = vid.frame
-            if vid.shape is None or new_frame is None:
-                continue
-            _, width = vid.shape[:2]
-            self._frame_buf[:, dx : dx + width, ...] = new_frame[:, :width, ...]
+        frames = [self.captures[host].frame for host, _ in self.frame_order]
+        frames = [f for f in frames if f is not None]
+        if len(frames) == 0:
+            print("No frames available to update frame buffer.")
+            return
+        # Compare heights of frames and padd the bottom to the smaller ones to match the largest height
+        max_height = max(frame.shape[0] for frame in frames)
+        resized_frames = [
+            frame
+            if frame.shape[0] == max_height
+            else np.pad(
+                frame,
+                ((0, max_height - frame.shape[0]), (0, 0), (0, 0)),
+                mode="constant",
+                constant_values=0,
+            )
+            for frame in frames
+        ]
+        hstack = np.hstack(resized_frames)
+        np.copyto(self._frame_buf, hstack)
 
     def stop_detection_process(self) -> bool:
         """Returns true if process properly closed"""
-        if hasattr(self, "_detection_process") and self._detection_process is not None:
+        if self._detection_process is not None:
             try:
                 self.model_stopper.set()
                 self._detection_process.join()
@@ -348,6 +359,7 @@ class Tracker:
                 print("Exception occured:", e)
                 return False
             self._detection_process = None
+            print("Detection process stopped.")
         self._bboxes = dict()
         return True
 
@@ -487,7 +499,6 @@ class Tracker:
         self.active_connection = None
 
     def stop(self) -> bool:
-        print("Stopping Tracker")
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None
