@@ -1,7 +1,7 @@
-import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from multiprocessing import Event, Process, Queue, shared_memory
+from multiprocessing.managers import SharedMemoryManager
 from queue import Empty, Full
 
 import cv2
@@ -38,18 +38,18 @@ def _detect_person_worker(
     model_class,
     bbox_queue: Queue,
     stopper,
+    frame_mem: shared_memory.SharedMemory,
     frame_shape,
     frame_dtype,
 ) -> None:
     if model_class is None:
         print("Model was not found please pass a model into Tracker to run.")
         return
-    shm = shared_memory.SharedMemory(name=SHARED_MEM_FRAME_NAME)
-    frame = np.ndarray(frame_shape, dtype=frame_dtype, buffer=shm.buf)
+    frame = np.ndarray(frame_shape, dtype=frame_dtype, buffer=frame_mem.buf)
     model: ObjectModel = model_class()
     try:
         while not stopper.is_set():
-            bboxes = model.detect_person(frame=frame)
+            bboxes = model.detect_person(frame=np.copy(frame))
             try:
                 bbox_queue.put_nowait(bboxes)
             except Full:
@@ -58,12 +58,6 @@ def _detect_person_worker(
         pass
     except ValueError:
         print("bbox_queue closed")
-    try:
-        shm.close()
-    except Exception as e:
-        print("Error closing shared memory in worker:", e)
-    print(f"Worker (pid={os.getpid()}) done")
-    print("Model exit complete.")
 
 
 @dataclass
@@ -123,12 +117,14 @@ class Tracker:
     frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
     active_connection: str | None = None
     _bboxes: dict[str, list] = dict()
-    _frame_mem: shared_memory.SharedMemory
     _frame_buf: np.ndarray
     _bbox_queue: Queue
     is_detection_running: bool = False
     _detection_process: Process | None = None
     _term: int | None = None
+    _send_frame_task: IterativeTask | None = None
+    _poll_bbox_task: IterativeTask | None = None
+    _smm: SharedMemoryManager | None = None
 
     def __init__(
         self,
@@ -140,6 +136,8 @@ class Tracker:
         self.video_buffer_size = video_buffer_size
         self.scheduler = scheduler
         self.model = model
+        self._smm = SharedMemoryManager()
+        self._smm.start()
         for host, conn in connections.items():
             self.max_fps = max(self.max_fps, conn.fps)
             frame_shape = self.add_capture(host, conn.camera, conn.fps)
@@ -157,7 +155,7 @@ class Tracker:
         - frame_shape: the frame shape of the video source
         """
         restart = False
-        if self._detection_process:
+        if self._detection_process is not None:
             restart = True
             self.stop_detection_process()
         elif self.model is not None:
@@ -195,19 +193,16 @@ class Tracker:
     def start_detection_process(self) -> None:
         if self._detection_process is not None:
             return  # Already running
+        assert self._smm is not None
         print("Starting detection process...")
         self.is_detection_running = True
         total_shape = self.get_total_frame_shape()
         total_nbytes = self.get_nbytes_from_total_shape(total_shape)
 
-        self.shape = total_shape
-        self.dtype = np.uint8
         self.model_stopper = Event()
-        if not hasattr(self, "_frame_mem") or self._frame_mem is None:
-            self._frame_mem = shared_memory.SharedMemory(
-                SHARED_MEM_FRAME_NAME, create=True, size=total_nbytes
-            )
-            self._frame_buf = np.ndarray(self.shape, self.dtype, self._frame_mem.buf)
+        # idk why but gc keeps deleting shared memory without me holding reference via "self."
+        self._frame_memory = self._smm.SharedMemory(size=total_nbytes)
+        self._frame_buf = np.ndarray(total_shape, np.uint8, self._frame_memory.buf)
         # we only care about the latest bbox but I prefer to have more than 1 allocated size
         self._bbox_queue = Queue(maxsize=2)
         self._detection_process = Process(
@@ -216,31 +211,25 @@ class Tracker:
                 self.model,
                 self._bbox_queue,
                 self.model_stopper,
-                self.shape,
-                self.dtype,
+                self._frame_memory,
+                total_shape,
+                np.uint8,
             ),
-            daemon=False,
+            daemon=True,
         )
         self._detection_process.start()
         self._term = add_termination_handler(self.stop)
         print("Detection process started.")
         if self.scheduler:
-            self.scheduler.set_timeout(self.frame_delay, self.poll_bboxes)
-            self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
+            self._poll_bbox_task = self.scheduler.set_interval(
+                self.frame_delay, self.poll_bboxes
+            )
+            self._send_frame_task = self.scheduler.set_interval(
+                self.frame_delay, self.send_latest_frame
+            )
 
     def poll_bboxes(self) -> None:
         print("Polling bounding boxes from detection process")
-        if (
-            self._detection_process is not None
-            and self._detection_process.is_alive()
-            and self.scheduler
-        ):
-            self.scheduler.set_timeout(self.frame_delay, self.poll_bboxes)
-        elif self._detection_process is None:
-            print("detection process is None; clearing internal bbox cache")
-            self._bboxes = dict()
-            return
-
         raw_bboxes: None | list[tuple[int, int, int, int]] = None
 
         try:
@@ -317,11 +306,6 @@ class Tracker:
         return h * w * c * np.dtype(np.uint8).itemsize
 
     def send_latest_frame(self) -> None:
-        if (
-            self._detection_process is not None or self.is_detection_running
-        ) and self.scheduler:
-            self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
-
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
             vid = self.captures[host]
@@ -353,7 +337,13 @@ class Tracker:
 
     def stop_detection_process(self) -> bool:
         """Returns true if process properly closed"""
+        if not self.is_detection_running:
+            return True
+        assert self._smm is not None
         self.is_detection_running = False
+        self._send_frame_task.cancel() if self._send_frame_task else None
+        self._poll_bbox_task.cancel() if self._poll_bbox_task else None
+        self._bboxes = dict()
         if self._detection_process is not None:
             try:
                 self.model_stopper.set()
@@ -366,7 +356,6 @@ class Tracker:
                 return False
             self._detection_process = None
             print("Detection process stopped.")
-        self._bboxes = dict()
         return True
 
     def get_frame_shape(self, host):  # -> tuple[Any, ...] | None:
@@ -511,15 +500,9 @@ class Tracker:
         self.remove_capture()
         for _ in range(6):
             if self.stop_detection_process():
-                if self._frame_mem is not None:
-                    try:
-                        self._frame_mem.close()
-                        self._frame_mem.unlink()
-                    except Exception as e:
-                        print("Exception while closing/unlinking shared memory:", e)
-                    del self._frame_mem, self._frame_buf
+                self._smm.shutdown() if self._smm is not None else None
+                self._smm = None
                 return True
-
         return False
 
     def swap_model(self, new_model) -> None:
