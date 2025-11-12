@@ -36,6 +36,8 @@ class Connection:
     def connect(self):
         self.is_running = True
         for attempt in range(5):
+            if not self.is_running:
+                return  # Exit since this connection is not needed anymore
             try:
                 self.socket.connect((self.host, self.port))
                 print(f"Bound to socket: {self.host}:{self.port}")
@@ -44,7 +46,7 @@ class Connection:
                 print(f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}")
                 time.sleep(5)
         else:
-            return  # Exit only if is_running was set to False
+            return  # Failed to connect after retries
 
         print("Starting to listen!")
         self.socket.listen()
