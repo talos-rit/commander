@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from multiprocessing import Event, Process, Queue, shared_memory
@@ -57,12 +58,12 @@ def _detect_person_worker(
         pass
     except ValueError:
         print("bbox_queue closed")
-        pass
-    finally:
-        print("Model exiting cleanly...")
+    try:
         shm.close()
-        bbox_queue.close()
-        print("Done")
+    except Exception as e:
+        print("Error closing shared memory in worker:", e)
+    print(f"Worker (pid={os.getpid()}) done")
+    print("Model exit complete.")
 
 
 @dataclass
@@ -125,6 +126,7 @@ class Tracker:
     _frame_mem: shared_memory.SharedMemory
     _frame_buf: np.ndarray
     _bbox_queue: Queue
+    is_detection_running: bool = False
     _detection_process: Process | None = None
     _term: int | None = None
 
@@ -194,16 +196,18 @@ class Tracker:
         if self._detection_process is not None:
             return  # Already running
         print("Starting detection process...")
+        self.is_detection_running = True
         total_shape = self.get_total_frame_shape()
         total_nbytes = self.get_nbytes_from_total_shape(total_shape)
 
         self.shape = total_shape
         self.dtype = np.uint8
         self.model_stopper = Event()
-        self._frame_mem = shared_memory.SharedMemory(
-            SHARED_MEM_FRAME_NAME, create=True, size=total_nbytes
-        )
-        self._frame_buf = np.ndarray(self.shape, self.dtype, self._frame_mem.buf)
+        if not hasattr(self, "_frame_mem") or self._frame_mem is None:
+            self._frame_mem = shared_memory.SharedMemory(
+                SHARED_MEM_FRAME_NAME, create=True, size=total_nbytes
+            )
+            self._frame_buf = np.ndarray(self.shape, self.dtype, self._frame_mem.buf)
         # we only care about the latest bbox but I prefer to have more than 1 allocated size
         self._bbox_queue = Queue(maxsize=2)
         self._detection_process = Process(
@@ -215,7 +219,7 @@ class Tracker:
                 self.shape,
                 self.dtype,
             ),
-            daemon=True,
+            daemon=False,
         )
         self._detection_process.start()
         self._term = add_termination_handler(self.stop)
@@ -314,10 +318,8 @@ class Tracker:
 
     def send_latest_frame(self) -> None:
         if (
-            self._detection_process is not None
-            and self._detection_process.is_alive()
-            and self.scheduler
-        ):
+            self._detection_process is not None or self.is_detection_running
+        ) and self.scheduler:
             self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
 
         if 1 == len(self.frame_order):
@@ -351,14 +353,14 @@ class Tracker:
 
     def stop_detection_process(self) -> bool:
         """Returns true if process properly closed"""
+        self.is_detection_running = False
         if self._detection_process is not None:
             try:
                 self.model_stopper.set()
                 self._detection_process.join()
-                self._frame_mem.close()
-                self._frame_mem.unlink()
                 self._bbox_queue.close()
                 self._bbox_queue.join_thread()
+                self.model_stopper.clear()
             except Exception as e:
                 print("Exception occured:", e)
                 return False
@@ -509,7 +511,15 @@ class Tracker:
         self.remove_capture()
         for _ in range(6):
             if self.stop_detection_process():
+                if self._frame_mem is not None:
+                    try:
+                        self._frame_mem.close()
+                        self._frame_mem.unlink()
+                    except Exception as e:
+                        print("Exception while closing/unlinking shared memory:", e)
+                    del self._frame_mem, self._frame_buf
                 return True
+
         return False
 
     def swap_model(self, new_model) -> None:
