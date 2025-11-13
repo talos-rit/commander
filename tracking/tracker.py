@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from config import load_config
+from config import load_config, load_default_config
 from manual_interface import ConnectionData
 from tkscheduler import IterativeTask, Scheduler
 from utils import (
@@ -110,6 +110,7 @@ class VideoConnection:
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
     config: dict = load_config()
+    default_config: dict = load_default_config()
     max_fps = 1  # this will be set dynamically based on captures
     frame_delay: float = 0.0  # same as above
     model = None
@@ -140,11 +141,11 @@ class Tracker:
         self._smm.start()
         for host, conn in connections.items():
             self.max_fps = max(self.max_fps, conn.fps)
-            frame_shape = self.add_capture(host, conn.camera, conn.fps)
+            frame_shape = self.add_capture(host, conn.camera, conn.fps, write_config=False)
             conn.set_frame_shape(frame_shape)
         self.frame_delay = 1000 / self.max_fps
 
-    def add_capture(self, host: str, camera: str | int, fps: int) -> tuple | None:
+    def add_capture(self, host: str, camera: str | int, fps: int, write_config: bool) -> tuple | None:
         """Adds a new video capture for a given host.
         If the detection process is running this will restart it.
         Parameters:
@@ -164,6 +165,8 @@ class Tracker:
         conn = VideoConnection(src=camera, fps=fps)
         self.captures[host] = conn
         self.frame_order.append((host, 0))
+        if write_config:
+            self.config = load_config()
         # self.update_max_fps()
         if restart:
             self.start_detection_process()
@@ -440,10 +443,14 @@ class Tracker:
     def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
         """Convert frame to tkinter image"""
         # Load config values
-        desired_height: int | None = self.config[self.active_connection].get(
+        if self.active_connection in self.config:
+            config_data = self.config[self.active_connection]
+        else:
+            config_data = self.default_config
+        desired_height: int | None = config_data.get(
             "frame_height", None
         )
-        desired_width: int | None = self.config[self.active_connection].get(
+        desired_width: int | None = config_data.get(
             "frame_width", None
         )
         if frame is None:

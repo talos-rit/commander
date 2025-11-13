@@ -246,7 +246,7 @@ class ManualInterface(tkinter.Tk):
         image_tk = ImageTk.PhotoImage(no_signal_image)
         return image_tk
 
-    def open_connection(self, hostname: str, port=None, camera=None) -> None:
+    def open_connection(self, hostname: str, port=None, camera=None, write_config=False) -> None:
         """Opens a new connection. Port and camera are supplied only if opening a new connection not from config.
 
         Args:
@@ -267,9 +267,11 @@ class ManualInterface(tkinter.Tk):
         conn = ConnectionData(hostname, port, camera, publisher)
         self.connections[hostname] = conn
         self.set_active_connection(hostname)
-        frame_shape = self.tracker.add_capture(hostname, camera, conn.fps)
+        frame_shape = self.tracker.add_capture(hostname, camera, conn.fps, write_config)
         conn.set_frame_shape(frame_shape)
         publisher.start_socket_connection(self.scheduler)
+        if write_config:
+            self.config = load_config()
         if self.director is not None:
             if frame_shape is not None:
                 self.director.add_control_feed(
@@ -469,7 +471,9 @@ class ManualInterface(tkinter.Tk):
             self.run_display_loop = False
             self.update_connection_menu()
         else:
-            if self.director is not None:
+            if self.director is None or self.get_active_connection().manual_only:
+                self.automatic_button.configure(state="disabled")
+            else:
                 self.automatic_button.configure(state="normal")
             if self.get_active_connection().manual:
                 self.toggle_controls("normal")
@@ -557,7 +561,7 @@ class ManualInterface(tkinter.Tk):
         model_class, director_class = USABLE_MODELS[option]
         self.director = director_class(self.tracker, self.connections, self.scheduler)
         self.tracker.swap_model(model_class)
-        if self.connections:
+        if self.connections and not self.get_active_connection().manual_only:
             self.automatic_button.configure(state="normal")
 
     # def toggle_continuous_mode(self) -> None:
@@ -573,6 +577,11 @@ class ManualInterface(tkinter.Tk):
         Disables all other controls when in automatic mode.
         """
         connection = self.get_active_connection()
+        if self.get_active_connection().manual_only:
+            print("Connection is set to manual only mode, cannot switch to automatic.")
+            self.automatic_button.deselect()
+            connection.set_manual(False)
+            return
         connection.set_manual(not connection.manual)
 
         if connection.manual:
