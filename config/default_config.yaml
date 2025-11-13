@@ -18,3 +18,5 @@ command_delay: 0.25 # Wait time before another command can be sent (while in dis
 fps: 60 # Frame rate to update the gui video
 frame_width: 500 # Desired width of the video frame
 # frame_height: 400 # auto calculate if commented out
+
+manual_only: false # If true, the connection will only allow manual control

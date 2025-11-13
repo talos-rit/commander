@@ -59,7 +59,8 @@ class BaseDirector(ABC):
             self.stop_auto_control()
 
     def update_control_feed(self, host: str, manual: bool) -> None:
-        self.control_feeds[host].manual = manual
+        if host in self.control_feeds:
+            self.control_feeds[host].manual = manual
 
     # Processes the bounding box and sends commands
     @abstractmethod

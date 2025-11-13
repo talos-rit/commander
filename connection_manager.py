@@ -13,6 +13,7 @@ class ConnectionData:
     camera: str | int
     publisher: Publisher
     manual: bool = True
+    manual_only: bool = False
     fps: int = field(default_factory=lambda: 60)
     shape: tuple | None = None
 
@@ -21,6 +22,9 @@ class ConnectionData:
         fps = conf.get(self.host, {}).get("fps")
         if fps is not None:
             self.fps = fps
+        manual_only = conf.get(self.host, {}).get("manual_only")
+        if manual_only is not None:
+            self.manual_only = manual_only
 
     def set_frame_shape(self, shape: tuple | None) -> None:
         self.shape = shape
@@ -103,11 +107,10 @@ class ConnectionManager(tkinter.Toplevel):
             self.parent.close_connection(hostname)
             self.render_list()
 
-    def add_connection(self, host, port, camera, write_config=True):
-        self.parent.open_connection(host, port, camera)
+    def add_connection(self, host, port, camera, write_config):
         if write_config:
             add_config(host, port, camera)
-            self.parent.config = load_config()
+        self.parent.open_connection(host, port, camera, write_config)
         self.render_list()
 
     def add_from_config(self, hostname):
