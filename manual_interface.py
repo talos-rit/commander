@@ -246,9 +246,10 @@ class ManualInterface(tkinter.Tk):
         image_tk = ImageTk.PhotoImage(no_signal_image)
         return image_tk
 
-    def open_connection(self, hostname: str, port=None, camera=None, write_config=False) -> None:
+    def open_connection(
+        self, hostname: str, port=None, camera=None, write_config=False
+    ) -> None:
         """Opens a new connection. Port and camera are supplied only if opening a new connection not from config.
-
         Args:
             socket_host (string): the host ip address of the socket connection
             socket_port (int): the port number of the socket connection
@@ -339,10 +340,10 @@ class ManualInterface(tkinter.Tk):
                 publisher.polar_pan_discrete(0, -10, 1000, 3000)
                 print("Polar pan discrete down")
             case Direction.LEFT:
-                publisher.polar_pan_discrete(-10, 0, 1000, 3000)
+                publisher.polar_pan_discrete(10, 0, 1000, 3000)
                 print("Polar pan discrete left")
             case Direction.RIGHT:
-                publisher.polar_pan_discrete(10, 0, 1000, 3000)
+                publisher.polar_pan_discrete(-10, 0, 1000, 3000)
                 print("Polar pan discrete right")
 
     def stop_move(self, direction: Direction) -> None:
@@ -533,7 +534,7 @@ class ManualInterface(tkinter.Tk):
     def set_mode(self, new_mode) -> None:
         if new_mode == "None":
             self.change_model(None)
-        else:      
+        else:
             self.change_model(new_mode)
 
     def update_display(self, img: ImageTk.PhotoImage) -> None:
