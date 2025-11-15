@@ -1,6 +1,6 @@
 import time
 
-from config import ROBOT_CONFIGS
+from config import load_config
 from directors.base_director import BaseDirector
 from publisher import Publisher
 from utils import (
@@ -8,10 +8,9 @@ from utils import (
     calculate_center_bbox,
 )
 
-# Temporary hardcoded index to until hostname can be passed in
-CONFIG = ROBOT_CONFIGS["operator.talos"]
 
 class KeepAwayDirector(BaseDirector):
+    config = load_config()
     # Time when the person first moved outside the box
     movement_detection_start_time: float | None = None
     # Track the time of the last command
@@ -19,19 +18,18 @@ class KeepAwayDirector(BaseDirector):
     # bool to ensure only one polar_pan_continuous_stop command is sent at a time
     last_command_stop = False
 
-    confirmation_delay = CONFIG["confirmation_delay"]
-    command_delay = CONFIG["command_delay"]
-
     # This method is called to process each frame
-    def process_frame(self, bounding_box: list, frame, is_director_running):
+    def process_frame(self, hostname: str, bounding_box: list, frame_shape, publisher: Publisher) -> None:
         """
         Based on received bounding box, this method tells the arm where to move the keep the subject in the acceptable box..
         It does this by continuously sending polar pan start and a direction until the subject is in the acceptable box.
         Then it sends a polar pan stop.
         """
-        frameOpenCV = frame.copy()
-        frame_height = frameOpenCV.shape[0]
-        frame_width = frameOpenCV.shape[1]
+        # Load config values
+        confirmation_delay = self.config[hostname]["confirmation_delay"]
+
+        frame_height = frame_shape[0]
+        frame_width = frame_shape[1]
 
         if len(bounding_box) == 0:
             return
@@ -56,9 +54,6 @@ class KeepAwayDirector(BaseDirector):
         # Calculate the center of the bounding box
         bbox_center_x, bbox_center_y = calculate_center_bbox(first_face)
 
-        if not is_director_running:
-            return
-
         # Stop polar pan if the subject is back in the box
         if (
             bbox_center_x > acceptable_box_left
@@ -67,7 +62,7 @@ class KeepAwayDirector(BaseDirector):
             and bbox_center_y < acceptable_box_bottom
         ):
             if not self.last_command_stop:
-                Publisher.polar_pan_continuous_stop()
+                publisher.polar_pan_continuous_stop()
                 print("Stop")
                 self.last_command_stop = True
 
@@ -81,7 +76,7 @@ class KeepAwayDirector(BaseDirector):
 
         # Check if they've been outside for at least the confirmation delay
         detected_duration = current_time - self.movement_detection_start_time
-        if detected_duration < self.confirmation_delay:
+        if detected_duration < confirmation_delay:
             return
         change_in_x = change_in_y = 0
         # Move accordinly
@@ -102,17 +97,17 @@ class KeepAwayDirector(BaseDirector):
             change_in_y = average - center_bottom
 
         if change_in_x > 0:
-            Publisher.polar_pan_continuous_start(-1, 0)
+            publisher.polar_pan_continuous_start(-1, 0)
             self.last_command_stop = False
         elif change_in_x < 0:
-            Publisher.polar_pan_continuous_start(1, 0)
+            publisher.polar_pan_continuous_start(1, 0)
             self.last_command_stop = False
         elif change_in_y < 0:
-            Publisher.polar_pan_continuous_start(0, 1)
+            publisher.polar_pan_continuous_start(0, 1)
             self.last_command_stop = False
         elif change_in_y > 0:
-            Publisher.polar_pan_continuous_start(0, -1)
+            publisher.polar_pan_continuous_start(0, -1)
             self.last_command_stop = False
         elif not self.last_command_stop:
-            Publisher.polar_pan_continuous_stop()
+            publisher.polar_pan_continuous_stop()
             self.last_command_stop = True

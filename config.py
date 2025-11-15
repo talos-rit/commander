@@ -1,135 +1,88 @@
 import os
 import yaml
-from glob import glob
 
 from utils import get_file_path
 
-DEFAULT_BASE_PATH = os.path.join(
+CONFIG_PATH = get_file_path(os.path.join(
+    os.path.dirname(__file__), "config/config.local.yaml"
+))
+DEFAULT_PATH = get_file_path(os.path.join(
     os.path.dirname(__file__), "config/default_config.yaml"
-)
-DEFAULT_LOCAL_PATH = os.path.join(
+))
+LOCAL_DEFAULT_PATH = get_file_path(os.path.join(
     os.path.dirname(__file__), "config/default_config.local.yaml"
-)
-if not os.path.exists(DEFAULT_LOCAL_PATH):
-  DEFAULT_LOCAL_PATH = None
+))
 
-def add_config(socket_host: str, port: int):
+def load_default_config():
     """
-    Create a {socket_host}_config.yaml file based on default_config.yaml,
-    replacing the socket_host and port variables with the passed in parameters.
+    Load the default configuration from config/default_config.yaml or
+    config/default_config.local.yaml if it exists.
+    """
+    if os.path.exists(LOCAL_DEFAULT_PATH):
+        with open(LOCAL_DEFAULT_PATH, "r") as f:
+            default_config = yaml.safe_load(f)
+    else:
+        with open(DEFAULT_PATH, "r") as f:
+            default_config = yaml.safe_load(f)
+    return default_config
+
+def load_config():
+    """
+    Load the configuration from config/config.local.yaml if it exists,
+    otherwise load the default configuration from config/default_config.yaml.
+    """
+    config = dict()
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, "r") as f:
+          config = yaml.safe_load(f)
+    return config
+
+def add_config(socket_host: str, port: int, camera_index: int):
+    """
+    WARNING: Changes global CONFIG variable to reflect the new configuration, therefore this variables MUST be re-imported after calling this function.
+
+    Add a new local configuration to config/config.local.yaml based on config/default_config.yaml,
+    or on config/default_config.local.yaml if it exists, updating the first two fields to socket_host and port.
+    Creates config/config.local.yaml if it does not exist.
+    Does not overwrite existing configurations.
     """
     base_dir = os.path.dirname(__file__)
-    default_path = os.path.join(base_dir, "config/default_config.yaml")
-    output_path = os.path.join(base_dir, f"config/{socket_host}_config.yaml")
-    if os.path.exists(output_path):
-        print(f"[WARNING] {output_path} already exists, not overwriting")
-        return output_path
+    local_config_path = get_file_path(os.path.join(base_dir, "config/config.local.yaml"))
 
     # Load the default configuration
-    with open(get_file_path(default_path), "r") as f:
-        config_data = yaml.safe_load(f)
+    local_config_data = load_default_config()
 
     # Update the first two fields if they exist
-    keys = list(config_data.keys())
+    keys = list(local_config_data.keys())
     if len(keys) >= 2:
-        config_data[keys[0]] = socket_host
-        config_data[keys[1]] = port
+        local_config_data[keys[0]] = socket_host
+        local_config_data[keys[1]] = port
+        local_config_data[keys[2]] = camera_index
     else:
         raise ValueError("default_config.yaml has no socket_host and port fields")
 
-    # Write the modified configuration
-    with open(get_file_path(output_path), "w") as f:
-        yaml.safe_dump(config_data, f, sort_keys=False)
+    # Load existing local configuration or create a new one\
+    config = dict()
+    if os.path.exists(local_config_path):
+        with open(local_config_path, "r") as f:
+            config = yaml.safe_load(f) or {}
+    
+    # Cancel if overwriting an existing configuration
+    if config.get(socket_host):
+        print(f"[WARNING] Configuration for '{socket_host}' already exists in config.local.yaml, not overwriting")
+        return
 
-    print(f"Created config/{socket_host}_config.yaml")
-    return output_path
+    # Add the new configuration and write back to file
+    config[socket_host] = local_config_data
+    with open(local_config_path, "w") as f:
+        yaml.safe_dump(config, f, sort_keys=False)
 
-def find_config_pairs():
-    """
-    Searches the current directory for all *_config.yaml and *_config.local.yaml files.
-    Returns a dictionary in the form:
-        {
-            "hostname": {
-                "base": "/path/to/hostname_config.yaml",
-                "local": "/path/to/hostname_config.local.yaml" or None
-            },
-            ...
-        }
-    - Excludes default_config.yaml and default_config.local.yaml.
-    - If a local file has no matching base config, it is discarded with a warning.
-    """
-    base_dir = os.path.join(os.path.dirname(__file__), "config/")
+    # Update the global CONFIG variable
+    global CONFIG
+    CONFIG = load_config()
 
-    # Find all base and local configs
-    base_configs = glob(os.path.join(base_dir, "*_config.yaml"))
-    local_configs = glob(os.path.join(base_dir, "*_config.local.yaml"))
+    return config
 
-    # Filter out defaults
-    base_configs = [f for f in base_configs if not f.endswith("default_config.yaml")]
-    local_configs = [f for f in local_configs if not f.endswith("default_config.local.yaml")]
-
-    # Maps of {hostname: file_path}
-    base_map = {os.path.basename(f).replace("_config.yaml", ""): f for f in base_configs}
-    local_map = {os.path.basename(f).replace("_config.local.yaml", ""): f for f in local_configs}
-
-    config_pairs = {}
-
-    # Pair up base with local configs via hostname
-    for name, base_path in base_map.items():
-        local_path = local_map.get(name)
-        config_pairs[name] = {"base": base_path, "local": local_path}
-
-    # Warn about unpaired local configs
-    for name, local_path in local_map.items():
-        if name not in base_map:
-            print(f"[WARNING] Ignoring local config '{os.path.basename(local_path)}' (no matching base config found).")
-
-    return config_pairs
-
-def _load_yaml(path):
-        if os.path.exists(path):
-            with open(get_file_path(path), "r") as f:
-                return yaml.safe_load(f) or {}
-        return {}
-
-def _merge_dicts(base, override):
-          for k, v in override.items():
-              if isinstance(v, dict) and isinstance(base.get(k), dict):
-                  _merge_dicts(base[k], v)
-              else:
-                  base[k] = v
-          return base
-
-def load_a_config(base_path, local_path = None):
-    base_config = _load_yaml(base_path)
-    if local_path:
-      local_config = _load_yaml(local_path)
-      return _merge_dicts(base_config, local_config)
-    return base_config
-
-def load_all_robot_configs():
-    """
-    Loads and merges all host configurations based on the map returned by find_config_pairs().
-    Returns:
-        {
-            "socket_host": { merged config dict },
-            ...
-        }
-    """
-    pairs = find_config_pairs()
-    robot_configs = {}
-
-    for hostname, paths in pairs.items():
-        base_path = paths["base"]
-        local_path = paths["local"]
-
-        try:
-            config_data = load_a_config(base_path, local_path)
-            robot_configs[hostname] = config_data
-        except Exception as e:
-            print(f"[WARNING] Failed to load config for '{hostname}': {e}")
-
-    return robot_configs
-
-ROBOT_CONFIGS = load_all_robot_configs()
-DEFAULT_CONFIG = load_a_config(DEFAULT_BASE_PATH, DEFAULT_LOCAL_PATH)
+# Set global variables
+CONFIG = load_config()
+DEFAULT_CONFIG = load_default_config()

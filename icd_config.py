@@ -1,38 +1,26 @@
 from ctypes import c_int8, c_int16, c_int32, c_uint8, c_uint16, c_uint32
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 
-def int_to_bytes(num, num_bits=16, unsigned=True):
+class CTypesInt(Enum):
+    INT8 = c_int8
+    INT16 = c_int16
+    INT32 = c_int32
+    UINT8 = c_uint8
+    UINT16 = c_uint16
+    UINT32 = c_uint32
+
+
+def toBytes(num, type: CTypesInt) -> bytes:
     """
     Helper function for converting integers to bits
     """
-    c_type_int = None
-
-    # Convert to C types accourding to ICD to ensure the correct number of bits.
-    # This can be expanded in the future if needed
-    if num_bits == 8:
-        if unsigned:
-            c_type_int = c_uint8(num)
-        else:
-            c_type_int = c_int8(num)
-    elif num_bits == 16:
-        if unsigned:
-            c_type_int = c_uint16(num)
-        else:
-            c_type_int = c_int16(num)
-    elif num_bits == 32:
-        if unsigned:
-            c_type_int = c_uint32(num)
-        else:
-            c_type_int = c_int32(num)
-    else:
-        raise Exception("Unsupported number of bits given to int_to_bytes")
-
-    # Reverse the bytes to be big-endian. Then convert to bytes.
-    return bytes(reversed(bytes(c_type_int)))
+    c_type_int = type.value
+    c_type_instance = c_type_int(num)
+    return bytes(reversed(bytes(c_type_instance)))
 
 
-def bytes_to_int(bytes):
+def toInt(bytes) -> int:
     return int.from_bytes(bytes, byteorder="big")
 
 
