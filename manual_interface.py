@@ -50,6 +50,11 @@ class ManualInterface(tkinter.Tk):
     pressed_keys: set[Direction] = set()
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
     _term: int | None = None
+    pressed_keys = set()  # keeps track of keys which are pressed down
+    last_key_presses = {}
+    config = load_config()
+    connections: dict[str, ConnectionData] = dict()
+    active_connection: None | str = None
 
     def __init__(self) -> None:
         """Constructor sets up tkinter manual interface, including buttons and labels"""
@@ -59,12 +64,6 @@ class ManualInterface(tkinter.Tk):
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.scheduler = Scheduler(self)
         self.title("Talos Manual Interface")
-        self.pressed_keys = set()  # keeps track of keys which are pressed down
-        self.last_key_presses = {}
-
-        self.config = load_config()
-        self.connections = dict()
-        self.active_connection: None | str = None
         self.tracker = Tracker(self.connections, scheduler=self.scheduler)
         self.no_signal_display = self.draw_no_signal_display()
 
@@ -311,7 +310,13 @@ class ManualInterface(tkinter.Tk):
         Args:
             direction (string): global variables for directional commands are provided at the top of this file
         """
-        if not self.get_active_connection().manual or self.active_connection is None:
+        connection = self.get_active_connection()
+        if connection is None:
+            print(
+                f"[ERROR] No connection found for active connection: {self.active_connection}"
+            )
+            return
+        if not connection.manual or self.active_connection is None:
             return
         self.last_key_presses[direction] = time.time()
 
@@ -325,14 +330,18 @@ class ManualInterface(tkinter.Tk):
             self.keep_moving(direction)
             return
         # moves toward input direction by delta 10 (degrees)
-        connectionData = self.connections.get(self.active_connection)
+        connectionData = self.get_active_connection()
         if connectionData is None:
             print(
                 f"[ERROR] No connection found for active connection: {self.active_connection}"
             )
             return
-        publisher: Publisher = connectionData.publisher
-        publisher.move_in_direction_polar_discrete(direction)
+        if self.director is None:
+            print("[ERROR] Director not found")
+            return
+        self.director.move_in_direction_polar_discrete(
+            direction, connectionData.publisher
+        )
 
     def stop_move(self, direction: Direction) -> None:
         """Stops a movement going the current direction.
@@ -340,7 +349,13 @@ class ManualInterface(tkinter.Tk):
         Args:
             direction (string): global variables for directional commands are provided at the top of this file
         """
-        if not (self.get_active_connection().manual and direction in self.pressed_keys):
+        connection = self.get_active_connection()
+        if connection is None:
+            print(
+                f"[ERROR] No connection found for active connection: {self.active_connection}"
+            )
+            return
+        if not (connection.manual and direction in self.pressed_keys):
             return
         if direction in self.last_key_presses:
             last_pressed_time = self.last_key_presses[direction]
@@ -377,6 +392,9 @@ class ManualInterface(tkinter.Tk):
             direction (enum): the directional button to change.
             depression (string): "raised" or "sunken", the depression state to change to.
         """
+        if self.active_connection is None:
+            print("No active connection")
+            return
 
         match direction:
             case Direction.UP:
@@ -389,7 +407,7 @@ class ManualInterface(tkinter.Tk):
                 self.right_button.config(relief=depression)
 
         if self.continuous_mode.get() and len(self.pressed_keys) == 0:
-            connectionData = self.connections.get(self.active_connection)
+            connectionData = self.get_active_connection()
             if connectionData is None:
                 print(
                     f"[ERROR] No connection found for active connection: {self.active_connection}"
@@ -407,11 +425,14 @@ class ManualInterface(tkinter.Tk):
         """
         if not self.continuous_mode.get():
             return
+        if self.active_connection is None:
+            print("No active connection")
+            return
 
         self.after(self.move_delay_ms, lambda: self.keep_moving(direction))
 
         if len(self.pressed_keys) > 0:
-            connectionData = self.connections.get(self.active_connection)
+            connectionData = self.get_active_connection()
             if connectionData is None:
                 print(
                     f"[ERROR] No connection found for active connection: {self.active_connection}"
@@ -460,11 +481,17 @@ class ManualInterface(tkinter.Tk):
             self.run_display_loop = False
             self.update_connection_menu()
         else:
-            if self.director is None or self.get_active_connection().manual_only:
+            connection = self.get_active_connection()
+            if connection is None:
+                print(
+                    f"[ERROR] No connection found for active connection: {self.active_connection}"
+                )
+                return
+            if self.director is None or connection.manual_only:
                 self.automatic_button.configure(state="disabled")
             else:
                 self.automatic_button.configure(state="normal")
-            if self.get_active_connection().manual:
+            if connection.manual:
                 self.toggle_controls("normal")
                 self.automatic_button.deselect()
             else:
@@ -474,7 +501,16 @@ class ManualInterface(tkinter.Tk):
             if not self.run_display_loop:
                 self.after("idle", self.start_display_loop)
 
-    def get_active_connection(self) -> ConnectionData:
+    def get_active_connection(self) -> ConnectionData | None:
+        """
+        Returns the current active connection data.
+        This will throw an error if no active connection is set.
+        """
+        if (
+            self.active_connection is None
+            or self.active_connection not in self.connections
+        ):
+            return None
         return self.connections[self.active_connection]
 
     def update_connection_menu(self, new_selection=None):
@@ -550,23 +586,24 @@ class ManualInterface(tkinter.Tk):
         model_class, director_class = USABLE_MODELS[option]
         self.director = director_class(self.tracker, self.connections, self.scheduler)
         self.tracker.swap_model(model_class)
-        if self.connections and not self.get_active_connection().manual_only:
+        active_connection = self.get_active_connection()
+        if (
+            self.connections
+            and active_connection is not None
+            and not active_connection.manual_only
+        ):
             self.automatic_button.configure(state="normal")
-
-    # def toggle_continuous_mode(self) -> None:
-    #     self.continuous_mode = not self.continuous_mode
-
-    # if self.continuous_mode:
-    #     self.cont_mode_label.config(text=ButtonText.CONTINUOUS_MODE_LABEL)
-    # else:
-    #     self.cont_mode_label.config(text=ButtonText.DISCRETE_MODE_LABEL)
 
     def toggle_command_mode(self) -> None:
         """Toggles command mode between manual mode and automatic mode.
         Disables all other controls when in automatic mode.
         """
         connection = self.get_active_connection()
-        if self.get_active_connection().manual_only:
+        if connection is None:
+            print("No active connection found, cannot toggle command mode.")
+            self.automatic_button.deselect()
+            return
+        if connection.manual_only:
             print("Connection is set to manual only mode, cannot switch to automatic.")
             self.automatic_button.deselect()
             connection.set_manual(False)

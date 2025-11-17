@@ -109,6 +109,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "mediapipe" },
+    { name = "ultralytics" },
+]
 mediapipe = [
     { name = "jax", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "mediapipe" },
@@ -129,6 +133,7 @@ requires-dist = [
     { name = "customtkinter", specifier = ">=5.2.2" },
     { name = "docopt" },
     { name = "jax", extras = ["cpu"], marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'mediapipe'", specifier = "==0.4.38" },
+    { name = "mediapipe", marker = "extra == 'all'" },
     { name = "mediapipe", marker = "extra == 'mediapipe'", specifier = ">=0.10.21" },
     { name = "numpy" },
     { name = "opencv-contrib-python" },
@@ -137,10 +142,11 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'mediapipe'", specifier = "==2.2.2" },
     { name = "torch", marker = "(platform_machine != 'x86_64' and extra == 'mediapipe') or (sys_platform != 'darwin' and extra == 'mediapipe')", specifier = ">=2.6.0" },
+    { name = "ultralytics", marker = "extra == 'all'" },
     { name = "ultralytics", marker = "extra == 'yolo'" },
     { name = "websocket-client" },
 ]
-provides-extras = ["mediapipe", "yolo"]
+provides-extras = ["mediapipe", "yolo", "all"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pyinstaller", specifier = ">=6.16.0" }]

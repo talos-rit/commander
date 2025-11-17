@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from publisher import Publisher
+from connection_manager import ConnectionData
+from publisher import Direction, Publisher
 from tkscheduler import IterativeTask, Scheduler
 from utils import add_termination_handler, remove_termination_handler
 
@@ -22,7 +23,12 @@ class BaseDirector(ABC):
     control_task: IterativeTask | None = None
     _term: int | None = None
 
-    def __init__(self, tracker, connections, scheduler: Scheduler | None = None):
+    def __init__(
+        self,
+        tracker,
+        connections: dict[str, ConnectionData],
+        scheduler: Scheduler | None = None,
+    ):
         self.tracker = tracker
         self.scheduler = scheduler
         self.control_feeds: dict[str, ControlFeed] = dict()
@@ -106,3 +112,14 @@ class BaseDirector(ABC):
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None
+
+    def move_in_direction_polar_discrete(
+        self,
+        direction: Direction,
+        publisher: Publisher,
+        delay: int = 1000,
+        duration: int = 3000,
+    ):
+        directionTup = Direction.toDirectionTuple(direction)
+        directionTup: tuple[int, int] = tuple(x * 10 for x in directionTup)  # pyright: ignore[reportAssignmentType]
+        publisher.polar_pan_discrete(*directionTup, delay, duration)

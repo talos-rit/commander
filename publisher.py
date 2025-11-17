@@ -367,20 +367,3 @@ class Publisher:
         self.connection.publish(
             command=Command.EXECUTE_HARDWARE_OPERATION, payload=payload
         )
-
-    def move_in_direction_polar_discrete(
-        self, direction: Direction, delay: int = 1000, duration: int = 3000
-    ):
-        match direction:
-            case Direction.UP:
-                self.polar_pan_discrete(0, 10, delay, duration)
-                print("Polar pan discrete up")
-            case Direction.DOWN:
-                self.polar_pan_discrete(0, -10, delay, duration)
-                print("Polar pan discrete down")
-            case Direction.LEFT:
-                self.polar_pan_discrete(-10, 0, delay, duration)
-                print("Polar pan discrete left")
-            case Direction.RIGHT:
-                self.polar_pan_discrete(10, 0, delay, duration)
-                print("Polar pan discrete right")
