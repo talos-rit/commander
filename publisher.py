@@ -4,6 +4,18 @@ from connections import Connection
 from icd_config import Command, CTypesInt, toBytes
 from tkscheduler import Scheduler
 
+DIRECTION_OFFSET_MAPPING: dict[int, tuple[int, int]] = {
+    0: (0, 0),
+    1: (0, 1),
+    -1: (0, -1),
+    2: (1, 1),
+    -2: (-1, -1),
+    3: (1, 0),
+    -3: (-1, 0),
+    4: (1, -1),
+    -4: (-1, 1),
+}
+
 
 class Direction(IntEnum):
     """Directional Enum for interface controls
@@ -20,18 +32,7 @@ class Direction(IntEnum):
     @staticmethod
     def toDirectionTuple(sum_direction: int) -> tuple[int, int]:
         """Convert Direction enum to (x, y) tuple representation"""
-        mapping = {
-            0: (0, 0),
-            1: (0, 1),
-            -1: (0, -1),
-            2: (1, 1),
-            -2: (-1, -1),
-            3: (1, 0),
-            -3: (-1, 0),
-            4: (1, -1),
-            -4: (-1, 1),
-        }
-        return mapping[sum_direction]
+        return DIRECTION_OFFSET_MAPPING[sum_direction]
 
 
 def assert_normalized(*nums: int):
@@ -55,7 +56,9 @@ class Publisher:
     def start_socket_connection(self, schedule: Scheduler | None = None):
         self.connection.schedule = schedule
         self.connection.connect_on_thread()
-        print(f"Started socket connection to {self.connection.host}:{self.connection.port}")
+        print(
+            f"Started socket connection to {self.connection.host}:{self.connection.port}"
+        )
 
     def close_connection(self):
         self.connection.close()
