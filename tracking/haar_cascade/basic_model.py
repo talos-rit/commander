@@ -1,15 +1,15 @@
 import cv2
 
+from assets import join_paths
 from tracking.tracker import ObjectModel
-from utils import get_file_path
+
+MODEL_FILE = join_paths("haarcascade_frontalface_default.xml")
 
 
 class BasicModel(ObjectModel):
     # The tracker class is responsible for capturing frames from the source and detecting faces in the frames
     def __init__(self):
-        self.faceCascade = cv2.CascadeClassifier(
-            get_file_path("tracking/haar_cascade/haarcascade_frontalface_default.xml")
-        )
+        self.faceCascade = cv2.CascadeClassifier(MODEL_FILE)
 
     # Detect faces in the frame
     def detect_person(self, frame, inHeight=500, inWidth=0):

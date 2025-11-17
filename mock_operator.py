@@ -1,14 +1,11 @@
 import time
 
-from config import ROBOT_CONFIGS
 from connections import CommandConnection
-from icd_config import int_to_bytes
+from icd_config import CTypesInt, toBytes
 
-# Temporary hardcoded index to until hostname can be passed in
-CONFIG = ROBOT_CONFIGS["operator.talos"]
 
 class MockOperator:
-    connection = CommandConnection(host=CONFIG["socket_host"], port=CONFIG["socket_port"])
+    connection = CommandConnection(host="mock_socket_host", port=420)
 
     @staticmethod
     def close_connection():
@@ -20,7 +17,7 @@ class MockOperator:
 
 
 def create_return_payload(success):
-    return int_to_bytes(int(success), num_bits=16, unsigned=True)
+    return toBytes(int(success), CTypesInt.UINT16)
 
 
 def main():

@@ -2,9 +2,9 @@ import socket
 import threading
 import time
 
-from icd_config import bytes_to_int, int_to_bytes
+from icd_config import CTypesInt, toBytes, toInt
 from tkscheduler import Scheduler
-from utils import add_termination_handler
+from utils import add_termination_handler, remove_termination_handler
 
 
 class Connection:
@@ -14,6 +14,7 @@ class Connection:
     command_count = 0
     thread: threading.Thread | None = None
     schedule: Scheduler | None = None
+    _term: int | None = None
 
     def __init__(
         self, host, port, schedule: Scheduler | None = None, connect_on_init=True
@@ -30,20 +31,22 @@ class Connection:
     def connect_on_thread(self):
         self.thread = threading.Thread(target=self.connect, daemon=True)
         self.thread.start()
-        add_termination_handler(self.close)
+        self._term = add_termination_handler(self.close)
 
     def connect(self):
         self.is_running = True
-        while self.is_running:
+        for attempt in range(5):
+            if not self.is_running:
+                return  # Exit since this connection is not needed anymore
             try:
                 self.socket.connect((self.host, self.port))
                 print(f"Bound to socket: {self.host}:{self.port}")
                 break
             except OSError as e:
-                print(f"[Connection]: Bind failed, retrying in 5s {e}")
+                print(f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}")
                 time.sleep(5)
         else:
-            return  # Exit only if is_running was set to False
+            return  # Failed to connect after retries
 
         print("Starting to listen!")
         self.socket.listen()
@@ -62,6 +65,9 @@ class Connection:
         self.is_running = False
         if self.thread is not None:
             self.thread.join()
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
         self.socket.close()
         print("Socket closed cleanly")
 
@@ -84,12 +90,12 @@ class Connection:
         payload_length = 0 if payload is None else len(payload)
 
         # TODO: Implement checksum. May get removed
-        crc = int_to_bytes(0, num_bits=16, unsigned=True)
+        crc = toBytes(0, CTypesInt.UINT16)
 
-        command_id = int_to_bytes(command_id, num_bits=32, unsigned=True)
-        reserved = int_to_bytes(0, num_bits=16, unsigned=True)
-        command_byte = int_to_bytes(command, num_bits=16, unsigned=True)
-        payload_length = int_to_bytes(payload_length, num_bits=16, unsigned=True)
+        command_id = toBytes(command_id, CTypesInt.UINT32)
+        reserved = toBytes(0, CTypesInt.UINT16)
+        command_byte = toBytes(command, CTypesInt.UINT16)
+        payload_length = toBytes(payload_length, CTypesInt.UINT16)
 
         # Put header together
         header = command_id + reserved + command_byte + payload_length
@@ -104,7 +110,7 @@ class Connection:
         try:
             self.socket.sendall(message)  # safer than send()
         except OSError as e:
-            print(f"Socket send failed: {e}")
+            print(f"Socket send to {self.host} failed: {e}")
             return -1
 
         # TODO: Implement response handling if needed
@@ -136,9 +142,7 @@ class CommandConnection(Connection):
 
     def on_message(self, connection: socket.socket, message: bytes):
         command_value_bytes = message[6:8]
-        command_value = bytes_to_int(command_value_bytes)
+        command_value = toInt(command_value_bytes)
         return_command_value = command_value + 0x8000
-        return_command_value_bytes = int_to_bytes(
-            return_command_value, num_bits=16, unsigned=True
-        )
+        return_command_value_bytes = toBytes(return_command_value, CTypesInt.UINT16)
         connection.send(return_command_value_bytes)

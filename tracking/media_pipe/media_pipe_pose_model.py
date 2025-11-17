@@ -4,7 +4,10 @@ import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from tracking.media_pipe.mp_utils import get_model_asset_path
+from tracking.media_pipe.model_path import (
+    path_efficientdet_lite0,
+    path_pose_landmarker_lite,
+)
 from tracking.tracker import ObjectModel
 
 
@@ -15,13 +18,12 @@ class MediaPipePoseModel(ObjectModel):
     lost_threshold = 100
     speaker_color = None
     color_threshold = 15
+    speaker_bbox: tuple[int, int, int, int] | None = None
 
     def __init__(
         self,
     ):
-        base_options = python.BaseOptions(
-            model_asset_path=get_model_asset_path("efficientdet_lite0.tflite")
-        )
+        base_options = python.BaseOptions(model_asset_path=path_efficientdet_lite0)
         options = vision.ObjectDetectorOptions(
             base_options=base_options,
             score_threshold=0.5,
@@ -30,7 +32,7 @@ class MediaPipePoseModel(ObjectModel):
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
         pose_base_options = python.BaseOptions(
-            model_asset_path=get_model_asset_path("pose_landmarker_lite.task")
+            model_asset_path=path_pose_landmarker_lite
         )
         pose_options = vision.PoseLandmarkerOptions(
             base_options=pose_base_options,
