@@ -1,16 +1,36 @@
 import tkinter
+from dataclasses import dataclass, field
 from tkinter import ttk
 
-from src.config import add_config, load_config
-from src.publisher import Publisher
+from config import add_config, load_config
+from publisher import Publisher
 
 
+@dataclass
 class ConnectionData:
-    def __init__(self, host: str, port: int, publisher: Publisher):
-        self.host = host
-        self.port = port
-        self.publisher = publisher
-        self.fps = load_config().get(host, {}).get("fps", 60)
+    host: str
+    port: int
+    camera: str | int
+    publisher: Publisher
+    manual: bool = True
+    manual_only: bool = False
+    fps: int = field(default_factory=lambda: 60)
+    shape: tuple | None = None
+
+    def __post_init__(self):
+        conf = load_config()
+        fps = conf.get(self.host, {}).get("fps")
+        if fps is not None:
+            self.fps = fps
+        manual_only = conf.get(self.host, {}).get("manual_only")
+        if manual_only is not None:
+            self.manual_only = manual_only
+
+    def set_frame_shape(self, shape: tuple | None) -> None:
+        self.shape = shape
+
+    def set_manual(self, manual: bool) -> None:
+        self.manual = manual
 
 
 class ConnectionManager(tkinter.Toplevel):
@@ -87,10 +107,10 @@ class ConnectionManager(tkinter.Toplevel):
             self.parent.close_connection(hostname)
             self.render_list()
 
-    def add_connection(self, host, port, camera, write_config=True):
-        self.parent.open_connection(host, port, camera)
+    def add_connection(self, host, port, camera, write_config):
         if write_config:
             add_config(host, port, camera)
+        self.parent.open_connection(host, port, camera, write_config)
         self.render_list()
 
     def add_from_config(self, hostname):
@@ -128,10 +148,10 @@ class ConnectionManager(tkinter.Toplevel):
             nonlocal result
             host = host_var.get().strip()
             port_str = port_var.get().strip()
-            camera = camera_var.get().strip()
+            camera_str = camera_var.get().strip()
             write_config = write_config_var.get()
 
-            if not host or not port_str or not camera:
+            if not host or not port_str or not camera_str:
                 print("Host, port, and camera inputs are required.")
                 return
 
@@ -142,6 +162,8 @@ class ConnectionManager(tkinter.Toplevel):
             except ValueError:
                 print("Port must be an integer between 1 and 65535.")
                 return
+
+            camera = int(camera_str) if camera_str.isdigit() else camera_str
 
             popup.destroy()
             self.add_connection(host, port, camera, write_config)

@@ -4,7 +4,7 @@ import time
 
 from src.icd_config import CTypesInt, toBytes, toInt
 from src.tkscheduler import Scheduler
-from src.utils import add_termination_handler
+from src.utils import add_termination_handler, remove_termination_handler
 
 
 class Connection:
@@ -14,6 +14,7 @@ class Connection:
     command_count = 0
     thread: threading.Thread | None = None
     schedule: Scheduler | None = None
+    _term: int | None = None
 
     def __init__(
         self, host, port, schedule: Scheduler | None = None, connect_on_init=True
@@ -30,20 +31,22 @@ class Connection:
     def connect_on_thread(self):
         self.thread = threading.Thread(target=self.connect, daemon=True)
         self.thread.start()
-        add_termination_handler(self.close)
+        self._term = add_termination_handler(self.close)
 
     def connect(self):
         self.is_running = True
-        while self.is_running:
+        for attempt in range(5):
+            if not self.is_running:
+                return  # Exit since this connection is not needed anymore
             try:
                 self.socket.connect((self.host, self.port))
                 print(f"Bound to socket: {self.host}:{self.port}")
                 break
             except OSError as e:
-                print(f"[Connection]: Bind failed, retrying in 5s {e}")
+                print(f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}")
                 time.sleep(5)
         else:
-            return  # Exit only if is_running was set to False
+            return  # Failed to connect after retries
 
         print("Starting to listen!")
         self.socket.listen()
@@ -62,6 +65,9 @@ class Connection:
         self.is_running = False
         if self.thread is not None:
             self.thread.join()
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
         self.socket.close()
         print("Socket closed cleanly")
 

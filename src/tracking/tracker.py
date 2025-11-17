@@ -1,20 +1,25 @@
 from abc import ABC, abstractmethod
-from multiprocessing import Event, Lock, Process, Queue, shared_memory
-from queue import Empty
+from dataclasses import dataclass, field
+from multiprocessing import Event, Process, Queue, shared_memory
+from multiprocessing.managers import SharedMemoryManager
+from queue import Empty, Full
 
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from src.config import DEFAULT_CONFIG
+from src.config import load_config, load_default_config
+from src.manual_interface import ConnectionData
 from src.tkscheduler import IterativeTask, Scheduler
 from src.utils import (
     add_termination_handler,
     calculate_acceptable_box,
     calculate_center_bbox,
+    remove_termination_handler,
 )
 
 SHARED_MEM_FRAME_NAME = "frame"
+POLL_BBOX_CYCLE_INTERVAL_MS = 10
 
 
 class ObjectModel(ABC):
@@ -23,13 +28,6 @@ class ObjectModel(ABC):
     The reason why this is separated is due to the fact that this will be running in a separate process.
     """
 
-    speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = DEFAULT_CONFIG.get("fps", 60)
-    camera_index = DEFAULT_CONFIG["camera_index"]
-    acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
-    desired_width = DEFAULT_CONFIG.get("frame_width", None)
-    desired_height = DEFAULT_CONFIG.get("frame_height", None)
-
     # Capture a frame from the source
     @abstractmethod
     def detect_person(self, frame) -> list:  # bboxes
@@ -37,198 +35,343 @@ class ObjectModel(ABC):
 
 
 def _detect_person_worker(
-    model_class, bbox_queue: Queue, stopper, frame_shape, frame_dtype, lock
+    model_class,
+    bbox_queue: Queue,
+    stopper,
+    frame_mem: shared_memory.SharedMemory,
+    frame_shape,
+    frame_dtype,
 ) -> None:
     if model_class is None:
         print("Model was not found please pass a model into Tracker to run.")
         return
-    shm = shared_memory.SharedMemory(name=SHARED_MEM_FRAME_NAME)
-    frame = np.ndarray(frame_shape, dtype=frame_dtype, buffer=shm.buf)
-    last_frame = np.zeros(frame_shape, frame_dtype)
+    frame = np.ndarray(frame_shape, dtype=frame_dtype, buffer=frame_mem.buf)
     model: ObjectModel = model_class()
     try:
         while not stopper.is_set():
-            np.copyto(last_frame, frame)  # visual artifact is not critical
-            bboxes = model.detect_person(frame=frame)
-            with lock:
-                bbox_queue.put(bboxes)
+            bboxes = model.detect_person(frame=np.copy(frame))
+            try:
+                bbox_queue.put_nowait(bboxes)
+            except Full:
+                pass
     except KeyboardInterrupt:
         pass
     except ValueError:
         print("bbox_queue closed")
-        pass
-    finally:
-        print("Model exiting cleanly...")
-        shm.close()
-        bbox_queue.close()
-        print("Done")
+
+
+@dataclass
+class VideoConnection:
+    src: str | int
+    fps: int = field(default=10)
+    shape: tuple | None = field(default=None)
+    dtype: np.dtype | None = field(default=None)
+    cap: cv2.VideoCapture | None = field(default=None, repr=False)
+    task: IterativeTask | None = field(default=None, repr=False)
+    video_buffer_size: int = field(default=1)
+    _term: int | None = field(default=None)
+
+    def __post_init__(self):
+        if self.cap is None:
+            source = None
+            try:
+                source = int(self.src)
+            except ValueError:
+                source = self.src
+            self.cap = cv2.VideoCapture(source)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
+            self._term = add_termination_handler(self.close)
+        frame = None
+        for _ in range(6):
+            ret, frame = self.cap.read()
+            if ret and frame is not None:
+                break
+        else:
+            print("Unable to pull frame from camera")
+            return
+        self.shape = frame.shape
+        self.dtype = frame.dtype
+
+    @property
+    def frame(self) -> np.ndarray | None:
+        if self.cap is not None:
+            _, frame = self.cap.read()
+            return frame
+
+    def close(self):
+        if self.cap is not None:
+            self.cap.release()
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
 
 
 # Class for handling video feed and object detection model usage
 class Tracker:
-    task: IterativeTask | None = None
     speaker_bbox: tuple[int, int, int, int] | None = None
-    fps = DEFAULT_CONFIG.get("fps", 60)
-    # camera_index = DEFAULT_CONFIG["camera_index"]
-    acceptable_box_percent = DEFAULT_CONFIG["acceptable_box_percent"]
-    desired_width: int | None = DEFAULT_CONFIG.get("frame_width", None)
-    desired_height: int | None = DEFAULT_CONFIG.get("frame_height", None)
+    config: dict = load_config()
+    default_config: dict = load_default_config()
+    max_fps = 1  # this will be set dynamically based on captures
+    frame_delay: float = 0.0  # same as above
     model = None
+    captures: dict[str, VideoConnection] = dict()
+    frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
     active_connection: str | None = None
-    _bboxes: list | None = None
-    _frames = dict()
+    _bboxes: dict[str, list] = dict()
+    _frame_buf: np.ndarray
+    _bbox_queue: Queue
+    is_detection_running: bool = False
+    _detection_process: Process | None = None
+    _term: int | None = None
+    _send_frame_task: IterativeTask | None = None
+    _poll_bbox_task: IterativeTask | None = None
+    _smm: SharedMemoryManager | None = None
 
     def __init__(
         self,
-        connections,
+        connections: dict[str, ConnectionData] = dict(),
         model=None,
         scheduler: Scheduler | None = None,
         video_buffer_size=1,
     ):
-        self.connections = connections
-        self.captures = dict()
-        # self.cap = cv2.VideoCapture(source or self.camera_index)
-        # self.cap.set(cv2.CAP_PROP_BUFFERSIZE, video_buffer_size)  # Reduce buffer size
         self.video_buffer_size = video_buffer_size
-        self.frame_delay = 1000 / self.fps
         self.scheduler = scheduler
         self.model = model
+        self._smm = SharedMemoryManager()
+        self._smm.start()
+        for host, conn in connections.items():
+            self.max_fps = max(self.max_fps, conn.fps)
+            frame_shape = self.add_capture(
+                host, conn.camera, conn.fps, write_config=False
+            )
+            conn.set_frame_shape(frame_shape)
+        self.frame_delay = 1000 / self.max_fps
 
-    def add_capture(self, host: str, camera: str | int) -> None:
-        """Adds a new video capture for a given host."""
-        cap = cv2.VideoCapture(camera)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)  # Reduce buffer size
-        self.captures[host] = cap
-        if self.task is None or not self.task.running:
-            self.start_video()
+    def add_capture(
+        self, host: str, camera: str | int, fps: int, write_config: bool
+    ) -> tuple | None:
+        """Adds a new video capture for a given host.
+        If the detection process is running this will restart it.
+        Parameters:
+        - host: unique identifier for the video source
+        - camera: video source (file path or camera index)
+        - fps: frames per second for the video source
+        Returns:
+        - frame_shape: the frame shape of the video source
+        """
+        restart = False
+        if self._detection_process is not None:
+            restart = True
+            self.stop_detection_process()
+        elif self.model is not None:
+            restart = True
+        # if the detection process was not running because there were no captures, start after adding the first capture
+        conn = VideoConnection(src=camera, fps=fps)
+        self.captures[host] = conn
+        self.frame_order.append((host, 0))
+        if write_config:
+            self.config = load_config()
+        # self.update_max_fps()
+        if restart:
+            self.start_detection_process()
+        return conn.shape
 
-    def remove_capture(self, host: str) -> None:
-        """Removes a video capture for a given host."""
+    def remove_capture(self, host: str | None = None) -> None:
+        """Releases video capture for a given host if not all video capture is closed."""
+        if host is None:
+            for host, cap in self.captures.items():
+                cap.close()
+            return
         if host in self.captures:
-            self.captures[host].release()
-            self.captures.pop(host)
+            self.captures[host].close()
+        self.frame_order = [fo for fo in self.frame_order if fo[0] != host]
+        del self.captures[host]
         if not self.captures:
-            self.stop_video()
+            self.stop_detection_process()
+        # self.update_max_fps()
+
+    def update_max_fps(self) -> None:
+        """Updates the max fps based on current captures."""
+        self.max_fps = 0
+        for conn in self.captures.values():
+            self.max_fps = max(self.max_fps, conn.fps)
+        self.frame_delay = 1000 / self.max_fps
 
     def start_detection_process(self) -> None:
-        if hasattr(self, "_detection_process") and self._detection_process is not None:
+        if self._detection_process is not None:
             return  # Already running
+        assert self._smm is not None
+        print("Starting detection process...")
+        self.is_detection_running = True
+        total_shape = self.get_total_frame_shape()
+        total_nbytes = self.get_nbytes_from_total_shape(total_shape)
 
-        img = self.save_frame()
-        if img is None:
-            print("Frame not found")
-            return
-
-        connection = img.get(self.active_connection, None)
-        if connection is None:
-            return
-        _, frame = connection
-        self.shape = frame.shape
-        self.dtype = frame.dtype
         self.model_stopper = Event()
-        self._frame_mem = shared_memory.SharedMemory(
-            SHARED_MEM_FRAME_NAME, create=True, size=frame.nbytes
-        )
-        self._frame_buf = np.ndarray(self.shape, self.dtype, self._frame_mem.buf)
+        # idk why but gc keeps deleting shared memory without me holding reference via "self."
+        self._frame_memory = self._smm.SharedMemory(size=total_nbytes)
+        self._frame_buf = np.ndarray(total_shape, np.uint8, self._frame_memory.buf)
         # we only care about the latest bbox but I prefer to have more than 1 allocated size
         self._bbox_queue = Queue(maxsize=2)
-        self.lock = Lock()
         self._detection_process = Process(
             target=_detect_person_worker,
             args=(
                 self.model,
                 self._bbox_queue,
                 self.model_stopper,
-                self.shape,
-                self.dtype,
-                self.lock,
+                self._frame_memory,
+                total_shape,
+                np.uint8,
             ),
             daemon=True,
         )
         self._detection_process.start()
-        add_termination_handler(self.stop)
+        self._term = add_termination_handler(self.stop)
+        print("Detection process started.")
         if self.scheduler:
-            self.scheduler.set_timeout(10, self.poll_bboxes)
-            self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
+            self._poll_bbox_task = self.scheduler.set_interval(
+                self.frame_delay, self.poll_bboxes
+            )
+            self._send_frame_task = self.scheduler.set_interval(
+                self.frame_delay, self.send_latest_frame
+            )
 
     def poll_bboxes(self) -> None:
+        print("Polling bounding boxes from detection process")
+        raw_bboxes: None | list[tuple[int, int, int, int]] = None
+
         try:
-            with self.lock:
-                self._bboxes = self._bbox_queue.get(block=False)
+            raw_bboxes = self._bbox_queue.get(block=False)
         except ValueError:
-            pass
+            return
         except Empty:
-            pass
-        if (
-            self._detection_process is not None
-            and self._detection_process.is_alive()
-            and self.scheduler
-        ):
-            self.scheduler.set_timeout(10, self.poll_bboxes)
-        elif self._detection_process is None:
-            print("detection process is None; clearing internal bbox cache")
-            self._bboxes = None
+            return
+        assert raw_bboxes is not None
+
+        bboxes_by_host: dict = {host: [] for host, _ in self.frame_order}
+
+        if 1 == len(self.frame_order):
+            (host, _) = self.frame_order[0]
+            self._bboxes = {host: raw_bboxes}
+            return
+
+        for x1, y1, x2, y2 in raw_bboxes:
+            cx = (x1 + x2) // 2
+
+            for index, (host, dx) in enumerate(self.frame_order):
+                if index == len(self.frame_order) - 1:
+                    bboxes_by_host[host].append(
+                        [max(0, x1 - dx), y1, max(0, x2 - dx), y2]
+                    )
+                    continue
+                (_, dx_next) = self.frame_order[index + 1]
+                if cx >= dx and cx < dx_next:
+                    bboxes_by_host[host].append(
+                        [max(0, x1 - dx), y1, max(0, x2 - dx), y2]
+                    )
+
+        self._bboxes = bboxes_by_host
+
+    def get_total_frame_shape(self):
+        """
+        Merges all of the frames side by side in a predictive manner.
+        """
+        total_width = 0
+        max_height = 0
+        self.frame_order = list()
+        for host, vid in self.captures.items():
+            shape = vid.shape
+            if shape is None:
+                continue
+            max_height = max(max_height, shape[0])
+            self.frame_order.append((host, total_width))
+            total_width = total_width + shape[1]
+        return (max_height, total_width, 3)
+
+    def get_nbytes_from_total_shape(self, shape):
+        """Given total frame shape, calculate nbytes for shared memory.
+
+        Accepts shape in either (height, width) or (height, width, channels).
+        Assumes 8-bit per channel (np.uint8) which is standard for OpenCV frames.
+        """
+        if shape is None:
+            return 0
+        if len(shape) == 2:
+            height, width = shape
+            channels = 3
+        elif len(shape) == 3:
+            height, width, channels = shape
+        else:
+            raise ValueError(f"Unsupported shape length: {len(shape)}")
+
+        try:
+            h = int(height)
+            w = int(width)
+            c = int(channels)
+        except (TypeError, ValueError):
+            raise ValueError("Shape elements must be integers")
+
+        return h * w * c * np.dtype(np.uint8).itemsize
 
     def send_latest_frame(self) -> None:
-        if hasattr(self, "_frames") and self._frames is not None:
-            try:
-                first_frame = self._frames[next(iter(self._frames))][1]
-                np.copyto(self._frame_buf, first_frame)
-            except Exception as e:
-                print("Exception raise while copying frame to shared memory:", e)
-                pass
-        if (
-            self._detection_process is not None
-            and self._detection_process.is_alive()
-            and self.scheduler
-        ):
-            self.scheduler.set_timeout(self.frame_delay, self.send_latest_frame)
+        if 1 == len(self.frame_order):
+            (host, _) = self.frame_order[0]
+            vid = self.captures[host]
+            new_frame = vid.frame
+            if new_frame is not None:
+                np.copyto(self._frame_buf, new_frame)
+            return
+
+        frames = [self.captures[host].frame for host, _ in self.frame_order]
+        frames = [f for f in frames if f is not None]
+        if len(frames) == 0:
+            print("No frames available to update frame buffer.")
+            return
+        # Compare heights of frames and padd the bottom to the smaller ones to match the largest height
+        max_height = max(frame.shape[0] for frame in frames)
+        resized_frames = [
+            frame
+            if frame.shape[0] == max_height
+            else np.pad(
+                frame,
+                ((0, max_height - frame.shape[0]), (0, 0), (0, 0)),
+                mode="constant",
+                constant_values=0,
+            )
+            for frame in frames
+        ]
+        hstack = np.hstack(resized_frames)
+        np.copyto(self._frame_buf, hstack)
 
     def stop_detection_process(self) -> bool:
         """Returns true if process properly closed"""
-        if hasattr(self, "_detection_process") and self._detection_process is not None:
+        if not self.is_detection_running:
+            return True
+        assert self._smm is not None
+        self.is_detection_running = False
+        self._send_frame_task.cancel() if self._send_frame_task else None
+        self._poll_bbox_task.cancel() if self._poll_bbox_task else None
+        self._bboxes = dict()
+        if self._detection_process is not None:
             try:
                 self.model_stopper.set()
                 self._detection_process.join()
-                self._frame_mem.close()
-                self._frame_mem.unlink()
                 self._bbox_queue.close()
                 self._bbox_queue.join_thread()
+                self.model_stopper.clear()
             except Exception as e:
                 print("Exception occured:", e)
                 return False
             self._detection_process = None
-        self._bboxes = None
+            print("Detection process stopped.")
         return True
 
-    def save_frame(self):
-        if not self.captures:
-            print("[WARNING] No captures available to save frame from, stopping video")
-            self.stop_video()
-            return None
-        frames = dict()
-        for host, cap in self.captures.items():
-            hasFrame, frame = cap.read()
-            if hasFrame:
-                frames[host] = (True, frame)
-        self._frames = frames
-        return self._frames
-
-    def get_frame_shape(self) -> tuple[int, int]:
+    def get_frame_shape(self, host):  # -> tuple[Any, ...] | None:
         """returns: (height, weight)"""
-        if self._frames is None:
-            self.save_frame()
-        assert self._frames
-        self.hasNewFrame = False
-        # TODO: figure out which video feed's frame shape is needed, probably by passing this function a hostname
-        (_, frame) = self._frames[
-            next(iter(self._frames))
-        ]  # Temporarily just grab the first one
-        frame_height = frame.shape[0]
-        frame_width = frame.shape[1]
-        return (frame_height, frame_width)
+        conn = self.captures[host]
+        if conn is not None:
+            return conn.shape
 
-    def get_bbox(self):  # -> list[Any] | None:
+    def get_bboxes(self):
         return self._bboxes
 
     def draw_visuals(self, bounding_box, frame):  # -> Any:
@@ -301,15 +444,24 @@ class Tracker:
             )
         return frame
 
-    def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage:
+    def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
         """Convert frame to tkinter image"""
+        # Load config values
+        if self.active_connection in self.config:
+            config_data = self.config[self.active_connection]
+        else:
+            config_data = self.default_config
+        desired_height: int | None = config_data.get("frame_height", None)
+        desired_width: int | None = config_data.get("frame_width", None)
+        if frame is None:
+            return None
         frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(frame_rgb)
 
-        dim = (self.desired_width, self.desired_height)
-        if self.desired_height is None:
+        dim = (desired_width, desired_height)
+        if desired_height is None:
             # Set desired dimensions (adjust these values as needed)
-            new_width = self.desired_width or 500
+            new_width = desired_width or 500
             aspect_ratio = float(frame.shape[1]) / float(frame.shape[0])
             new_height = int(new_width / aspect_ratio)
 
@@ -319,7 +471,7 @@ class Tracker:
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
         return ImageTk.PhotoImage(image=pil_image)
 
-    def create_imagetk(self, bboxes=None, frame=None) -> None | ImageTk.PhotoImage:
+    def create_imagetk(self) -> None | ImageTk.PhotoImage:
         """This adds bounding box to the frame
         and returns the tkimage created.
         If the frame is supplied that frame will be used,
@@ -330,18 +482,17 @@ class Tracker:
             - bboxes
             - ImageTk.PhotoImage
         """
-        if frame is None:
-            active_frame = self._frames.get(self.active_connection, None)
-            frame = active_frame[1] if active_frame is not None else None
-        bboxes = bboxes or self._bboxes
-        if frame is None:
-            return None
-        # FIXME: this function needs to have bboxes be separated per connection
-        # if bboxes is not None:
-        #     self.draw_visuals(bboxes, frame)
-        if frame is None:
-            return None
-        return self.conv_cv2_frame_to_tkimage(frame)
+        if self.active_connection is None:
+            return
+        cap = self.captures.get(self.active_connection, None)
+        if cap is None:
+            return
+        active_frame = cap.frame
+        if self.active_connection is not None:
+            bboxes = self._bboxes.get(self.active_connection, None)
+            if bboxes is not None:
+                self.draw_visuals(bboxes, active_frame)
+        return self.conv_cv2_frame_to_tkimage(active_frame)
 
     def set_active_connection(self, connection: str) -> None:
         self.active_connection = connection
@@ -349,30 +500,15 @@ class Tracker:
     def remove_active_connection(self) -> None:
         self.active_connection = None
 
-    def start_video(self) -> IterativeTask:
-        assert self.scheduler is not None
-        assert Tracker.task is None or not Tracker.task.running
-        Tracker.task = self.scheduler.set_interval(self.frame_delay, self.save_frame)
-        print("Video started")
-        return Tracker.task
-
-    def stop_video(self) -> None:
-        """Stops the save frame capturing process"""
-        print("Stopping video")
-        if Tracker.task is not None:
-            Tracker.task.cancel()
-
-    # NOTE: This function is never used, leaving it here for now
-    def start(self) -> None:
-        print("Starting Tracker")
-        self.start_video()
-        self.start_detection_process()
-
     def stop(self) -> bool:
-        print("Stopping Tracker")
-        self.stop_video()
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
+        self.remove_capture()
         for _ in range(6):
             if self.stop_detection_process():
+                self._smm.shutdown() if self._smm is not None else None
+                self._smm = None
                 return True
         return False
 
@@ -382,4 +518,7 @@ class Tracker:
             print("Failed to stop detection model")
             return
         self.model = new_model
-        self.start_detection_process()
+        if (
+            self.captures and self.model is not None
+        ):  # do not start detection process if there are no captures, or if model is None
+            self.start_detection_process()

@@ -75,7 +75,26 @@ def calculate_center_bbox(bbox: tuple[int, int, int, int]):
     return calculate_center_box(*bbox)
 
 
-TERMINATION_HANDLERS: list
+def id_generator():
+    """Id generator for handlers."""
+    current_id = 0
+    while True:
+        yield current_id
+        current_id += 1
+
+
+class TerminationHandler:
+    id: int | None = None
+
+    def __init__(self, func) -> None:
+        self.func = func
+
+    def __call__(self, *args, **kwds):
+        return self.func(*args, **kwds)
+
+
+TERMINATION_HANDLERS: list[TerminationHandler]
+ID_GEN = id_generator()
 
 
 def start_termination_guard():
@@ -85,9 +104,12 @@ def start_termination_guard():
     signal.signal(signal.SIGINT, terminate)
 
 
-def add_termination_handler(handler):
-    global TERMINATION_HANDLERS
+def add_termination_handler(call):
+    global TERMINATION_HANDLERS, ID_GEN
+    handler = TerminationHandler(call)
+    handler.id = next(ID_GEN)
     TERMINATION_HANDLERS.append(handler)
+    return handler.id
 
 
 def terminate(signum, frame):
@@ -99,4 +121,8 @@ def terminate(signum, frame):
         handler = TERMINATION_HANDLERS.pop()
         handler()
     print("Finished clean up")
-    # sys.exit(0)
+
+
+def remove_termination_handler(id: int):
+    global TERMINATION_HANDLERS
+    TERMINATION_HANDLERS = [h for h in TERMINATION_HANDLERS if h.id != id]
