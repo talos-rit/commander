@@ -42,9 +42,9 @@ CONTROL_BTN_GRID_FIT_STYLE = {
     "sticky": "nsew",
 }
 OPTIONS_MENU_STYLE: dict[str, str] = {
-    "button_color": "#4c4c4c",
-    "button_hover_color": "#565656",
-    "fg_color": "#2b2b2b",
+    "button_color": "#3f3f3f",
+    "button_hover_color": "#6B6B6B",
+    "fg_color": "#3a3a3a",
 }
 
 
@@ -224,10 +224,12 @@ class ManualInterface(tk.Tk):
             text="Manage connections",
             command=self.manage_connections,
             font=("Cascadia Code", 10, "bold"),
-            fg_color="#2b2b2b",
-            hover_color="#565656",
+            fg_color="#3f3f3f",
+            hover_color="#6B6B6B",
         )
-        self.manageConnectionsButton.grid(row=0, column=0, ipady=2, sticky="ew")
+        self.manageConnectionsButton.grid(
+            row=0, column=0, ipady=2, padx=5, pady=5, sticky="ew"
+        )
 
         self.selectedConnection = tk.StringVar(value="None")
         self.selectedConnection.trace_add(
@@ -245,7 +247,7 @@ class ManualInterface(tk.Tk):
             command=self.set_active_connection,
             **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
         )
-        self.connectionMenu.grid(row=1, column=0, pady=5, sticky="ew")
+        self.connectionMenu.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
 
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
