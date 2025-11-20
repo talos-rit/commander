@@ -10,6 +10,8 @@ dependencies = [
     "pyyaml",
     "pillow",
     "customtkinter>=5.2.2",
+    "sv-ttk>=2.6.1",
+    "darkdetect>=0.8.0",
 ]
 name = "commander"
 requires-python = "==3.12.*"
