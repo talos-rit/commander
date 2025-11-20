@@ -236,14 +236,14 @@ class ManualInterface(tk.Tk):
             "write",
             lambda *args: self.set_active_connection(self.selectedConnection.get()),
         )
-        initial_options = (
+        self.connectionMenuList = (
             list(self.connections.keys()) if self.connections else ["None"]
         )
 
         self.connectionMenu = ctk.CTkOptionMenu(
             connection_frame,
             variable=self.selectedConnection,
-            values=initial_options,
+            values=self.connectionMenuList,
             command=self.set_active_connection,
             **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
         )
@@ -526,21 +526,16 @@ class ManualInterface(tk.Tk):
 
     def update_connection_menu(self, new_selection=None):
         """Refresh dropdown menu to show the latest connections"""
-        menu = self.connectionMenu["menu"]
-        menu.delete(0, "end")  # clear old options
 
         if not self.connections:
-            menu.add_command(
-                label="None", command=lambda: self.selectedConnection.set("None")
-            )
+            options = ["None"]
             self.selectedConnection.set("None")
+            self.connectionMenu.configure(values=options)
             return
 
-        for conn in self.connections:
-            menu.add_command(
-                label=conn,
-                command=lambda value=conn: self.selectedConnection.set(value),
-            )
+        options = list(self.connections.keys())
+        self.connectionMenu.configure(values=options)
+
         # If a new connection was added, switch to it
         if new_selection and new_selection in self.connections:
             self.selectedConnection.set(new_selection)
