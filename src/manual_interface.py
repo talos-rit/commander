@@ -1,10 +1,12 @@
 import time
-import tkinter
+import tkinter as tk
 from enum import StrEnum
 from threading import Thread
 from typing import Literal
 
-import customtkinter
+import customtkinter as ctk
+import darkdetect
+import sv_ttk
 from PIL import Image, ImageDraw, ImageTk
 
 from src.config import load_config
@@ -18,6 +20,32 @@ from src.utils import (
     start_termination_guard,
     terminate,
 )
+
+BORDER_STYLE = {
+    "border_width": 2,
+    "border_color": "#3D3D3D",
+}
+CONTROL_BTN_STYLE = {
+    "fg_color": "#ffffff",
+    "corner_radius": 10,
+    "text_color": "#000000",
+    "text_color_disabled": "#7A7A7A",
+    "font": ("Cascadia Code", 16, "bold"),
+    "hover_color": "#E5E5E5",
+    **BORDER_STYLE,
+}
+CONTROL_BTN_GRID_FIT_STYLE = {
+    "padx": 2,
+    "pady": 2,
+    "ipady": 25,
+    "ipadx": 25,
+    "sticky": "nsew",
+}
+OPTIONS_MENU_STYLE: dict[str, str] = {
+    "button_color": "#4c4c4c",
+    "button_hover_color": "#565656",
+    "fg_color": "#2b2b2b",
+}
 
 
 class ButtonText(StrEnum):
@@ -38,7 +66,7 @@ class ButtonText(StrEnum):
     AUTOMATIC_MODE_LABEL = "Automatic"
 
 
-class ManualInterface(tkinter.Tk):
+class ManualInterface(tk.Tk):
     """
     Representation of a manual interface used to control
     the robotic arm which holds the camera.
@@ -54,6 +82,8 @@ class ManualInterface(tkinter.Tk):
     def __init__(self) -> None:
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
+        # ctk.DrawEngine.preferred_drawing_method = "circle_shapes"
+        sv_ttk.set_theme(darkdetect.theme())  # pyright: ignore[reportArgumentType]
         start_termination_guard()
         self._term = add_termination_handler(super().destroy)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -68,20 +98,32 @@ class ManualInterface(tkinter.Tk):
         self.tracker = Tracker(self.connections, scheduler=self.scheduler)
         self.no_signal_display = self.draw_no_signal_display()
 
-        self.continuous_mode = tkinter.BooleanVar(value=True)  # continuous/discrete
-        self.toggle_group = tkinter.Frame(self)
-        self.toggle_group.grid(row=1, column=0)
+        container = tk.Frame(self)
+        container.pack(fill="both", expand=True)
+        container.rowconfigure(0, weight=3)
+        container.rowconfigure([1, 2, 3], weight=1)
+        container.columnconfigure([0, 1, 2], weight=1)
 
-        self.automatic_button = customtkinter.CTkSwitch(
+        self.toggle_group = ctk.CTkFrame(
+            container,
+            corner_radius=10,
+            **BORDER_STYLE,
+        )
+        self.toggle_group.grid(row=1, column=0, padx=2, pady=2, sticky="nsew")
+        self.toggle_group.columnconfigure([0, 2], weight=1)
+        self.toggle_group.rowconfigure([0, 3], weight=1)
+
+        self.automatic_button = ctk.CTkSwitch(
             self.toggle_group,
             text=ButtonText.AUTOMATIC_MODE_LABEL,
             font=("Cascadia Code", 16, "bold"),
             command=self.toggle_command_mode,
         )
-        self.automatic_button.pack(side="top", anchor="w", pady=5)
+        self.automatic_button.grid(row=1, column=1, sticky="ew")
         self.automatic_button.configure(state="disabled")
 
-        self.cont_toggle_button = customtkinter.CTkSwitch(
+        self.continuous_mode = tk.BooleanVar(value=True)  # continuous/discrete
+        self.cont_toggle_button = ctk.CTkSwitch(
             self.toggle_group,
             text=ButtonText.CONTINUOUS_MODE_LABEL,
             font=("Cascadia Code", 16, "bold"),
@@ -89,63 +131,53 @@ class ManualInterface(tkinter.Tk):
             onvalue=True,
             offvalue=False,
         )
-        self.cont_toggle_button.pack(side="top", anchor="w")
+        self.cont_toggle_button.grid(row=2, column=1, sticky="ew")
 
         # setting up home button
 
-        self.home_button = tkinter.Button(
-            self,
+        self.home_button = ctk.CTkButton(
+            container,
             text=ButtonText.HOME,
-            height=2,
-            width=10,
-            font=("Cascadia Code", 16, "bold"),
             command=self.move_home,
+            **CONTROL_BTN_STYLE,
         )
-        self.home_button.grid(row=2, column=1, padx=10, pady=10)
+        self.home_button.grid(row=2, column=1, **CONTROL_BTN_GRID_FIT_STYLE)
 
         # setting up directional buttons
 
-        self.up_button = tkinter.Button(
-            self,
+        self.up_button = ctk.CTkButton(
+            container,
             text=ButtonText.UP,
-            height=2,
-            width=10,
-            font=("Cascadia Code", 16, "bold"),
+            **CONTROL_BTN_STYLE,
         )
-        self.up_button.grid(row=1, column=1, padx=10, pady=10)
+        self.up_button.grid(row=1, column=1, **CONTROL_BTN_GRID_FIT_STYLE)
 
         self.bind_button(self.up_button, Direction.UP)
 
-        self.down_button = tkinter.Button(
-            self,
+        self.down_button = ctk.CTkButton(
+            container,
             text=ButtonText.DOWN,
-            height=2,
-            width=10,
-            font=("Cascadia Code", 16, "bold"),
+            **CONTROL_BTN_STYLE,
         )
-        self.down_button.grid(row=3, column=1, padx=10, pady=10)
+        self.down_button.grid(row=3, column=1, **CONTROL_BTN_GRID_FIT_STYLE)
 
         self.bind_button(self.down_button, Direction.DOWN)
 
-        self.left_button = tkinter.Button(
-            self,
+        self.left_button = ctk.CTkButton(
+            container,
             text=ButtonText.LEFT,
-            height=2,
-            width=10,
-            font=("Cascadia Code", 16, "bold"),
+            **CONTROL_BTN_STYLE,
         )
-        self.left_button.grid(row=2, column=0, padx=10, pady=10)
+        self.left_button.grid(row=2, column=0, **CONTROL_BTN_GRID_FIT_STYLE)
 
         self.bind_button(self.left_button, Direction.LEFT)
 
-        self.right_button = tkinter.Button(
-            self,
+        self.right_button = ctk.CTkButton(
+            container,
             text=ButtonText.RIGHT,
-            height=2,
-            width=10,
-            font=("Cascadia Code", 16, "bold"),
+            **CONTROL_BTN_STYLE,
         )
-        self.right_button.grid(row=2, column=2, padx=10, pady=10)
+        self.right_button.grid(row=2, column=2, **CONTROL_BTN_GRID_FIT_STYLE)
 
         self.bind_button(self.right_button, Direction.RIGHT)
 
@@ -154,65 +186,66 @@ class ManualInterface(tkinter.Tk):
 
         # Setting up integrated video
         # Create a label that will display video frames.
-        self.video_label = tkinter.Label(self)
-        # This line ensures it stays on the top of the manual interface and centers it in the  middle
+        self.video_label = tk.Label(container)
         self.video_label.grid(
-            row=0, column=0, columnspan=6, padx=10, pady=10, sticky="nsew"
+            row=0, column=0, columnspan=3, padx=10, pady=10, sticky="nsew"
         )
         self.update_display(self.no_signal_display)
 
-        self.model_frame = tkinter.Frame(self)
-        self.model_frame.grid(row=3, column=0)
+        self.model_frame = tk.Frame(container)
+        self.model_frame.grid(row=3, column=0, padx=5, pady=5, sticky="nsew")
+        self.model_frame.columnconfigure(0, weight=1)
 
-        tkinter.Label(
+        tk.Label(
             self.model_frame,
             text="Detection Model",
             font=("Cascadia Code", 16),
-        ).pack(side="top", anchor="w")
+        ).grid(row=0, column=0, pady=2, sticky="ew")
 
         options = ["None"] + MODEL_OPTIONS
-        customtkinter.CTkOptionMenu(
+        ctk.CTkOptionMenu(
             self.model_frame,
-            variable=tkinter.StringVar(value="None"),
+            variable=tk.StringVar(value="None"),
             values=options,
             command=self.set_mode,
-            width=150,
-            button_color="#4c4c4c",
-            button_hover_color="#565656",
-            fg_color="#2b2b2b",
-        ).pack(side="top", anchor="w")
+            **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
+        ).grid(row=1, column=0, sticky="ew")
 
-        self.loadAllButton = tkinter.Button(
-            self,
-            text="Connect all",
-            font=("Cascadia Code", 10, "bold"),
-            command=self.open_all_configured,
+        connection_frame = ctk.CTkFrame(
+            container,
+            corner_radius=10,
+            **BORDER_STYLE,
         )
-        self.loadAllButton.grid(row=1, column=6, padx=10)
+        connection_frame.grid(row=3, column=2, padx=5, pady=5, sticky="nsew")
+        connection_frame.columnconfigure(0, weight=1)
 
-        self.manageConnectionsButton = tkinter.Button(
-            self,
+        self.manageConnectionsButton = ctk.CTkButton(
+            connection_frame,
             text="Manage connections",
-            font=("Cascadia Code", 10, "bold"),
             command=self.manage_connections,
+            font=("Cascadia Code", 10, "bold"),
+            fg_color="#2b2b2b",
+            hover_color="#565656",
         )
-        self.manageConnectionsButton.grid(row=2, column=6, padx=10)
+        self.manageConnectionsButton.grid(row=0, column=0, ipady=2, sticky="ew")
 
-        self.selectedConnection = tkinter.StringVar(value="None")
+        self.selectedConnection = tk.StringVar(value="None")
         self.selectedConnection.trace_add(
             "write",
             lambda *args: self.set_active_connection(self.selectedConnection.get()),
         )
-        initial_options = self.connections if self.connections else ["None"]
-
-        self.connectionMenu = tkinter.OptionMenu(
-            self,
-            self.selectedConnection,
-            *initial_options,
-            command=self.set_active_connection,
+        initial_options = (
+            list(self.connections.keys()) if self.connections else ["None"]
         )
-        self.connectionMenu.config(width=10)
-        self.connectionMenu.grid(row=3, column=6, padx=10)
+
+        self.connectionMenu = ctk.CTkOptionMenu(
+            connection_frame,
+            variable=self.selectedConnection,
+            values=initial_options,
+            command=self.set_active_connection,
+            **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
+        )
+        self.connectionMenu.grid(row=1, column=0, pady=5, sticky="ew")
 
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
@@ -232,7 +265,7 @@ class ManualInterface(tkinter.Tk):
         """Shortens the constructor by binding button up/down presses.
 
         Args:
-            button (tkinter.Button): button to bind with press and release functions
+            button (tk.Button): button to bind with press and release functions
             direction (string): global variables for directional commands are provided at the top of this file
         """
 
@@ -617,11 +650,11 @@ class ManualInterface(tkinter.Tk):
         if state not in ("normal", "active", "disabled"):
             raise ValueError(f"Invalid state: {state!r}")
 
-        self.up_button.config(state=state)
-        self.down_button.config(state=state)
-        self.left_button.config(state=state)
-        self.right_button.config(state=state)
-        self.home_button.config(state=state)
+        self.up_button.configure(state=state)
+        self.down_button.configure(state=state)
+        self.left_button.configure(state=state)
+        self.right_button.configure(state=state)
+        self.home_button.configure(state=state)
 
     def destroy(self):
         if self._term is not None:
