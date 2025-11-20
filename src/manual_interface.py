@@ -528,9 +528,8 @@ class ManualInterface(tk.Tk):
         """Refresh dropdown menu to show the latest connections"""
 
         if not self.connections:
-            options = ["None"]
             self.selectedConnection.set("None")
-            self.connectionMenu.configure(values=options)
+            self.connectionMenu.configure(values=["None"])
             return
 
         options = list(self.connections.keys())
