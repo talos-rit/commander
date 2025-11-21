@@ -1,8 +1,8 @@
 from enum import IntEnum
 
-from connections import Connection
-from icd_config import Command, CTypesInt, toBytes
-from tkscheduler import Scheduler
+from src.connections import Connection
+from src.icd_config import Command, CTypesInt, toBytes
+from src.tkscheduler import Scheduler
 
 DIRECTION_OFFSET_MAPPING: dict[int, tuple[int, int]] = {
     0: (0, 0),

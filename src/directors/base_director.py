@@ -2,9 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from publisher import Publisher
-from tkscheduler import IterativeTask, Scheduler
-from utils import add_termination_handler, remove_termination_handler
+from src.publisher import Publisher
+from src.tkscheduler import IterativeTask, Scheduler
+from src.utils import add_termination_handler, remove_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
 

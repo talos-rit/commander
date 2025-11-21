@@ -2,8 +2,8 @@ import tkinter
 from dataclasses import dataclass, field
 from tkinter import ttk
 
-from config import add_config, load_config
-from publisher import Publisher
+from src.config import add_config, load_config
+from src.publisher import Publisher
 
 
 @dataclass

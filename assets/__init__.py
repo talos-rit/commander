@@ -1,6 +1,6 @@
 from os import path
 
-from utils import get_file_path
+from src.utils import get_file_path
 
 ASSET_DIRPATH = path.dirname(path.abspath(__file__))
 

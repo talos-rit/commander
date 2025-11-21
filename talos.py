@@ -3,8 +3,8 @@ import multiprocessing
 
 import cv2
 
-from directors.continuous_director import ContinuousDirector
-from manual_interface import ManualInterface
+from src.directors.continuous_director import ContinuousDirector
+from src.manual_interface import ManualInterface
 
 
 def main() -> None:

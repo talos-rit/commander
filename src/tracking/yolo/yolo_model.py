@@ -6,7 +6,7 @@ import torch
 from ultralytics import YOLO
 
 from assets import join_paths
-from tracking.tracker import ObjectModel
+from src.tracking.tracker import ObjectModel
 
 
 class YOLOModel(ObjectModel):

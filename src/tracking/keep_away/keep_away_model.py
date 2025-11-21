@@ -1,28 +1,31 @@
+import time
+
 import cv2
 import mediapipe as mp
 import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from tracking.media_pipe.model_path import (
+from src.tracking.media_pipe.model_path import (
     path_efficientdet_lite0,
     path_pose_landmarker_lite,
 )
-from tracking.tracker import ObjectModel
+from src.tracking.tracker import ObjectModel
+from src.utils import calculate_acceptable_box
 
 
-class MediaPipePoseModel(ObjectModel):
-    # The tracker class is responsible for capturing frames from the source and detecting people in the frames
-
+class KeepAwayModel(ObjectModel):
     lost_counter = 0
     lost_threshold = 100
     speaker_color = None
     color_threshold = 15
+    keep_away_mode = False
+    countdown_start = None
+    game_over = True
     speaker_bbox: tuple[int, int, int, int] | None = None
 
-    def __init__(
-        self,
-    ):
+    # The tracker class is responsible for capturing frames from the source and detecting people in the frames
+    def __init__(self):
         base_options = python.BaseOptions(model_asset_path=path_efficientdet_lite0)
         options = vision.ObjectDetectorOptions(
             base_options=base_options,
@@ -62,7 +65,6 @@ class MediaPipePoseModel(ObjectModel):
         detection_result = object_detector.detect(mp_image)
         if not detection_result:
             return []
-
         bboxes = []
         for detection in detection_result.detections:
             # print(detection)
@@ -112,9 +114,7 @@ class MediaPipePoseModel(ObjectModel):
             vertical_diff_left = abs(left_wrist.y - left_shoulder.y)
             vertical_diff_right = abs(right_wrist.y - right_shoulder.y)
 
-            if vertical_diff_left < 0.1 and vertical_diff_right < 0.1:
-                return True
-
+            return vertical_diff_left < 0.1 and vertical_diff_right < 0.1
         return False
 
     def detect_person(self, frame):
@@ -126,7 +126,7 @@ class MediaPipePoseModel(ObjectModel):
         """
         bboxes = self.detectPerson(self.object_detector, frame)
 
-        if self.speaker_bbox is None:
+        if self.speaker_bbox is None or self.game_over is True:
             # If no speaker is locked in yet, look for the X pose.
             for box in bboxes:
                 bbox = box
@@ -134,7 +134,6 @@ class MediaPipePoseModel(ObjectModel):
                 cropped = frame[y1:y2, x1:x2]
                 if cropped.size == 0:
                     continue
-
                 cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cropped_rgb)
                 # Run pose detection on the cropped image.
@@ -142,8 +141,10 @@ class MediaPipePoseModel(ObjectModel):
                 if not pose_result or not pose_result.pose_landmarks:
                     continue
 
+                landmarks = pose_result.pose_landmarks[0]
+
                 # Check for the X formation.
-                if not self.is_x_pose(pose_result.pose_landmarks[0]):
+                if not self.is_x_pose(landmarks):
                     continue
 
                 self.speaker_bbox = bbox
@@ -151,22 +152,28 @@ class MediaPipePoseModel(ObjectModel):
                 smaller_box = self.get_cropped_box(box, frame)
                 color = self.get_dominant_color(smaller_box)
                 self.speaker_color = color
+                self.countdown_start = time.time()
+                self.game_over = False
+                self.keep_away_mode = True
                 print("Speaker detected with X pose:", self.speaker_bbox)
-                return self.speaker_bbox
+                print("Game Started!")
+                return [self.speaker_bbox]
 
             # While speaker not yet locked, return all detected bounding boxes.
-            # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
+            # This will just have the director track whichever it sees first.
+            # If there is only one person in frame this is fine
             return bboxes
 
         # If frame is empty after detecting a speaker, increment the lost speaker counter
+        # No detections
         self.lost_counter += 1
-        if len(bboxes) != 0:
-            # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox. Based solely on color.
+        if len(bboxes) > 0:
+            # Speaker is already locked. Find the current detection that is
+            # closest to the stored speaker bbox. Based solely on color.
             best_bbox = None
             best_candidate_color = None
 
             for bbox in bboxes:
-                x1, y1, x2, y2 = bbox
                 smaller_box = self.get_cropped_box(bbox, frame)
                 color = self.get_dominant_color(smaller_box)
                 # Compute the Euclidean distance between the candidate color and the stored speaker color.
@@ -176,8 +183,9 @@ class MediaPipePoseModel(ObjectModel):
                     best_bbox = bbox
                     best_candidate_color = color
 
+            self.lost_counter += 1
             if best_bbox is not None:
-                # Found a candidate that has similar color reset the counter
+                # Found a candidate that has similar color.
                 self.speaker_bbox = best_bbox
                 self.speaker_color = best_candidate_color
                 self.lost_counter = 0
@@ -187,7 +195,8 @@ class MediaPipePoseModel(ObjectModel):
             self.speaker_bbox = None
             self.speaker_color = None
             self.lost_counter = 0
-        return self.speaker_bbox
+
+        return [self.speaker_bbox] if self.speaker_bbox is not None else []
 
     def get_cropped_box(self, bbox, frame):
         """
@@ -237,3 +246,72 @@ class MediaPipePoseModel(ObjectModel):
         dominant_hue = unique_hues[np.argmax(counts)]
 
         return int(dominant_hue)
+
+    def draw_visuals(self, bounding_box, frame):
+        h, w = frame.shape[:2]
+
+        # 1) Compute elapsed once
+        elapsed = (
+            time.time() - (self.countdown_start or 0) if self.keep_away_mode else None
+        )
+
+        # Draw acceptable box
+        left, top, right, bottom = calculate_acceptable_box(w, h)
+        cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+
+        # Before drawing boxes, if we're past the countdown and not yet game_over,
+        #    check for a “catch” and set game_over.
+        if (
+            self.keep_away_mode
+            and elapsed is not None
+            and elapsed >= 5
+            and not self.game_over
+        ):
+            for x1, y1, x2, y2 in bounding_box:
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+                if left < cx < right and top < cy < bottom:
+                    self.game_over = True
+                    break
+
+        # Draw every bbox + center dot (green until caught, red if game_over and caught)
+        for x1, y1, x2, y2 in bounding_box:
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+
+            if (
+                self.keep_away_mode
+                and self.game_over
+                and left < cx < right
+                and top < cy < bottom
+            ):
+                box_color = (0, 0, 255)
+            else:
+                box_color = (0, 255, 0)
+
+            cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
+            cv2.circle(frame, (cx, cy), 5, box_color, -1)
+
+        # Overlay countdown or Game Over text on top
+        if not self.keep_away_mode:
+            return
+
+        text = None
+        if (elapsed or 0) < 5:
+            text, scale, thickness = str(5 - int(elapsed or 0)), 5, 8
+        elif self.game_over:
+            text, scale, thickness = "GAME OVER", 3, 6
+
+        if text is not None:
+            (tw, th), _ = cv2.getTextSize(
+                text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness
+            )
+            pos = ((w - tw) // 2, (h + th) // 2)
+            cv2.putText(
+                frame,
+                text,
+                pos,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                scale,
+                (0, 0, 255),
+                thickness,
+                cv2.LINE_AA,
+            )
