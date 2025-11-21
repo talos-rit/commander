@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from directors import BaseDirector, ContinuousDirector
+from src.directors import BaseDirector, ContinuousDirector
 
 from .haar_cascade.basic_model import BasicModel
 from .keep_away.keep_away_director import KeepAwayDirector

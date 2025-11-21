@@ -1,9 +1,9 @@
 import time
 
-from config import load_config
-from directors.base_director import BaseDirector
-from publisher import Publisher
-from utils import (
+from src.config import load_config
+from src.directors.base_director import BaseDirector
+from src.publisher import Publisher
+from src.utils import (
     calculate_acceptable_box,
     calculate_center_bbox,
 )
@@ -17,7 +17,9 @@ class DiscreteDirector(BaseDirector):
     movement_detection_start_time = None
 
     # This method is called to process each frame
-    def process_frame(self, hostname: str, bounding_box: list, frame_shape, publisher: Publisher):
+    def process_frame(
+        self, hostname: str, bounding_box: list, frame_shape, publisher: Publisher
+    ):
         # Load config values
         horizontal_field_of_view = self.config[hostname]["horizontal_field_of_view"]
         vertical_field_of_view = self.config[hostname]["vertical_field_of_view"]
@@ -56,10 +58,7 @@ class DiscreteDirector(BaseDirector):
                 self.movement_detection_start_time = current_time
 
             # Check if they've been outside for at least the confirmation delay
-            if (
-                current_time - self.movement_detection_start_time
-                < confirmation_delay
-            ):
+            if current_time - self.movement_detection_start_time < confirmation_delay:
                 return
 
             change_in_x = 0

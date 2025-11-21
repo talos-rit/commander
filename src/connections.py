@@ -2,9 +2,9 @@ import socket
 import threading
 import time
 
-from icd_config import CTypesInt, toBytes, toInt
-from tkscheduler import Scheduler
-from utils import add_termination_handler, remove_termination_handler
+from src.icd_config import CTypesInt, toBytes, toInt
+from src.tkscheduler import Scheduler
+from src.utils import add_termination_handler, remove_termination_handler
 
 
 class Connection:

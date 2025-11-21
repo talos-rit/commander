@@ -8,10 +8,10 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from config import load_config, load_default_config
-from manual_interface import ConnectionData
-from tkscheduler import IterativeTask, Scheduler
-from utils import (
+from src.config import load_config, load_default_config
+from src.manual_interface import ConnectionData
+from src.tkscheduler import IterativeTask, Scheduler
+from src.utils import (
     add_termination_handler,
     calculate_acceptable_box,
     calculate_center_bbox,
@@ -141,11 +141,15 @@ class Tracker:
         self._smm.start()
         for host, conn in connections.items():
             self.max_fps = max(self.max_fps, conn.fps)
-            frame_shape = self.add_capture(host, conn.camera, conn.fps, write_config=False)
+            frame_shape = self.add_capture(
+                host, conn.camera, conn.fps, write_config=False
+            )
             conn.set_frame_shape(frame_shape)
         self.frame_delay = 1000 / self.max_fps
 
-    def add_capture(self, host: str, camera: str | int, fps: int, write_config: bool) -> tuple | None:
+    def add_capture(
+        self, host: str, camera: str | int, fps: int, write_config: bool
+    ) -> tuple | None:
         """Adds a new video capture for a given host.
         If the detection process is running this will restart it.
         Parameters:
@@ -447,12 +451,8 @@ class Tracker:
             config_data = self.config[self.active_connection]
         else:
             config_data = self.default_config
-        desired_height: int | None = config_data.get(
-            "frame_height", None
-        )
-        desired_width: int | None = config_data.get(
-            "frame_width", None
-        )
+        desired_height: int | None = config_data.get("frame_height", None)
+        desired_width: int | None = config_data.get("frame_width", None)
         if frame is None:
             return None
         frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)

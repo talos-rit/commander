@@ -1,9 +1,9 @@
 import time
 
-from config import load_config
-from directors.base_director import BaseDirector
-from publisher import Publisher
-from utils import (
+from src.config import load_config
+from src.directors.base_director import BaseDirector
+from src.publisher import Publisher
+from src.utils import (
     calculate_acceptable_box,
     calculate_center_bbox,
 )
@@ -19,7 +19,9 @@ class KeepAwayDirector(BaseDirector):
     last_command_stop = False
 
     # This method is called to process each frame
-    def process_frame(self, hostname: str, bounding_box: list, frame_shape, publisher: Publisher) -> None:
+    def process_frame(
+        self, hostname: str, bounding_box: list, frame_shape, publisher: Publisher
+    ) -> None:
         """
         Based on received bounding box, this method tells the arm where to move the keep the subject in the acceptable box..
         It does this by continuously sending polar pan start and a direction until the subject is in the acceptable box.

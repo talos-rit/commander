@@ -8,10 +8,10 @@ import customtkinter as ctk
 import sv_ttk
 from PIL import Image, ImageDraw, ImageTk
 
-from config import load_config
-from connection_manager import ConnectionData, ConnectionManager
-from publisher import Direction, Publisher
-from styles import (
+from src.config import load_config
+from src.connection_manager import ConnectionData, ConnectionManager
+from src.publisher import Direction, Publisher
+from src.styles import (
     BORDER_STYLE,
     BTN_STYLE,
     CONTROL_BTN_GRID_FIT_STYLE,
@@ -20,9 +20,9 @@ from styles import (
     OPTIONS_MENU_STYLE,
     THEME_FRAME_BG_COLOR,
 )
-from tkscheduler import Scheduler
-from tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
-from utils import (
+from src.tkscheduler import Scheduler
+from src.tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
+from src.utils import (
     add_termination_handler,
     remove_termination_handler,
     start_termination_guard,
