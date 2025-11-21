@@ -5,13 +5,21 @@ from threading import Thread
 from typing import Literal
 
 import customtkinter as ctk
-import darkdetect
 import sv_ttk
 from PIL import Image, ImageDraw, ImageTk
 
 from config import load_config
 from connection_manager import ConnectionData, ConnectionManager
 from publisher import Direction, Publisher
+from styles import (
+    BORDER_STYLE,
+    BTN_STYLE,
+    CONTROL_BTN_GRID_FIT_STYLE,
+    CONTROL_BTN_STYLE,
+    IS_SYSTEM_DARK,
+    OPTIONS_MENU_STYLE,
+    THEME_FRAME_BG_COLOR,
+)
 from tkscheduler import Scheduler
 from tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
 from utils import (
@@ -20,32 +28,6 @@ from utils import (
     start_termination_guard,
     terminate,
 )
-
-BORDER_STYLE = {
-    "border_width": 2,
-    "border_color": "#3D3D3D",
-}
-CONTROL_BTN_STYLE = {
-    "fg_color": "#ffffff",
-    "corner_radius": 10,
-    "text_color": "#000000",
-    "text_color_disabled": "#7A7A7A",
-    "font": ("Cascadia Code", 16, "bold"),
-    "hover_color": "#E5E5E5",
-    **BORDER_STYLE,
-}
-CONTROL_BTN_GRID_FIT_STYLE = {
-    "padx": 2,
-    "pady": 2,
-    "ipady": 25,
-    "ipadx": 25,
-    "sticky": "nsew",
-}
-OPTIONS_MENU_STYLE: dict[str, str] = {
-    "button_color": "#3f3f3f",
-    "button_hover_color": "#6B6B6B",
-    "fg_color": "#3a3a3a",
-}
 
 
 class ButtonText(StrEnum):
@@ -83,7 +65,7 @@ class ManualInterface(tk.Tk):
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
         # ctk.DrawEngine.preferred_drawing_method = "circle_shapes"
-        sv_ttk.set_theme(darkdetect.theme())  # pyright: ignore[reportArgumentType]
+        sv_ttk.set_theme("dark" if IS_SYSTEM_DARK else "light")
         start_termination_guard()
         self._term = add_termination_handler(super().destroy)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -139,6 +121,7 @@ class ManualInterface(tk.Tk):
             container,
             text=ButtonText.HOME,
             command=self.move_home,
+            **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
         self.home_button.grid(row=2, column=1, **CONTROL_BTN_GRID_FIT_STYLE)
@@ -148,6 +131,7 @@ class ManualInterface(tk.Tk):
         self.up_button = ctk.CTkButton(
             container,
             text=ButtonText.UP,
+            **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
         self.up_button.grid(row=1, column=1, **CONTROL_BTN_GRID_FIT_STYLE)
@@ -157,6 +141,7 @@ class ManualInterface(tk.Tk):
         self.down_button = ctk.CTkButton(
             container,
             text=ButtonText.DOWN,
+            **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
         self.down_button.grid(row=3, column=1, **CONTROL_BTN_GRID_FIT_STYLE)
@@ -166,6 +151,7 @@ class ManualInterface(tk.Tk):
         self.left_button = ctk.CTkButton(
             container,
             text=ButtonText.LEFT,
+            **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
         self.left_button.grid(row=2, column=0, **CONTROL_BTN_GRID_FIT_STYLE)
@@ -175,6 +161,7 @@ class ManualInterface(tk.Tk):
         self.right_button = ctk.CTkButton(
             container,
             text=ButtonText.RIGHT,
+            **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
         self.right_button.grid(row=2, column=2, **CONTROL_BTN_GRID_FIT_STYLE)
@@ -192,15 +179,17 @@ class ManualInterface(tk.Tk):
         )
         self.update_display(self.no_signal_display)
 
-        self.model_frame = tk.Frame(container)
-        self.model_frame.grid(row=3, column=0, padx=5, pady=5, sticky="nsew")
+        self.model_frame = ctk.CTkFrame(container, corner_radius=10, **BORDER_STYLE)
+        self.model_frame.grid(row=3, column=0, padx=2, pady=2, sticky="nsew")
+        self.model_frame.rowconfigure(1, weight=1)
         self.model_frame.columnconfigure(0, weight=1)
 
         tk.Label(
             self.model_frame,
             text="Detection Model",
             font=("Cascadia Code", 16),
-        ).grid(row=0, column=0, pady=2, sticky="ew")
+            bg=THEME_FRAME_BG_COLOR,
+        ).grid(row=0, column=0, pady=5, padx=5, sticky="ew")
 
         options = ["None"] + MODEL_OPTIONS
         ctk.CTkOptionMenu(
@@ -209,23 +198,21 @@ class ManualInterface(tk.Tk):
             values=options,
             command=self.set_mode,
             **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
-        ).grid(row=1, column=0, sticky="ew")
+        ).grid(row=2, column=0, pady=5, padx=5, sticky="ew")
 
         connection_frame = ctk.CTkFrame(
             container,
             corner_radius=10,
             **BORDER_STYLE,
         )
-        connection_frame.grid(row=3, column=2, padx=5, pady=5, sticky="nsew")
+        connection_frame.grid(row=3, column=2, padx=2, pady=2, sticky="nsew")
         connection_frame.columnconfigure(0, weight=1)
 
         self.manageConnectionsButton = ctk.CTkButton(
             connection_frame,
             text="Manage connections",
             command=self.manage_connections,
-            font=("Cascadia Code", 10, "bold"),
-            fg_color="#3f3f3f",
-            hover_color="#6B6B6B",
+            **{**BTN_STYLE, "bg_color": THEME_FRAME_BG_COLOR},
         )
         self.manageConnectionsButton.grid(
             row=0, column=0, ipady=2, padx=5, pady=5, sticky="ew"
