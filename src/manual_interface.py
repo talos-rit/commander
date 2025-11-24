@@ -48,6 +48,14 @@ class ButtonText(StrEnum):
     AUTOMATIC_MODE_LABEL = "Automatic"
 
 
+DIRECTIONAL_KEY_BINDING_MAPPING = {
+    "Up": Direction.UP,
+    "Down": Direction.DOWN,
+    "Left": Direction.LEFT,
+    "Right": Direction.RIGHT,
+}
+
+
 class ManualInterface(tk.Tk):
     """
     Representation of a manual interface used to control
@@ -55,6 +63,7 @@ class ManualInterface(tk.Tk):
     """
 
     scheduler: Scheduler
+    connections: dict[str, ConnectionData]
     director = None
     run_display_loop = False  # Flag for display loop
     pressed_keys: set[Direction] = set()
@@ -240,17 +249,9 @@ class ManualInterface(tk.Tk):
 
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
-        self.bind("<KeyPress-Up>", lambda event: self.start_move(Direction.UP))
-        self.bind("<KeyRelease-Up>", lambda event: self.stop_move(Direction.UP))
-
-        self.bind("<KeyPress-Down>", lambda event: self.start_move(Direction.DOWN))
-        self.bind("<KeyRelease-Down>", lambda event: self.stop_move(Direction.DOWN))
-
-        self.bind("<KeyPress-Left>", lambda event: self.start_move(Direction.LEFT))
-        self.bind("<KeyRelease-Left>", lambda event: self.stop_move(Direction.LEFT))
-
-        self.bind("<KeyPress-Right>", lambda event: self.start_move(Direction.RIGHT))
-        self.bind("<KeyRelease-Right>", lambda event: self.stop_move(Direction.RIGHT))
+        for key, dir in DIRECTIONAL_KEY_BINDING_MAPPING.items():
+            self.bind(f"<KeyPress-{key}>", lambda _, d=dir: self.start_move(d))
+            self.bind(f"<KeyRelease-{key}>", lambda _, d=dir: self.stop_move(d))
 
     def bind_button(self, button: ctk.CTkButton, direction: Direction) -> None:
         """Shortens the constructor by binding button up/down presses.
@@ -260,8 +261,8 @@ class ManualInterface(tk.Tk):
             direction (string): global variables for directional commands are provided at the top of this file
         """
 
-        button.bind("<Button-1>", lambda event: self.start_move(direction))
-        button.bind("<ButtonRelease-1>", lambda event: self.stop_move(direction))
+        button.bind("<Button-1>", lambda _: self.start_move(direction))
+        button.bind("<ButtonRelease-1>", lambda _: self.stop_move(direction))
 
     def draw_no_signal_display(self) -> ImageTk.PhotoImage:
         no_signal_image = Image.new("RGB", (500, 380), color="gray")
@@ -343,8 +344,6 @@ class ManualInterface(tk.Tk):
             return
         self.pressed_keys.add(direction)
 
-        self.change_button_state(direction, "sunken")
-
         if self.continuous_mode.get():
             self.keep_moving(direction)
             return
@@ -409,7 +408,7 @@ class ManualInterface(tk.Tk):
                 if self.last_key_presses.get(direction) == last_pressed_time:
                     if direction in self.pressed_keys:
                         self.pressed_keys.remove(direction)
-                        self.change_button_state(direction, "raised")
+                        self.halt_movement_on_no_keys()
                 # clean up job entry
                 self._stop_move_jobs.pop(direction, None)
 
@@ -421,28 +420,12 @@ class ManualInterface(tk.Tk):
         # Fallback: immediate removal if no timestamp exists
         if direction in self.pressed_keys:
             self.pressed_keys.remove(direction)
-        self.change_button_state(direction, "raised")
+        self.halt_movement_on_no_keys()
 
-    def change_button_state(self, direction, depression) -> None:
-        """Changes button state to sunken or raised based on input depression argument.
-
-        Args:
-            direction (enum): the directional button to change.
-            depression (string): "raised" or "sunken", the depression state to change to.
-        """
-
-        # match direction:
-        #     case Direction.UP:
-        #         self.up_button.configure(relief=depression)
-        #     case Direction.DOWN:
-        #         self.down_button.configure(relief=depression)
-        #     case Direction.LEFT:
-        #         self.left_button.configure(relief=depression)
-        #     case Direction.RIGHT:
-        #         self.right_button.configure(relief=depression)
-
+    def halt_movement_on_no_keys(self) -> None:
+        """Stops continuous movement if in continuous mode and no keys are pressed."""
         if self.continuous_mode.get() and len(self.pressed_keys) == 0:
-            connectionData = self.connections.get(self.active_connection)
+            connectionData = self.get_active_connection_safe()
             if connectionData is None:
                 print(
                     f"[ERROR] No connection found for active connection: {self.active_connection}"
@@ -463,7 +446,7 @@ class ManualInterface(tk.Tk):
         if len(self.pressed_keys) == 0 or direction not in self.pressed_keys:
             return
         self.after(self.move_delay_ms, lambda: self.keep_moving(direction))
-        connectionData = self.connections.get(self.active_connection)
+        connectionData = self.get_active_connection_safe()
         if connectionData is None:
             print(
                 f"[ERROR] No connection found for active connection: {self.active_connection}"
@@ -527,6 +510,13 @@ class ManualInterface(tk.Tk):
                 self.after("idle", self.start_display_loop)
 
     def get_active_connection(self) -> ConnectionData:
+        if self.active_connection is None:
+            raise ValueError("No active connection set")
+        return self.connections[self.active_connection]
+
+    def get_active_connection_safe(self) -> ConnectionData | None:
+        if self.active_connection is None:
+            return None
         return self.connections[self.active_connection]
 
     def update_connection_menu(self, new_selection=None):
