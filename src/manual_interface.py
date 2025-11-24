@@ -1,14 +1,14 @@
 import time
 import tkinter as tk
 from enum import StrEnum
-from threading import Thread
 from typing import Literal
 
 import customtkinter as ctk
+import cv2
 import sv_ttk
 from PIL import Image, ImageDraw, ImageTk
 
-from src.config import load_config
+from src.config import load_config, load_default_config
 from src.connection_manager import ConnectionData, ConnectionManager
 from src.publisher import Direction, Publisher
 from src.styles import (
@@ -59,6 +59,8 @@ class ManualInterface(tk.Tk):
     run_display_loop = False  # Flag for display loop
     pressed_keys: set[Direction] = set()
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
+    config: dict = load_config()
+    default_config: dict = load_default_config()
     _term: int | None = None
 
     def __init__(self) -> None:
@@ -131,21 +133,21 @@ class ManualInterface(tk.Tk):
         self.up_button = ctk.CTkButton(
             container,
             text=ButtonText.UP,
+            command=lambda: self.start_move(Direction.UP),
             **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
         self.up_button.grid(row=1, column=1, **CONTROL_BTN_GRID_FIT_STYLE)
-
         self.bind_button(self.up_button, Direction.UP)
 
         self.down_button = ctk.CTkButton(
             container,
             text=ButtonText.DOWN,
+            command=lambda: self.start_move(Direction.DOWN),
             **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
         self.down_button.grid(row=3, column=1, **CONTROL_BTN_GRID_FIT_STYLE)
-
         self.bind_button(self.down_button, Direction.DOWN)
 
         self.left_button = ctk.CTkButton(
@@ -155,12 +157,12 @@ class ManualInterface(tk.Tk):
             **CONTROL_BTN_STYLE,
         )
         self.left_button.grid(row=2, column=0, **CONTROL_BTN_GRID_FIT_STYLE)
-
         self.bind_button(self.left_button, Direction.LEFT)
 
         self.right_button = ctk.CTkButton(
             container,
             text=ButtonText.RIGHT,
+            command=lambda: self.start_move(Direction.RIGHT),
             **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
@@ -250,16 +252,16 @@ class ManualInterface(tk.Tk):
         self.bind("<KeyPress-Right>", lambda event: self.start_move(Direction.RIGHT))
         self.bind("<KeyRelease-Right>", lambda event: self.stop_move(Direction.RIGHT))
 
-    def bind_button(self, button, direction: Direction) -> None:
+    def bind_button(self, button: ctk.CTkButton, direction: Direction) -> None:
         """Shortens the constructor by binding button up/down presses.
 
         Args:
-            button (tk.Button): button to bind with press and release functions
+            button (ctk.CTkButton): button to bind with press and release functions
             direction (string): global variables for directional commands are provided at the top of this file
         """
 
-        button.bind("<ButtonPress>", lambda event: self.start_move(direction))
-        button.bind("<ButtonRelease>", lambda event: self.stop_move(direction))
+        button.bind("<Button-1>", lambda event: self.start_move(direction))
+        button.bind("<ButtonRelease-1>", lambda event: self.stop_move(direction))
 
     def draw_no_signal_display(self) -> ImageTk.PhotoImage:
         no_signal_image = Image.new("RGB", (500, 380), color="gray")
@@ -290,7 +292,7 @@ class ManualInterface(tk.Tk):
         conn = ConnectionData(hostname, port, camera, publisher)
         self.connections[hostname] = conn
         self.set_active_connection(hostname)
-        frame_shape = self.tracker.add_capture(hostname, camera, conn.fps, write_config)
+        frame_shape = self.tracker.add_capture(hostname, camera, conn.fps)
         conn.set_frame_shape(frame_shape)
         publisher.start_socket_connection(self.scheduler)
         if write_config:
@@ -371,37 +373,54 @@ class ManualInterface(tk.Tk):
     def stop_move(self, direction: Direction) -> None:
         """Stops a movement going the current direction.
 
-        Args:
-            direction (string): global variables for directional commands are provided at the top of this file
+        Debounces key-up using tkinter's after instead of creating threads.
         """
-        if not (self.get_active_connection().manual and direction in self.pressed_keys):
+        # Safely get the active connection; if none, do nothing.
+        connectionData = None
+        if self.active_connection is not None:
+            connectionData = self.connections.get(self.active_connection)
+        if (
+            connectionData is None
+            or not connectionData.manual
+            or direction not in self.pressed_keys
+        ):
             return
+
+        # ensure the per-direction jobs dict exists
+        if not hasattr(self, "_stop_move_jobs"):
+            self._stop_move_jobs = {}
+
+        # If we have a recorded last press time, schedule a short delayed check
+        # instead of sleeping in a background thread. This lets new key presses
+        # update last_key_presses and cancel/replace the pending job.
         if direction in self.last_key_presses:
             last_pressed_time = self.last_key_presses[direction]
 
-            # Fix for operating systems that spam KEYDOWN KEYUP when a key is
-            # held down:
+            # cancel any previously scheduled job for this direction
+            prev_job = self._stop_move_jobs.get(direction)
+            if prev_job is not None:
+                try:
+                    self.after_cancel(prev_job)
+                except Exception:
+                    pass
 
-            # I know this is jank but this is the best way I could figure out...
-            # Time.sleep stops the whole function, so new key presses will not
-            # be heard until after the sleep. So, create a new thread which is
-            # async to wait for a new key press
-            def stop_func() -> None:
-                # Wait a fraction of a second
-                time.sleep(0.05)
-                # Get the last time the key was pressed again
-                new_last_pressed_time = self.last_key_presses[direction]
+            def finalize_stop() -> None:
+                # If the press time hasn't changed, treat as a real release
+                if self.last_key_presses.get(direction) == last_pressed_time:
+                    if direction in self.pressed_keys:
+                        self.pressed_keys.remove(direction)
+                        self.change_button_state(direction, "raised")
+                # clean up job entry
+                self._stop_move_jobs.pop(direction, None)
 
-                # Check if the key has been pressed or if the times are the same
-                if new_last_pressed_time == last_pressed_time:
-                    self.pressed_keys.remove(direction)
-                    self.change_button_state(direction, "raised")
-
-            # Start the thread
-            thread = Thread(target=stop_func, daemon=True)
-            thread.start()
+            # schedule the delayed check (50 ms)
+            job_id = self.after(50, finalize_stop)
+            self._stop_move_jobs[direction] = job_id
             return
-        self.pressed_keys.remove(direction)
+
+        # Fallback: immediate removal if no timestamp exists
+        if direction in self.pressed_keys:
+            self.pressed_keys.remove(direction)
         self.change_button_state(direction, "raised")
 
     def change_button_state(self, direction, depression) -> None:
@@ -412,15 +431,15 @@ class ManualInterface(tk.Tk):
             depression (string): "raised" or "sunken", the depression state to change to.
         """
 
-        match direction:
-            case Direction.UP:
-                self.up_button.config(relief=depression)
-            case Direction.DOWN:
-                self.down_button.config(relief=depression)
-            case Direction.LEFT:
-                self.left_button.config(relief=depression)
-            case Direction.RIGHT:
-                self.right_button.config(relief=depression)
+        # match direction:
+        #     case Direction.UP:
+        #         self.up_button.configure(relief=depression)
+        #     case Direction.DOWN:
+        #         self.down_button.configure(relief=depression)
+        #     case Direction.LEFT:
+        #         self.left_button.configure(relief=depression)
+        #     case Direction.RIGHT:
+        #         self.right_button.configure(relief=depression)
 
         if self.continuous_mode.get() and len(self.pressed_keys) == 0:
             connectionData = self.connections.get(self.active_connection)
@@ -441,18 +460,17 @@ class ManualInterface(tk.Tk):
         """
         if not self.continuous_mode.get():
             return
-
+        if len(self.pressed_keys) == 0 or direction not in self.pressed_keys:
+            return
         self.after(self.move_delay_ms, lambda: self.keep_moving(direction))
-
-        if len(self.pressed_keys) > 0:
-            connectionData = self.connections.get(self.active_connection)
-            if connectionData is None:
-                print(
-                    f"[ERROR] No connection found for active connection: {self.active_connection}"
-                )
-                return
-            publisher = connectionData.publisher
-            publisher.polar_pan_continuous_direction_start(sum(self.pressed_keys))
+        connectionData = self.connections.get(self.active_connection)
+        if connectionData is None:
+            print(
+                f"[ERROR] No connection found for active connection: {self.active_connection}"
+            )
+            return
+        publisher = connectionData.publisher
+        publisher.polar_pan_continuous_direction_start(sum(self.pressed_keys))
 
     def move_home(self) -> None:
         """Moves the robotic arm from its current location to its home position"""
@@ -540,12 +558,40 @@ class ManualInterface(tk.Tk):
             self.update_display(self.no_signal_display)
             return
 
-        img = self.tracker.create_imagetk()
+        frame = self.tracker.get_frame()
+        img = self.conv_cv2_frame_to_tkimage(frame)
         if img is not None:
             self.update_display(img)
         else:
             self.update_display(self.no_signal_display)
         self.after(20, self.display_loop)
+
+    def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
+        """Convert frame to tkinter image"""
+        # Load config values
+        if frame is None:
+            return None
+        if self.active_connection in self.config:
+            config_data = self.config[self.active_connection]
+        else:
+            config_data = self.default_config
+        desired_height: int | None = config_data.get("frame_height", None)
+        desired_width: int | None = config_data.get("frame_width", None)
+        frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(frame_rgb)
+
+        dim = (desired_width, desired_height)
+        if desired_height is None:
+            # Set desired dimensions (adjust these values as needed)
+            new_width = desired_width or 500
+            aspect_ratio = float(frame.shape[1]) / float(frame.shape[0])
+            new_height = int(new_width / aspect_ratio)
+
+            # Create the new dimensions tuple (width, height)
+            dim = (new_width, new_height)
+        assert dim[0] is not None and dim[1] is not None
+        pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
+        return ImageTk.PhotoImage(image=pil_image)
 
     def set_mode(self, new_mode) -> None:
         if new_mode == "None":
@@ -580,14 +626,6 @@ class ManualInterface(tk.Tk):
         self.tracker.swap_model(model_class)
         if self.connections and not self.get_active_connection().manual_only:
             self.automatic_button.configure(state="normal")
-
-    # def toggle_continuous_mode(self) -> None:
-    #     self.continuous_mode = not self.continuous_mode
-
-    # if self.continuous_mode:
-    #     self.cont_mode_label.config(text=ButtonText.CONTINUOUS_MODE_LABEL)
-    # else:
-    #     self.cont_mode_label.config(text=ButtonText.DISCRETE_MODE_LABEL)
 
     def toggle_command_mode(self) -> None:
         """Toggles command mode between manual mode and automatic mode.

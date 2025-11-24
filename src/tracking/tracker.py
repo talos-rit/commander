@@ -6,7 +6,6 @@ from queue import Empty, Full
 
 import cv2
 import numpy as np
-from PIL import Image, ImageTk
 
 from src.config import load_config, load_default_config
 from src.manual_interface import ConnectionData
@@ -120,9 +119,8 @@ class Tracker:
     _bboxes: dict[str, list] = dict()
     _frame_buf: np.ndarray
     _bbox_queue: Queue
-    is_detection_running: bool = False
     _detection_process: Process | None = None
-    _term: int | None = None
+    _term_handler_id: int | None = None
     _send_frame_task: IterativeTask | None = None
     _poll_bbox_task: IterativeTask | None = None
     _smm: SharedMemoryManager | None = None
@@ -141,15 +139,11 @@ class Tracker:
         self._smm.start()
         for host, conn in connections.items():
             self.max_fps = max(self.max_fps, conn.fps)
-            frame_shape = self.add_capture(
-                host, conn.camera, conn.fps, write_config=False
-            )
+            frame_shape = self.add_capture(host, conn.camera, conn.fps)
             conn.set_frame_shape(frame_shape)
         self.frame_delay = 1000 / self.max_fps
 
-    def add_capture(
-        self, host: str, camera: str | int, fps: int, write_config: bool
-    ) -> tuple | None:
+    def add_capture(self, host: str, camera: str | int, fps: int) -> tuple | None:
         """Adds a new video capture for a given host.
         If the detection process is running this will restart it.
         Parameters:
@@ -169,9 +163,6 @@ class Tracker:
         conn = VideoConnection(src=camera, fps=fps)
         self.captures[host] = conn
         self.frame_order.append((host, 0))
-        if write_config:
-            self.config = load_config()
-        # self.update_max_fps()
         if restart:
             self.start_detection_process()
         return conn.shape
@@ -188,21 +179,12 @@ class Tracker:
         del self.captures[host]
         if not self.captures:
             self.stop_detection_process()
-        # self.update_max_fps()
-
-    def update_max_fps(self) -> None:
-        """Updates the max fps based on current captures."""
-        self.max_fps = 0
-        for conn in self.captures.values():
-            self.max_fps = max(self.max_fps, conn.fps)
-        self.frame_delay = 1000 / self.max_fps
 
     def start_detection_process(self) -> None:
         if self._detection_process is not None:
             return  # Already running
         assert self._smm is not None
         print("Starting detection process...")
-        self.is_detection_running = True
         total_shape = self.get_total_frame_shape()
         total_nbytes = self.get_nbytes_from_total_shape(total_shape)
 
@@ -225,7 +207,7 @@ class Tracker:
             daemon=True,
         )
         self._detection_process.start()
-        self._term = add_termination_handler(self.stop)
+        self._term_handler_id = add_termination_handler(self.stop)
         print("Detection process started.")
         if self.scheduler:
             self._poll_bbox_task = self.scheduler.set_interval(
@@ -344,10 +326,9 @@ class Tracker:
 
     def stop_detection_process(self) -> bool:
         """Returns true if process properly closed"""
-        if not self.is_detection_running:
+        if self._detection_process is None:
             return True
         assert self._smm is not None
-        self.is_detection_running = False
         self._send_frame_task.cancel() if self._send_frame_task else None
         self._poll_bbox_task.cancel() if self._poll_bbox_task else None
         self._bboxes = dict()
@@ -444,34 +425,7 @@ class Tracker:
             )
         return frame
 
-    def conv_cv2_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
-        """Convert frame to tkinter image"""
-        # Load config values
-        if self.active_connection in self.config:
-            config_data = self.config[self.active_connection]
-        else:
-            config_data = self.default_config
-        desired_height: int | None = config_data.get("frame_height", None)
-        desired_width: int | None = config_data.get("frame_width", None)
-        if frame is None:
-            return None
-        frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
-        pil_image = Image.fromarray(frame_rgb)
-
-        dim = (desired_width, desired_height)
-        if desired_height is None:
-            # Set desired dimensions (adjust these values as needed)
-            new_width = desired_width or 500
-            aspect_ratio = float(frame.shape[1]) / float(frame.shape[0])
-            new_height = int(new_width / aspect_ratio)
-
-            # Create the new dimensions tuple (width, height)
-            dim = (new_width, new_height)
-        assert dim[0] is not None and dim[1] is not None
-        pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
-        return ImageTk.PhotoImage(image=pil_image)
-
-    def create_imagetk(self) -> None | ImageTk.PhotoImage:
+    def get_frame(self, host: str | None = None):
         """This adds bounding box to the frame
         and returns the tkimage created.
         If the frame is supplied that frame will be used,
@@ -482,17 +436,14 @@ class Tracker:
             - bboxes
             - ImageTk.PhotoImage
         """
-        if self.active_connection is None:
+        if host is None and (host := self.active_connection) is None:
             return
-        cap = self.captures.get(self.active_connection, None)
-        if cap is None:
+        if (cap := self.captures.get(host, None)) is None:
             return
         active_frame = cap.frame
-        if self.active_connection is not None:
-            bboxes = self._bboxes.get(self.active_connection, None)
-            if bboxes is not None:
-                self.draw_visuals(bboxes, active_frame)
-        return self.conv_cv2_frame_to_tkimage(active_frame)
+        if (bboxes := self._bboxes.get(host, None)) is not None:
+            self.draw_visuals(bboxes, active_frame)
+        return active_frame
 
     def set_active_connection(self, connection: str) -> None:
         self.active_connection = connection
@@ -501,9 +452,9 @@ class Tracker:
         self.active_connection = None
 
     def stop(self) -> bool:
-        if self._term is not None:
-            remove_termination_handler(self._term)
-            self._term = None
+        if self._term_handler_id is not None:
+            remove_termination_handler(self._term_handler_id)
+            self._term_handler_id = None
         self.remove_capture()
         for _ in range(6):
             if self.stop_detection_process():
