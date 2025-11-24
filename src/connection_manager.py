@@ -7,30 +7,27 @@ from src.publisher import Publisher
 
 
 @dataclass
-class ConnectionData:
+class OperatorConnection:
     host: str
     port: int
-    camera: str | int
-    publisher: Publisher
-    manual: bool = True
-    manual_only: bool = False
-    fps: int = field(default_factory=lambda: 60)
-    shape: tuple | None = None
+    publisher: Publisher = field(init=False)
+    is_manual: bool = True
+    is_manual_only: bool = field(
+        default_factory=lambda: load_config().get("default_manual_only", False)
+    )
+    fps: int = field(default_factory=lambda: load_config().get("default_fps", 60))
 
     def __post_init__(self):
-        conf = load_config()
-        fps = conf.get(self.host, {}).get("fps")
-        if fps is not None:
-            self.fps = fps
-        manual_only = conf.get(self.host, {}).get("manual_only")
-        if manual_only is not None:
-            self.manual_only = manual_only
-
-    def set_frame_shape(self, shape: tuple | None) -> None:
-        self.shape = shape
+        self.publisher = Publisher(self.host, self.port)
 
     def set_manual(self, manual: bool) -> None:
-        self.manual = manual
+        self.is_manual = manual
+
+    def toggle_manual(self) -> None:
+        self.is_manual = not self.is_manual
+
+    def close(self) -> None:
+        self.publisher.close()
 
 
 class ConnectionManager(tkinter.Toplevel):

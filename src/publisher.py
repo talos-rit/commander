@@ -2,7 +2,6 @@ from enum import IntEnum
 
 from src.connections import Connection
 from src.icd_config import Command, CTypesInt, toBytes
-from src.tkscheduler import Scheduler
 
 DIRECTION_OFFSET_MAPPING: dict[int, tuple[int, int]] = {
     0: (0, 0),
@@ -48,19 +47,20 @@ class Publisher:
     command_count = 0
     CHAR_ENCODING = "utf-8"
 
-    def __init__(self, socket_host: str, socket_port: int):
+    def __init__(
+        self, socket_host: str, socket_port: int, start_connection: bool = True
+    ):
         self.connection = Connection(
-            host=socket_host, port=socket_port, connect_on_init=False
+            host=socket_host, port=socket_port, connect_on_init=start_connection
         )
 
-    def start_socket_connection(self, schedule: Scheduler | None = None):
-        self.connection.schedule = schedule
+    def start_socket_connection(self):
         self.connection.connect_on_thread()
         print(
             f"Started socket connection to {self.connection.host}:{self.connection.port}"
         )
 
-    def close_connection(self):
+    def close(self):
         self.connection.close()
 
     def handshake(self):
