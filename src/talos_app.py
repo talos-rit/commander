@@ -41,6 +41,10 @@ class App:
         camera: int | None = None,
         write_config=False,
     ) -> None:
+        """
+        Opens a connection to the given hostname.
+        If port or camera is not provided, uses the values from the config.
+        """
         if hostname in self.connections:
             return print(f"Connection to {hostname} already exists")
         conf = self.config.get(hostname, {})
@@ -57,6 +61,11 @@ class App:
             )
 
     def start_move(self, direction: Direction) -> None:
+        """
+        Starts movement in the given direction.
+        In continuous mode, starts continuous movement.
+        In discrete mode, starts sending discrete movement commands at intervals.
+        """
         if (connection := self.get_active_connection()) is None:
             return print(f"[ERROR] No connection found for {self.active_connection}")
         if not connection.is_manual:
@@ -70,6 +79,7 @@ class App:
         )
 
     def discrete_move(self, direction: Direction) -> None:
+        """Sends a single discrete movement command in the given direction."""
         if (connection := self.get_active_connection()) is None:
             return print(f"[ERROR] No connection found for {self.active_connection}")
         publisher = connection.publisher
@@ -88,6 +98,10 @@ class App:
                 print("Polar pan discrete right")
 
     def continuous_move(self, direction: Direction) -> None:
+        """
+        Starts continuous movement in the given direction.
+        This will merge with any existing continuous movements.
+        """
         if direction in self.current_continuous_directions:
             return
         if (connection := self.get_active_connection()) is None:
@@ -113,10 +127,21 @@ class App:
             publisher = connection.publisher
             publisher.polar_pan_continuous_stop()
             return
-        print(self.control_mode, self.discrete_move_task)
         if self.discrete_move_task.get(direction) is not None:
             task = self.discrete_move_task.pop(direction)
             task.cancel()
+
+    def stop_all_movement(self) -> None:
+        """Stops all continuous and discrete movements."""
+        if (connection := self.get_active_connection()) is None:
+            return print(f"[ERROR] No connection found for {self.active_connection}")
+        if self.control_mode == ControlMode.CONTINUOUS:
+            publisher = connection.publisher
+            self.current_continuous_directions.clear()
+            return publisher.polar_pan_continuous_stop()
+        for task in self.discrete_move_task.values():
+            task.cancel()
+        self.discrete_move_task.clear()
 
     def move_home(self) -> None:
         """Moves the robotic arm from its current location to its home position"""
@@ -126,9 +151,11 @@ class App:
         publisher.home(1000)
 
     def get_connections(self) -> dict[str, Connection]:
+        """Gets all connections"""
         return self.connections
 
     def set_active_connection(self, hostname: str | None) -> None:
+        """Sets the active connection by hostname"""
         if hostname is None:
             self.tracker.set_active_connection(None)
             self.active_connection = None
@@ -139,11 +166,14 @@ class App:
         self.active_connection = hostname
 
     def remove_connection(self, hostname: str) -> None:
+        """
+        Removes a connection by hostname.
+        If the connection is active, sets the active connection to another available connection or None.
+        """
         if hostname not in self.connections:
             return print(f"[ERROR] Connection to {hostname} does not exist")
         if hostname == self.active_connection:
             hosts = list(self.connections.keys())
-            print(hosts)
             if len(hosts) > 1:
                 self.set_active_connection(hosts[0])
             else:
@@ -154,16 +184,19 @@ class App:
             self.director.remove_control_feed(hostname)
 
     def get_active_connection(self) -> Connection | None:
+        """Gets the active connection"""
         if self.active_connection is None:
             return None
         return self.connections[self.active_connection]
 
     def get_active_frame(self):
+        """Gets the active connection's current video frame"""
         if self.active_connection is None:
             return None
         return self.tracker.get_frame(self.active_connection)
 
     def get_active_config(self) -> dict | None:
+        """Gets the active connection's configuration"""
         if self.active_connection is None:
             return None
         return self.config.get(self.active_connection, None)
@@ -173,9 +206,14 @@ class App:
         return self.control_mode
 
     def get_director(self) -> BaseDirector | None:
+        """Returns the current director"""
         return self.director
 
     def change_model(self, option: str | None = None) -> None:
+        """Changes the model to the new option and starts the detection process.
+        Args:
+            option (str | "None" | None, optional): New model option to swap to. Defaults to None.
+        """
         option = option if option != "None" else None
         if self.director is not None:
             print("Stopping previous model")
@@ -209,9 +247,15 @@ class App:
         if self.director is not None:
             self.director.update_control_feed(connection.host, connection.is_manual)
 
-    def toggle_control_mode(self) -> None:
-        """Toggles between continuous and discrete control modes"""
+    def toggle_control_mode(self) -> ControlMode:
+        """
+        Toggles between continuous and discrete control.
+        Any ongoing movements are stopped.
+        returns the new control mode
+        """
+        self.stop_all_movement()
         if self.control_mode == ControlMode.CONTINUOUS:
             self.control_mode = ControlMode.DISCRETE
         else:
             self.control_mode = ControlMode.CONTINUOUS
+        return self.control_mode

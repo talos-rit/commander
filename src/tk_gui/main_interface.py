@@ -8,7 +8,6 @@ import sv_ttk
 from PIL import Image, ImageDraw, ImageTk
 
 from src.config import load_default_config
-from src.connection.connection import Connection
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
 from src.tk_gui.connection_manager import TKConnectionManager
@@ -299,9 +298,6 @@ class TKInterface(tk.Tk):
         self.update_connection_menu()
         if not self.display_loop_task:
             self.after("idle", self.start_display_loop)
-
-    def get_active_connection(self) -> Connection | None:
-        return self.app.get_active_connection()
 
     def update_connection_menu(self):
         """Refresh dropdown menu to show the latest connections"""
