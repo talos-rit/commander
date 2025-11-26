@@ -6,7 +6,7 @@ from src.icd_config import CTypesInt, toBytes, toInt
 from src.utils import add_termination_handler, remove_termination_handler
 
 
-class Connection:
+class OperatorConnection:
     """Base Connection Class, Creates Socket connection on initialization."""
 
     is_running = False
@@ -127,7 +127,7 @@ class Connection:
         print("subclass must implement on_message method")
 
 
-class CommandConnection(Connection):
+class CommandConnection(OperatorConnection):
     """Connection Class used for Mock Operator. This is a receiving socket class.
 
     Args:

@@ -8,7 +8,12 @@ import cv2
 import sv_ttk
 from PIL import Image, ImageDraw, ImageTk
 
-from gui.styles import (
+from src.config import load_config, load_default_config
+from src.connection.connection import Connection
+from src.connection.publisher import Direction
+from src.directors import BaseDirector
+from src.gui.connection_manager import ConnectionManager
+from src.gui.styles import (
     BORDER_STYLE,
     BTN_STYLE,
     CONTROL_BTN_GRID_FIT_STYLE,
@@ -17,11 +22,7 @@ from gui.styles import (
     OPTIONS_MENU_STYLE,
     THEME_FRAME_BG_COLOR,
 )
-from gui.tkscheduler import Scheduler
-from src.config import load_config, load_default_config
-from src.directors import BaseDirector
-from src.gui.connection_manager import ConnectionManager, OperatorConnection
-from src.publisher import Direction
+from src.gui.tkscheduler import TKScheduler
 from src.tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
 from src.utils import (
     add_termination_handler,
@@ -60,8 +61,8 @@ class ManualInterface(tk.Tk):
     the robotic arm which holds the camera.
     """
 
-    scheduler: Scheduler
-    connections: dict[str, OperatorConnection]
+    scheduler: TKScheduler
+    connections: dict[str, Connection]
     director: BaseDirector | None = None
     display_loop_task: str | None = None  # display loop task handle
     pressed_keys: set[Direction] = set()
@@ -77,7 +78,7 @@ class ManualInterface(tk.Tk):
         start_termination_guard()
         self._term = add_termination_handler(super().destroy)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
-        self.scheduler = Scheduler(self)
+        self.scheduler = TKScheduler(self)
         self.title("Talos Manual Interface")
         self.pressed_keys = set()  # keeps track of keys which are pressed down
         self.last_key_presses = {}
@@ -268,16 +269,16 @@ class ManualInterface(tk.Tk):
         if hostname in self.connections:
             return print(f"Connection to {hostname} already exists")
         conf = self.config.get(hostname, {})
-        conn = OperatorConnection(hostname, port or conf["socket_port"])
+        camera = conf["camera_index"] if camera is None else camera
+        vid_conn = self.tracker.add_capture(hostname, camera)
+        conn = Connection(hostname, port or conf["socket_port"], vid_conn)
         self.connections[hostname] = conn
         self.set_active_connection(hostname)
-        camera = conf["camera_index"] if camera is None else camera
-        frame_shape = self.tracker.add_capture(hostname, camera)
         if write_config:
             self.config = load_config()
-        if self.director is not None and frame_shape is not None:
+        if self.director is not None and vid_conn.shape is not None:
             self.director.add_control_feed(
-                hostname, conn.is_manual, frame_shape, conn.publisher
+                hostname, conn.is_manual, vid_conn.shape, conn.publisher
             )
 
     def close_connection(self, hostname: str) -> None:
@@ -300,8 +301,8 @@ class ManualInterface(tk.Tk):
             direction (string): global variables for directional commands are provided at the top of this file
         """
         if (connection := self.get_active_connection()) is None:
-            return
-        if not connection.is_manual or self.active_connection is None:
+            return print(f"[ERROR] No connection found for {self.active_connection}")
+        if not connection.is_manual:
             return
         self.last_key_presses[direction] = time.time()
 
@@ -312,9 +313,7 @@ class ManualInterface(tk.Tk):
         if self.continuous_mode.get():
             return self.keep_moving(direction)
 
-        if (connectionData := self.get_active_connection()) is None:
-            return print(f"[ERROR] No connection found for {self.active_connection}")
-        publisher = connectionData.publisher
+        publisher = connection.publisher
         match direction:
             case Direction.UP:
                 publisher.polar_pan_discrete(0, 10, 1000, 3000)
@@ -455,7 +454,7 @@ class ManualInterface(tk.Tk):
         if not self.display_loop_task:
             self.after("idle", self.start_display_loop)
 
-    def get_active_connection(self) -> OperatorConnection | None:
+    def get_active_connection(self) -> Connection | None:
         if self.active_connection is None:
             return None
         return self.connections[self.active_connection]

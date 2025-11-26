@@ -4,7 +4,7 @@ import multiprocessing
 import cv2
 
 from src.directors.continuous_director import ContinuousDirector
-from src.manual_interface import ManualInterface
+from src.gui.manual_interface import ManualInterface
 
 
 def main() -> None:

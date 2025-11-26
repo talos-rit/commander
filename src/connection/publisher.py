@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-from src.connections import Connection
+from src.connection.operator_connections import OperatorConnection
 from src.icd_config import Command, CTypesInt, toBytes
 
 DIRECTION_OFFSET_MAPPING: dict[int, tuple[int, int]] = {
@@ -50,7 +50,7 @@ class Publisher:
     def __init__(
         self, socket_host: str, socket_port: int, start_connection: bool = True
     ):
-        self.connection = Connection(
+        self.connection = OperatorConnection(
             host=socket_host, port=socket_port, connect_on_init=start_connection
         )
 

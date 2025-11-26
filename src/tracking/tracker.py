@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from enum import Enum
 from multiprocessing import Event, Process, Queue, shared_memory
 from multiprocessing.managers import SharedMemoryManager
@@ -8,8 +7,9 @@ from queue import Empty, Full
 import cv2
 import numpy as np
 
-from gui.tkscheduler import IterativeTask, Scheduler
 from src.config import load_config, load_default_config
+from src.connection.connection import VideoConnection
+from src.scheduler import IterativeTask, Scheduler
 from src.utils import (
     add_termination_handler,
     calculate_acceptable_box,
@@ -66,48 +66,6 @@ def _detect_person_worker(
         print("bbox_queue closed")
 
 
-@dataclass
-class VideoConnection:
-    src: str | int
-    video_buffer_size: int = field(default=1)
-    cap: cv2.VideoCapture = field(init=False)
-    shape: tuple | None = field(init=False, default=None)
-    dtype: np.dtype | None = field(init=False, default=None)
-    _term: int | None = field(init=False)
-
-    def __post_init__(self):
-        source = None
-        try:
-            source = int(self.src)
-        except ValueError:
-            source = self.src
-        self.cap = cv2.VideoCapture(source)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
-        self._term = add_termination_handler(self.close)
-        frame = None
-        for _ in range(6):
-            ret, frame = self.cap.read()
-            if ret and frame is not None:
-                self.shape = frame.shape
-                self.dtype = frame.dtype
-                return
-        print("Unable to pull frame from camera")
-        return
-
-    @property
-    def frame(self) -> np.ndarray | None:
-        if self.cap is not None:
-            _, frame = self.cap.read()
-            return frame
-
-    def close(self):
-        if self.cap is not None:
-            self.cap.release()
-        if self._term is not None:
-            remove_termination_handler(self._term)
-            self._term = None
-
-
 # Class for handling video feed and object detection model usage
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
@@ -141,14 +99,14 @@ class Tracker:
         self._smm.start()
         self.frame_delay = 1000 / self.max_fps
 
-    def add_capture(self, host: str, camera: str | int) -> tuple | None:
+    def add_capture(self, host: str, camera: str | int) -> VideoConnection:
         """Adds a new video capture for a given host.
         If the detection process is running this will restart it.
         Parameters:
         - host: unique identifier for the video source
         - camera: video source (file path or camera index)
         Returns:
-        - frame_shape: the frame shape of the video source
+        - VideoConnection: new video connection object
         """
         restart = False
         if self._detection_process is not None:
@@ -161,7 +119,7 @@ class Tracker:
         self.frame_order.append((host, 0))
         if restart:
             self.start_detection_process()
-        return conn.shape
+        return conn
 
     def remove_capture(self, host: str | None = None) -> None:
         """Releases video capture for a given host if not all video capture is closed."""

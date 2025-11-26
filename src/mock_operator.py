@@ -1,6 +1,6 @@
 import time
 
-from src.connections import CommandConnection
+from src.connection.operator_connections import CommandConnection
 from src.icd_config import CTypesInt, toBytes
 
 
