@@ -8,8 +8,8 @@ from queue import Empty, Full
 import cv2
 import numpy as np
 
+from gui.tkscheduler import IterativeTask, Scheduler
 from src.config import load_config, load_default_config
-from src.tkscheduler import IterativeTask, Scheduler
 from src.utils import (
     add_termination_handler,
     calculate_acceptable_box,

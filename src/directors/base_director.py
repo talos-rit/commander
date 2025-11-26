@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
+from gui.tkscheduler import IterativeTask, Scheduler
+from src.gui.connection_manager import OperatorConnection
 from src.publisher import Publisher
-from src.tkscheduler import IterativeTask, Scheduler
 from src.utils import add_termination_handler, remove_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
@@ -22,7 +23,12 @@ class BaseDirector(ABC):
     control_task: IterativeTask | None = None
     _term: int | None = None
 
-    def __init__(self, tracker, connections, scheduler: Scheduler | None = None):
+    def __init__(
+        self,
+        tracker,
+        connections: dict[str, OperatorConnection],
+        scheduler: Scheduler | None = None,
+    ):
         self.tracker = tracker
         self.scheduler = scheduler
         self.control_feeds: dict[str, ControlFeed] = dict()

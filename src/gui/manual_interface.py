@@ -8,11 +8,7 @@ import cv2
 import sv_ttk
 from PIL import Image, ImageDraw, ImageTk
 
-from src.config import load_config, load_default_config
-from src.connection_manager import ConnectionManager, OperatorConnection
-from src.directors import BaseDirector
-from src.publisher import Direction
-from src.styles import (
+from gui.styles import (
     BORDER_STYLE,
     BTN_STYLE,
     CONTROL_BTN_GRID_FIT_STYLE,
@@ -21,7 +17,11 @@ from src.styles import (
     OPTIONS_MENU_STYLE,
     THEME_FRAME_BG_COLOR,
 )
-from src.tkscheduler import Scheduler
+from gui.tkscheduler import Scheduler
+from src.config import load_config, load_default_config
+from src.directors import BaseDirector
+from src.gui.connection_manager import ConnectionManager, OperatorConnection
+from src.publisher import Direction
 from src.tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
 from src.utils import (
     add_termination_handler,
