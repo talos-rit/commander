@@ -12,8 +12,8 @@ from src.config import load_config, load_default_config
 from src.connection.connection import Connection
 from src.connection.publisher import Direction
 from src.directors import BaseDirector
-from src.gui.connection_manager import ConnectionManager
-from src.gui.styles import (
+from src.tk_gui.connection_manager import TKConnectionManager
+from src.tk_gui.styles import (
     BORDER_STYLE,
     BTN_STYLE,
     CONTROL_BTN_GRID_FIT_STYLE,
@@ -22,7 +22,7 @@ from src.gui.styles import (
     OPTIONS_MENU_STYLE,
     THEME_FRAME_BG_COLOR,
 )
-from src.gui.tkscheduler import TKScheduler
+from src.tk_gui.tkscheduler import TKScheduler
 from src.tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
 from src.utils import (
     add_termination_handler,
@@ -55,7 +55,7 @@ DIRECTIONAL_KEY_BINDING_MAPPING = {
 }
 
 
-class ManualInterface(tk.Tk):
+class TKInterface(tk.Tk):
     """
     Representation of a manual interface used to control
     the robotic arm which holds the camera.
@@ -413,7 +413,7 @@ class ManualInterface(tk.Tk):
 
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
-        ConnectionManager(self, self.connections)
+        TKConnectionManager(self, self.connections)
 
     def set_active_connection(self, option) -> None:
         if option == self.active_connection or option == "None":

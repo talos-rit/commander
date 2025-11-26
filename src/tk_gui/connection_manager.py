@@ -4,7 +4,7 @@ from tkinter import ttk
 from src.config import add_config, load_config
 
 
-class ConnectionManager(tkinter.Toplevel):
+class TKConnectionManager(tkinter.Toplevel):
     def __init__(self, parent, connections):
         super().__init__(parent)
         self.title("Connection Manager")

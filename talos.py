@@ -4,7 +4,7 @@ import multiprocessing
 import cv2
 
 from src.directors.continuous_director import ContinuousDirector
-from src.gui.manual_interface import ManualInterface
+from tk_gui.main_interface import TKInterface
 
 
 def main() -> None:
@@ -48,7 +48,7 @@ def main() -> None:
                 break
             director.process_frame(bounding_box, frame, True)
 
-    interface = ManualInterface()
+    interface = TKInterface()
     interface.mainloop()
 
 
