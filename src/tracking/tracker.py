@@ -396,11 +396,8 @@ class Tracker:
             self.draw_visuals(bboxes, active_frame)
         return active_frame
 
-    def set_active_connection(self, connection: str) -> None:
+    def set_active_connection(self, connection: str | None) -> None:
         self.active_connection = connection
-
-    def remove_active_connection(self) -> None:
-        self.active_connection = None
 
     def stop(self) -> bool:
         if self._term_handler_id is not None:

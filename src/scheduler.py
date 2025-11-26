@@ -16,7 +16,7 @@ class Scheduler(ABC):
         pass
 
     @abstractmethod
-    def set_interval(self, ms, func, *args):
+    def set_interval(self, ms, func, *args) -> IterativeTask:
         """
         Calls func every ms milliseconds.
         Return an IterativeTask instance.

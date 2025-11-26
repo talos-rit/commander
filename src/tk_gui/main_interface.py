@@ -1,4 +1,3 @@
-import time
 import tkinter as tk
 from enum import StrEnum
 from typing import Literal
@@ -8,10 +7,10 @@ import cv2
 import sv_ttk
 from PIL import Image, ImageDraw, ImageTk
 
-from src.config import load_config, load_default_config
+from src.config import load_default_config
 from src.connection.connection import Connection
 from src.connection.publisher import Direction
-from src.directors import BaseDirector
+from src.talos_app import App, ControlMode
 from src.tk_gui.connection_manager import TKConnectionManager
 from src.tk_gui.styles import (
     BORDER_STYLE,
@@ -22,8 +21,8 @@ from src.tk_gui.styles import (
     OPTIONS_MENU_STYLE,
     THEME_FRAME_BG_COLOR,
 )
-from src.tk_gui.tkscheduler import TKScheduler
-from src.tracking import MODEL_OPTIONS, USABLE_MODELS, Tracker
+from src.tk_gui.tkscheduler import TKIterativeTask, TKScheduler
+from src.tracking import MODEL_OPTIONS
 from src.utils import (
     add_termination_handler,
     remove_termination_handler,
@@ -61,13 +60,10 @@ class TKInterface(tk.Tk):
     the robotic arm which holds the camera.
     """
 
+    app: App
     scheduler: TKScheduler
-    connections: dict[str, Connection]
-    director: BaseDirector | None = None
-    display_loop_task: str | None = None  # display loop task handle
-    pressed_keys: set[Direction] = set()
+    display_loop_task: TKIterativeTask | None = None  # display loop task handle
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
-    config: dict[str, dict] = load_config()
     default_config: dict = load_default_config()
     _term: int | None = None
 
@@ -79,14 +75,8 @@ class TKInterface(tk.Tk):
         self._term = add_termination_handler(super().destroy)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.scheduler = TKScheduler(self)
+        self.app = App(self.scheduler)
         self.title("Talos Manual Interface")
-        self.pressed_keys = set()  # keeps track of keys which are pressed down
-        self.last_key_presses = {}
-
-        self.config = load_config()
-        self.connections = dict()
-        self.active_connection: None | str = None
-        self.tracker = Tracker(scheduler=self.scheduler)
         self.no_signal_display = self.draw_no_signal_display()
 
         container = tk.Frame(self)
@@ -113,21 +103,24 @@ class TKInterface(tk.Tk):
         self.automatic_button.grid(row=1, column=1, sticky="ew")
         self.automatic_button.configure(state="disabled")
 
-        self.continuous_mode = tk.BooleanVar(value=True)  # continuous/discrete
+        self.continuous_mode = tk.StringVar(
+            value=self.app.get_control_mode()
+        )  # continuous/discrete
         self.cont_toggle_button = ctk.CTkSwitch(
             self.toggle_group,
             text=ButtonText.CONTINUOUS_MODE_LABEL,
             font=("Cascadia Code", 16, "bold"),
             variable=self.continuous_mode,
-            onvalue=True,
-            offvalue=False,
+            command=self.app.toggle_control_mode,
+            onvalue=ControlMode.CONTINUOUS,
+            offvalue=ControlMode.DISCRETE,
         )
         self.cont_toggle_button.grid(row=2, column=1, sticky="ew")
 
         self.home_button = ctk.CTkButton(
             container,
             text=ButtonText.HOME,
-            command=self.move_home,
+            command=self.app.move_home,
             **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
@@ -145,7 +138,6 @@ class TKInterface(tk.Tk):
         self.down_button = ctk.CTkButton(
             container,
             text=ButtonText.DOWN,
-            command=lambda: self.start_move(Direction.DOWN),
             **BTN_STYLE,
             **CONTROL_BTN_STYLE,
         )
@@ -197,7 +189,7 @@ class TKInterface(tk.Tk):
             self.model_frame,
             variable=tk.StringVar(value="None"),
             values=["None"] + MODEL_OPTIONS,
-            command=self.set_mode,
+            command=self.app.change_model,
             **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
         ).grid(row=2, column=0, pady=5, padx=5, sticky="ew")
 
@@ -224,7 +216,7 @@ class TKInterface(tk.Tk):
             "write",
             lambda *_: self.set_active_connection(self.selectedConnection.get()),
         )
-        self.connectionMenuList = list(self.connections) or ["None"]
+        self.connectionMenuList = list(self.app.get_connections().keys()) or ["None"]
         self.connectionMenu = ctk.CTkOptionMenu(
             connection_frame,
             variable=self.selectedConnection,
@@ -237,15 +229,15 @@ class TKInterface(tk.Tk):
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
         for key, dir in DIRECTIONAL_KEY_BINDING_MAPPING.items():
-            self.bind(f"<KeyPress-{key}>", lambda _, d=dir: self.start_move(d))
-            self.bind(f"<KeyRelease-{key}>", lambda _, d=dir: self.stop_move(d))
+            self.bind(f"<KeyPress-{key}>", lambda _, d=dir: self.app.start_move(d))
+            self.bind(f"<KeyRelease-{key}>", lambda _, d=dir: self.app.stop_move(d))
 
     def bind_directional_button(
         self, button: ctk.CTkButton, direction: Direction
     ) -> None:
         """binds button press and release events to start and stop movement respectively"""
-        button.bind("<Button-1>", lambda _: self.start_move(direction))
-        button.bind("<ButtonRelease-1>", lambda _: self.stop_move(direction))
+        button.bind("<Button-1>", lambda _, d=direction: self.app.start_move(d))
+        button.bind("<ButtonRelease-1>", lambda _, d=direction: self.app.stop_move(d))
 
     def draw_no_signal_display(self) -> ImageTk.PhotoImage:
         no_signal_image = Image.new("RGB", (500, 380), color="gray")
@@ -266,181 +258,34 @@ class TKInterface(tk.Tk):
             port (int): the port number of the socket connection(default picked from config)
             camera (int): the index of the camera to use for this connection(default picked from config)
         """
-        if hostname in self.connections:
-            return print(f"Connection to {hostname} already exists")
-        conf = self.config.get(hostname, {})
-        camera = conf["camera_index"] if camera is None else camera
-        vid_conn = self.tracker.add_capture(hostname, camera)
-        conn = Connection(hostname, port or conf["socket_port"], vid_conn)
-        self.connections[hostname] = conn
-        self.set_active_connection(hostname)
-        if write_config:
-            self.config = load_config()
-        if self.director is not None and vid_conn.shape is not None:
-            self.director.add_control_feed(
-                hostname, conn.is_manual, vid_conn.shape, conn.publisher
-            )
+        self.app.open_connection(
+            hostname, port=port, camera=camera, write_config=write_config
+        )
+        self.update_ui()
 
     def close_connection(self, hostname: str) -> None:
         """Closes hostname connection if it exists"""
-        if hostname not in self.connections:
-            return print(f"Connection to {hostname} does not exist")
-        self.tracker.remove_capture(hostname)
-        self.connections.pop(hostname).close()
-        if self.active_connection == hostname:
-            self.remove_active_connection()
-        else:
-            self.update_connection_menu()
-        if self.director is not None:
-            self.director.remove_control_feed(hostname)
-
-    def start_move(self, direction: Direction) -> None:
-        """Moves the robotic arm a static number of degrees per second.
-
-        Args:
-            direction (string): global variables for directional commands are provided at the top of this file
-        """
-        if (connection := self.get_active_connection()) is None:
-            return print(f"[ERROR] No connection found for {self.active_connection}")
-        if not connection.is_manual:
-            return
-        self.last_key_presses[direction] = time.time()
-
-        if direction in self.pressed_keys:
-            return
-        self.pressed_keys.add(direction)
-
-        if self.continuous_mode.get():
-            return self.keep_moving(direction)
-
-        publisher = connection.publisher
-        match direction:
-            case Direction.UP:
-                publisher.polar_pan_discrete(0, 10, 1000, 3000)
-                print("Polar pan discrete up")
-            case Direction.DOWN:
-                publisher.polar_pan_discrete(0, -10, 1000, 3000)
-                print("Polar pan discrete down")
-            case Direction.LEFT:
-                publisher.polar_pan_discrete(10, 0, 1000, 3000)
-                print("Polar pan discrete left")
-            case Direction.RIGHT:
-                publisher.polar_pan_discrete(-10, 0, 1000, 3000)
-                print("Polar pan discrete right")
-
-    def stop_move(self, direction: Direction) -> None:
-        """Stops a movement going the current direction.
-
-        Debounces key-up using tkinter's after instead of creating threads.
-        Previous team reported issues with an operating system specific bug
-        where key-up events would be spammed when held down.
-        """
-        # Safely get the active connection; if none, do nothing.
-        if (connectionData := self.get_active_connection()) is None:
-            return
-        if not connectionData.is_manual or direction not in self.pressed_keys:
-            return
-
-        # ensure the per-direction jobs dict exists
-        if not hasattr(self, "_stop_move_jobs"):
-            self._stop_move_jobs = dict()
-
-        if direction in self.last_key_presses:
-            last_pressed_time = self.last_key_presses[direction]
-
-            # cancel any previously scheduled job for this direction
-            prev_job = self._stop_move_jobs.get(direction)
-            if prev_job is not None:
-                try:
-                    self.after_cancel(prev_job)
-                except Exception:
-                    pass
-
-            def finalize_stop() -> None:
-                # If the press time hasn't changed, treat as a real release
-                if (
-                    self.last_key_presses.get(direction) == last_pressed_time
-                    and direction in self.pressed_keys
-                ):
-                    self.pressed_keys.remove(direction)
-                    self.halt_movement_on_no_keys()
-                # clean up job entry
-                self._stop_move_jobs.pop(direction, None)
-
-            job_id = self.after(50, finalize_stop)
-            self._stop_move_jobs[direction] = job_id
-            return
-
-        # Fallback: immediate removal if no timestamp exists
-        if direction in self.pressed_keys:
-            self.pressed_keys.remove(direction)
-        self.halt_movement_on_no_keys()
-
-    def halt_movement_on_no_keys(self) -> None:
-        """Stops continuous movement if in continuous mode and no keys are pressed."""
-        if not (self.continuous_mode.get() and len(self.pressed_keys) == 0):
-            return
-        if (connectionData := self.get_active_connection()) is None:
-            return print(f"[ERROR] No connection found for {self.active_connection}")
-        publisher = connectionData.publisher
-        publisher.polar_pan_continuous_stop()
-
-    def keep_moving(self, direction: Direction) -> None:
-        """Continuously allows moving to continue as controls are pressed and stops them once released by recursively calling this function while
-            the associated directional is being pressed.
-
-        Args:
-            direction (_type_): global variables for directional commands are provided at the top of this file
-        """
-        if (
-            not self.continuous_mode.get()
-            or len(self.pressed_keys) == 0
-            or direction not in self.pressed_keys
-        ):
-            return
-        self.after(self.move_delay_ms, lambda: self.keep_moving(direction))
-        if (connectionData := self.get_active_connection()) is None:
-            return print(f"[ERROR] No connection found for {self.active_connection}")
-        publisher = connectionData.publisher
-        publisher.polar_pan_continuous_direction_start(sum(self.pressed_keys))
-
-    def move_home(self) -> None:
-        """Moves the robotic arm from its current location to its home position"""
-        if (connectionData := self.get_active_connection()) is None:
-            return print(f"[ERROR] No connection found for {self.active_connection}")
-        publisher = connectionData.publisher
-        publisher.home(1000)
+        self.app.remove_connection(hostname)
+        self.update_ui()
 
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
-        TKConnectionManager(self, self.connections)
+        TKConnectionManager(self, self.app.get_connections())
 
     def set_active_connection(self, option) -> None:
-        if option == self.active_connection or option == "None":
-            return
-        self.active_connection = option
-        self.tracker.set_active_connection(option)
-        self.update_ui()
-
-    def remove_active_connection(self) -> None:
-        if self.connections:
-            return self.set_active_connection(
-                self.connections[next(iter(self.connections))].host
-            )
-        self.active_connection = None
-        self.tracker.remove_active_connection()
+        self.app.set_active_connection(option if option != "None" else None)
         self.update_ui()
 
     def update_ui(self) -> None:
-        if len(self.connections) == 0:
+        if len(self.app.get_connections()) == 0:
             self.set_manual_control_btn_state("disabled")
             self.automatic_button.deselect()
             self.automatic_button.configure(state="disabled")
             self.cancel_display_loop()
             return self.update_connection_menu()
-        if (connection := self.get_active_connection()) is None:
+        if (connection := self.app.get_active_connection()) is None:
             return
-        if self.director is None or connection.is_manual_only:
+        if self.app.get_director() is None or self.app.is_manual_only():
             self.automatic_button.configure(state="disabled")
         else:
             self.automatic_button.configure(state="normal")
@@ -450,51 +295,43 @@ class TKInterface(tk.Tk):
         else:
             self.set_manual_control_btn_state("disabled")
             self.automatic_button.select()
-        self.update_connection_menu(self.active_connection)
+        self.continuous_mode.set(self.app.get_control_mode())
+        self.update_connection_menu()
         if not self.display_loop_task:
             self.after("idle", self.start_display_loop)
 
     def get_active_connection(self) -> Connection | None:
-        if self.active_connection is None:
-            return None
-        return self.connections[self.active_connection]
+        return self.app.get_active_connection()
 
-    def update_connection_menu(self, new_selection: str | None = None):
+    def update_connection_menu(self):
         """Refresh dropdown menu to show the latest connections"""
-        if not self.connections:
-            return self.selectedConnection.set("None")
-        options = list(self.connections)
+        options = self.app.get_connections().keys()
         self.connectionMenu.configure(values=options)
-        if new_selection in self.connections:
-            self.selectedConnection.set(new_selection)
-        elif self.selectedConnection.get() not in self.connections:
-            first_key = next(iter(self.connections))
-            self.selectedConnection.set(first_key)
+        current_connection = self.app.get_active_connection()
+        host = "None" if current_connection is None else current_connection.host
+        self.selectedConnection.set(host)
 
     def start_display_loop(self) -> None:
-        self.display_loop_task = self.after(0, self.display_loop)
+        self.display_loop_task = self.scheduler.set_interval(50, self.display_loop)
 
     def cancel_display_loop(self) -> None:
         if self.display_loop_task is None:
             return
-        self.after_cancel(self.display_loop_task)
+        self.display_loop_task.cancel()
         self.display_loop_task = None
         self.update_display(self.no_signal_display)
 
     def display_loop(self) -> None:
         """Video display loop"""
-        frame = self.tracker.get_frame()
+        frame = self.app.get_active_frame()
         img = self.convert_frame_to_tkimage(frame)
         self.update_display(img or self.no_signal_display)
-        self.display_loop_task = self.after(20, self.display_loop)
 
     def convert_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
         """Convert frame to tkinter image"""
         if frame is None:
             return None
-        config_data = self.default_config
-        if self.active_connection in self.config:
-            config_data = self.config[self.active_connection]
+        config_data = self.app.get_active_config() or self.default_config
         desired_height: int | None = config_data.get("frame_height", None)
         desired_width: int | None = config_data.get("frame_width", None)
         frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
@@ -511,67 +348,18 @@ class TKInterface(tk.Tk):
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
         return ImageTk.PhotoImage(image=pil_image)
 
-    def set_mode(self, new_mode) -> None:
-        self.change_model(None if new_mode == "None" else new_mode)
-
     def update_display(self, img: ImageTk.PhotoImage) -> None:
         self.video_label.config(image=img)
         # Keep a reference to prevent gc
         # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
         self.video_label.dumb_image_ref = img  # pyright: ignore[reportAttributeAccessIssue]
 
-    def change_model(self, option: str | None = None) -> None:
-        if self.director is not None:
-            print("Stopping previous model")
-            self.director.stop_auto_control()
-            self.director = None
-        if option is None:
-            print("Disabling model")
-            self.automatic_button.configure(state="disabled")
-            return self.tracker.swap_model(None)
-        if option not in USABLE_MODELS:
-            return print(
-                f"Model option was not found skipping initialization... (found {option})"
-            )
-        print(f"Entering {option}")
-        model_class, director_class = USABLE_MODELS[option]
-        self.director = director_class(self.tracker, self.connections, self.scheduler)
-        self.tracker.swap_model(model_class)
-        if (connection := self.get_active_connection()) is None:
-            return
-        if self.connections and not connection.is_manual_only:
-            self.automatic_button.configure(state="normal")
-
     def toggle_command_mode(self) -> None:
         """Toggles command mode between manual mode and automatic mode.
         Disables all other controls when in automatic mode.
         """
-        if (connection := self.get_active_connection()) is None:
-            return
-        if connection.is_manual_only:
-            print("Connection is set to manual only mode, cannot switch to automatic.")
-            self.automatic_button.deselect()
-            return connection.set_manual(False)
-        connection.toggle_manual()
-
-        if connection.is_manual:
-            if self.director is not None:
-                self.director.update_control_feed(connection.host, True)
-            self.set_manual_control_btn_state("normal")
-            self.pressed_keys = set()
-            return
-
-        if self.director is not None:
-            self.director.update_control_feed(connection.host, False)
-        else:
-            print("director not found")
-        self.set_manual_control_btn_state("disabled")
-        self.pressed_keys = {
-            Direction.UP,
-            Direction.DOWN,
-            Direction.LEFT,
-            Direction.RIGHT,
-        }
+        self.app.toggle_director()
+        self.update_ui()
 
     def set_manual_control_btn_state(
         self, state: Literal["normal", "active", "disabled"]

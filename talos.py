@@ -4,7 +4,7 @@ import multiprocessing
 import cv2
 
 from src.directors.continuous_director import ContinuousDirector
-from tk_gui.main_interface import TKInterface
+from src.tk_gui.main_interface import TKInterface
 
 
 def main() -> None:

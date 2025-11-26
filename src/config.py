@@ -5,17 +5,13 @@ import yaml
 from src.utils import get_file_path
 
 CONFIG_PATH = get_file_path(
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), "config/config.local.yaml")
+    os.path.join(os.path.dirname(__file__), "../config/config.local.yaml")
 )
 DEFAULT_PATH = get_file_path(
-    os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "config/default_config.yaml"
-    )
+    os.path.join(os.path.dirname(__file__), "../config/default_config.yaml")
 )
 LOCAL_DEFAULT_PATH = get_file_path(
-    os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "config/default_config.local.yaml"
-    )
+    os.path.join(os.path.dirname(__file__), "../config/default_config.local.yaml")
 )
 
 
@@ -54,10 +50,6 @@ def add_config(socket_host: str, port: int, camera_index: int):
     Creates config/config.local.yaml if it does not exist.
     Does not overwrite existing configurations.
     """
-    base_dir = os.path.dirname(__file__)
-    local_config_path = get_file_path(
-        os.path.join(base_dir, "config/config.local.yaml")
-    )
 
     # Load the default configuration
     local_config_data = load_default_config()
@@ -73,8 +65,8 @@ def add_config(socket_host: str, port: int, camera_index: int):
 
     # Load existing local configuration or create a new one\
     config = dict()
-    if os.path.exists(local_config_path):
-        with open(local_config_path, "r") as f:
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, "r") as f:
             config = yaml.safe_load(f) or {}
 
     # Cancel if overwriting an existing configuration
@@ -86,7 +78,7 @@ def add_config(socket_host: str, port: int, camera_index: int):
 
     # Add the new configuration and write back to file
     config[socket_host] = local_config_data
-    with open(local_config_path, "w") as f:
+    with open(CONFIG_PATH, "w") as f:
         yaml.safe_dump(config, f, sort_keys=False)
 
     # Update the global CONFIG variable
