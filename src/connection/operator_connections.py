@@ -3,27 +3,22 @@ import threading
 import time
 
 from src.icd_config import CTypesInt, toBytes, toInt
-from src.tkscheduler import Scheduler
 from src.utils import add_termination_handler, remove_termination_handler
 
 
-class Connection:
+class OperatorConnection:
     """Base Connection Class, Creates Socket connection on initialization."""
 
     is_running = False
     command_count = 0
     thread: threading.Thread | None = None
-    schedule: Scheduler | None = None
     _term: int | None = None
 
-    def __init__(
-        self, host, port, schedule: Scheduler | None = None, connect_on_init=True
-    ):
+    def __init__(self, host, port, connect_on_init=True):
         self.host = host
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.schedule = schedule
         if connect_on_init:
             # Start connection on a separate thread so it doesn't block
             self.connect_on_thread()
@@ -132,7 +127,7 @@ class Connection:
         print("subclass must implement on_message method")
 
 
-class CommandConnection(Connection):
+class CommandConnection(OperatorConnection):
     """Connection Class used for Mock Operator. This is a receiving socket class.
 
     Args:

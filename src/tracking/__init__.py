@@ -15,7 +15,6 @@ class ModelOption(StrEnum):
     BASIC = "basic"
 
 
-MODEL_OPTIONS = list(map(lambda v: v.value, list(ModelOption)))
 USABLE_MODELS: dict[str, tuple[ObjectModel.__class__, BaseDirector.__class__]] = dict()
 
 # haar_cascade is imported via opencv-python by default
@@ -45,5 +44,7 @@ except ImportError as e:
         "Failed to import Yolo model. This is an optional import, but may limit the ability to run this model",
         "This can be installed using `uv sync --extra yolo` or `uv sync --extra all`",
     )
+
+MODEL_OPTIONS = list(USABLE_MODELS.keys())
 
 __all__ = ["USABLE_MODELS", "ModelOption", "MODEL_OPTIONS", "Tracker"]

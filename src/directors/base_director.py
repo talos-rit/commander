@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from src.publisher import Publisher
-from src.tkscheduler import IterativeTask, Scheduler
+from src.connection.connection import Connection
+from src.connection.publisher import Publisher
+from src.scheduler import IterativeTask, Scheduler
 from src.utils import add_termination_handler, remove_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
@@ -22,16 +23,21 @@ class BaseDirector(ABC):
     control_task: IterativeTask | None = None
     _term: int | None = None
 
-    def __init__(self, tracker, connections, scheduler: Scheduler | None = None):
+    def __init__(
+        self,
+        tracker,
+        connections: dict[str, Connection],
+        scheduler: Scheduler | None = None,
+    ):
         self.tracker = tracker
         self.scheduler = scheduler
         self.control_feeds: dict[str, ControlFeed] = dict()
         for conn in connections.values():
-            shape = conn.shape
+            shape = conn.video_connection.shape
             if shape is not None:
                 self.control_feeds[conn.host] = ControlFeed(
                     host=conn.host,
-                    manual=conn.manual,
+                    manual=conn.is_manual,
                     frame_shape=shape,
                     publisher=conn.publisher,
                 )
@@ -45,12 +51,14 @@ class BaseDirector(ABC):
 
     def add_control_feed(
         self, host: str, manual: bool, frame_shape: tuple, publisher: Publisher
-    ) -> None:
-        self.control_feeds[host] = ControlFeed(
+    ) -> ControlFeed:
+        cf = ControlFeed(
             host=host, manual=manual, frame_shape=frame_shape, publisher=publisher
         )
+        self.control_feeds[host] = cf
         if self.scheduler is not None and self.control_task is None:
             self.start_auto_control()
+        return cf
 
     def remove_control_feed(self, host: str) -> None:
         if host in self.control_feeds:

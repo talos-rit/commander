@@ -1,8 +1,8 @@
 import time
 
 from src.config import load_config
+from src.connection.publisher import Publisher
 from src.directors.base_director import BaseDirector
-from src.publisher import Publisher
 from src.utils import (
     calculate_acceptable_box,
     calculate_center_bbox,

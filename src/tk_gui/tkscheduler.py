@@ -1,13 +1,16 @@
 from tkinter import Tk
 
+from src.scheduler import IterativeTask, Scheduler
 
-class IterativeTask:
+
+class TKIterativeTask(IterativeTask):
     root: Tk
     is_running = True
     _stop_flag = False
     _call_id: str | None = None
 
     def __init__(self, root: Tk, ms, func, *args):
+        super().__init__()
         self.root = root
         self.iterative_call(int(ms), func, *args)
 
@@ -24,7 +27,7 @@ class IterativeTask:
             self.root.after_cancel(self._call_id)
 
 
-class Scheduler:
+class TKScheduler(Scheduler):
     def __init__(self, root: Tk):
         self.root = root
 
@@ -35,4 +38,4 @@ class Scheduler:
             self.root.after(int(ms), func, *args)
 
     def set_interval(self, ms, func, *args):
-        return IterativeTask(self.root, int(ms), func, *args)
+        return TKIterativeTask(self.root, int(ms), func, *args)

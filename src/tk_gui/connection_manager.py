@@ -1,39 +1,10 @@
 import tkinter
-from dataclasses import dataclass, field
 from tkinter import ttk
 
 from src.config import add_config, load_config
-from src.publisher import Publisher
 
 
-@dataclass
-class ConnectionData:
-    host: str
-    port: int
-    camera: str | int
-    publisher: Publisher
-    manual: bool = True
-    manual_only: bool = False
-    fps: int = field(default_factory=lambda: 60)
-    shape: tuple | None = None
-
-    def __post_init__(self):
-        conf = load_config()
-        fps = conf.get(self.host, {}).get("fps")
-        if fps is not None:
-            self.fps = fps
-        manual_only = conf.get(self.host, {}).get("manual_only")
-        if manual_only is not None:
-            self.manual_only = manual_only
-
-    def set_frame_shape(self, shape: tuple | None) -> None:
-        self.shape = shape
-
-    def set_manual(self, manual: bool) -> None:
-        self.manual = manual
-
-
-class ConnectionManager(tkinter.Toplevel):
+class TKConnectionManager(tkinter.Toplevel):
     def __init__(self, parent, connections):
         super().__init__(parent)
         self.title("Connection Manager")
