@@ -27,24 +27,6 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.terminal:
-        # from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
-
-        # tracker = MediaPipePoseModel(None, source=args.source)
-        # # tracker = MediaPipeTracker(args.source, get_file_path("./config.yaml"))
-        # # tracker = YOLOTracker(args.source, get_file_path("./config.yaml"))
-        # # director = DiscreteDirector(tracker, get_file_path("./config.yaml"))
-        # director = ContinuousDirector(tracker)
-
-        # while True:
-        #     bounding_box, frame = tracker.detect_person(False)
-
-        #     # Helpful for bounding boxes on screen, this can be removed later
-        #     if cv2.waitKey(1) & 0xFF == ord("q"):
-        #         break
-
-        #     if bounding_box is None or frame is None:
-        #         break
-        #     director.process_frame(bounding_box, frame, True)
         interface = Interface()
         interface.run()
     else:
