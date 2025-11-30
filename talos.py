@@ -1,5 +1,7 @@
 import argparse
 import multiprocessing
+import multiprocessing.managers
+import multiprocessing.shared_memory
 
 from src.textual_tui.main_interface import Interface
 from src.tk_gui.main_interface import TKInterface
@@ -27,7 +29,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.terminal:
+        smm = multiprocessing.managers.SharedMemoryManager()
         interface = Interface()
+        interface.smm = smm
         interface.run()
     else:
         interface = TKInterface()

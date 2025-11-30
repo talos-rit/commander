@@ -1,46 +1,65 @@
+from rich.text import TextType
 from textual.message import Message
 from textual.widgets import Button
+from typing_extensions import Literal
+
+ButtonVariant = Literal["default", "primary", "success", "warning", "error"]
 
 
-class HoldButton(Button):
-    def __init__(self, *args, hold_ms=200, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._held = False
-        self._hold_timer = None
-        self._hold_interval = hold_ms / 1000
+class ReactiveButton(Button):
+    def __init__(
+        self,
+        label: TextType | None = None,
+        seconds_to_disable_on_mount: int | None = 1,
+        on_blur=None,
+        *,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+        disabled: bool = True,
+    ):
+        super().__init__(
+            label=label,
+            name=name,
+            id=id,
+            classes=classes,
+            disabled=disabled,
+        )
+        self.on_btn_blur = on_blur
 
-    # Fires the moment the user presses
-    def on_mouse_down(self, event):
-        event.stop()
-        self._held = True
-        self.post_message(self.ButtonActive())
+        def enable():
+            self.disabled = False
 
-        # Start hold loop
-        self._hold_timer = self.app.set_interval(
-            self._hold_interval,
-            self._on_hold,
+        self.set_timer(
+            seconds_to_disable_on_mount or 0,
+            enable,
         )
 
-    # Fires the moment the user releases
-    def on_mouse_up(self, event):
-        event.stop()
-        if self._held:
-            self._held = False
-            if self._hold_timer:
-                self._hold_timer.stop()
-            self.post_message(self.ButtonReleased())
+    class Active(Message):
+        def __init__(self, button):
+            self.button: ReactiveButton = button
+            super().__init__()
 
-    # Called repeatedly while held
-    def _on_hold(self):
-        if self._held:
-            self.post_message(self.ButtonHold())
+        @property
+        def control(self):
+            return self.button
 
-    # Custom Messages
-    class ButtonActive(Message):
-        pass
+    class Released(Message):
+        def __init__(self, button):
+            self.button: ReactiveButton = button
+            super().__init__()
 
-    class ButtonHold(Message):
-        pass
+        @property
+        def control(self):
+            return self.button
 
-    class ButtonReleased(Message):
-        pass
+    def on_focus(self):
+        self.post_message(ReactiveButton.Active(self))
+
+    def on_click(self):
+        self.post_message(ReactiveButton.Released(self))
+        if self.on_btn_blur:
+            self.on_btn_blur()
+        else:
+            # Not preferred as it will put focus on another random component.
+            self.blur()
