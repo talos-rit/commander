@@ -2,12 +2,16 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Footer, Header, Static
 
+from src.talos_app import App as TalosApp
+from src.talos_app import Direction
+from src.textual_tui.scheduler import TextualScheduler
 from src.textual_tui.widgets.print_viewer import PrintViewer
 
 
 class Interface(App):
     CSS_PATH = "app.tcss"
     BINDINGS = [("q", "quit", "Quit")]
+    _talos_app: TalosApp
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -29,8 +33,8 @@ class Interface(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        print("Hello from print()!")
-        print("Another line...")
+        scheduler = TextualScheduler(self)
+        self._talos_app = TalosApp(scheduler)
 
     async def key_up(self) -> None:
         await self.run_action("key_up")
@@ -61,6 +65,10 @@ class Interface(App):
 
     def action_key_space(self) -> None:
         print("HOME button pressed")
+        self._talos_app.move_home()
+
+    def mv_direction(self, direction: Direction):
+        self._talos_app.start_move(direction)
 
 
 if __name__ == "__main__":
