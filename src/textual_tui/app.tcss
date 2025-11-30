@@ -1,0 +1,10 @@
+.widget {
+    content-align: center middle;
+    border: solid black;
+    height: 1fr;
+    width: 1fr;
+}
+
+.column {
+    width: 1fr;
+}

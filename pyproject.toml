@@ -12,6 +12,7 @@ dependencies = [
     "customtkinter>=5.2.2",
     "sv-ttk>=2.6.1",
     "darkdetect>=0.8.0",
+    "textual>=6.7.0",
 ]
 name = "commander"
 requires-python = "==3.12.*"
@@ -19,7 +20,8 @@ version = "0.1.0"
 
 [dependency-groups]
 dev = [
-    "pyinstaller>=6.16.0"
+    "pyinstaller>=6.16.0",
+    "textual-dev>=1.8.0",
 ]
 
 [project.optional-dependencies]
