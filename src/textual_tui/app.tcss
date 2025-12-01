@@ -8,3 +8,7 @@
 .column {
     width: 1fr;
 }
+
+.label-text {
+    padding: 0 1;
+}

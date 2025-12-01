@@ -4,13 +4,17 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.timer import Timer
-from textual.widgets import Button, Footer, Header, Static
+from textual.widgets import Button, Footer, Header, Select, Static, Switch
 
 from src.talos_app import App as TalosApp
-from src.talos_app import Direction
+from src.talos_app import ControlMode, Direction
 from src.textual_tui.scheduler import TextualScheduler
 from src.textual_tui.widgets.button import ReactiveButton
 from src.textual_tui.widgets.print_viewer import PrintViewer
+
+from ..tracking import MODEL_OPTIONS
+
+MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)
 
 
 class Interface(App):
@@ -32,7 +36,11 @@ class Interface(App):
         with Horizontal():
             with Vertical(classes="column"):
                 with Horizontal():
-                    yield Static(id="control-selection", classes="widget")
+                    with Vertical(classes="widget"):
+                        yield Static("Control Mode:", classes="label-text")
+                        yield Switch(value=False, id="auto-mode-switch")
+                        yield Static("Continuous Control:", classes="label-text")
+                        yield Switch(value=False, id="continuous-control-switch")
                     yield ReactiveButton("UP", id="up", classes="widget")
                     yield Static(id="placeholder", classes="widget")
                 with Horizontal():
@@ -45,7 +53,9 @@ class Interface(App):
                     )
                     yield ReactiveButton("RIGHT", id="right", classes="widget")
                 with Horizontal():
-                    yield Static(id="model-selection", classes="widget")
+                    with Vertical(classes="widget"):
+                        yield Static("Model:", classes="label-text")
+                        yield Select(MODEL_OPTIONS_TEXTUAL, id="model-select")
                     yield ReactiveButton("DOWN", id="down", classes="widget")
                     yield Static(id="connection-selection", classes="widget")
             yield PrintViewer(classes="column")
@@ -55,6 +65,11 @@ class Interface(App):
         print("Mounting Interface")
         scheduler = TextualScheduler(self)
         self._talos_app = TalosApp(scheduler, smm=self.smm)
+
+        continuous_switch = self.query_one("#continuous-control-switch", Switch)
+        continuous_switch.value = (
+            self._talos_app.get_control_mode() == ControlMode.CONTINUOUS
+        )
 
     @on(ReactiveButton.Active, "#up")
     def action_up(self):
@@ -87,6 +102,20 @@ class Interface(App):
     @on(ReactiveButton.Released, "#down")
     def action_down_end(self):
         self.stop_mv_direction(Direction.DOWN)
+
+    @on(Select.Changed, "#model-select")
+    def model_changed(self, event: Select.Changed) -> None:
+        if event.value is Select.BLANK:
+            return self._talos_app.change_model(None)
+        self._talos_app.change_model(str(event.value))
+
+    @on(Switch.Changed, "#auto-mode-switch")
+    def auto_mode_changed(self, _: Switch.Changed) -> None:
+        self._talos_app.toggle_director()
+
+    @on(Switch.Changed, "#continuous-control-switch")
+    def continuous_control_changed(self, _: Switch.Changed) -> None:
+        self._talos_app.toggle_control_mode()
 
     def debounce_input(self, name, func, wait_ms: int = 100):
         def called():
