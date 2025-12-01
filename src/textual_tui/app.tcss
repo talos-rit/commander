@@ -12,3 +12,12 @@
 .label-text {
     padding: 0 1;
 }
+
+.manage-connection {
+    width: 100%;
+    margin: 0 1;
+}
+
+.connection-widget {
+    # layout: horizontal;
+}

@@ -57,7 +57,13 @@ class Interface(App):
                         yield Static("Model:", classes="label-text")
                         yield Select(MODEL_OPTIONS_TEXTUAL, id="model-select")
                     yield ReactiveButton("DOWN", id="down", classes="widget")
-                    yield Static(id="connection-selection", classes="widget")
+                    with Vertical(classes="widget connection-widget"):
+                        yield Button(
+                            "Manage Connection",
+                            id="manage-connection",
+                            classes="manage-connection",
+                        )
+                        yield Select([], id="connection-select")
             yield PrintViewer(classes="column")
         yield Footer()
 
