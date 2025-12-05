@@ -1,0 +1,19 @@
+.widget {
+    content-align: center middle;
+    border: solid black;
+    height: 1fr;
+    width: 1fr;
+}
+
+.column {
+    width: 1fr;
+}
+
+.label-text {
+    padding: 0 1;
+}
+
+.manage-connection {
+    width: 100%;
+    margin: 0 1;
+}
