@@ -1,15 +1,16 @@
 from textual.app import App
+from textual.timer import Timer
 
 from src.talos_app import IterativeTask, Scheduler
 
 
 class TextualIterativeTask(IterativeTask):
-    def __init__(self, timer):
-        self._timer = timer
+    def __init__(self, timer: Timer):
+        self._timer: Timer = timer
         self.is_running = True
 
     def cancel(self):
-        self._timer.cancel()
+        self._timer.stop()
         self.is_running = False
 
 

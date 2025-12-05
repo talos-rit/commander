@@ -1,0 +1,13 @@
+ManageConnectionScreen {
+  background: black 50%;
+  align: center middle;
+}
+
+ManageConnectionScreen>* {
+  width: 70%;
+  background: transparent;
+}
+
+.prev-connections-list, .current-connections-list {
+  border: solid green;
+}

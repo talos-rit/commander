@@ -48,6 +48,7 @@ class App:
         Opens a connection to the given hostname.
         If port or camera is not provided, uses the values from the config.
         """
+        print(f"Opening connection to {hostname}")
         if hostname in self.connections:
             return print(f"Connection to {hostname} already exists")
         conf = self.config.get(hostname, {})

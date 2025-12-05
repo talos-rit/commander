@@ -1,23 +1,27 @@
 from multiprocessing.managers import SharedMemoryManager
 
-from textual import on
+from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.reactive import reactive
 from textual.timer import Timer
+from textual.types import NoSelection
 from textual.widgets import Button, Footer, Header, Select, Static, Switch
 
 from src.talos_app import App as TalosApp
 from src.talos_app import ControlMode, Direction
+from src.textual_tui.manage_connection import ManageConnectionScreen
 from src.textual_tui.scheduler import TextualScheduler
 from src.textual_tui.widgets.button import ReactiveButton
 from src.textual_tui.widgets.print_viewer import PrintViewer
+from src.tracking import MODEL_OPTIONS
 
-from ..tracking import MODEL_OPTIONS
+from ..tk_gui.main_interface import start_termination_guard
 
 MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)
 
 
-class Interface(App):
+class TextualInterface(App):
     CSS_PATH = "app.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
@@ -62,8 +66,12 @@ class Interface(App):
                             "Manage Connection",
                             id="manage-connection",
                             classes="manage-connection",
+                            action="app.manage_connection()",
                         )
-                        yield Select([], id="connection-select")
+                        yield Select(
+                            [],
+                            id="connection-select",
+                        )
             yield PrintViewer(classes="column")
         yield Footer()
 
@@ -71,6 +79,7 @@ class Interface(App):
         print("Mounting Interface")
         scheduler = TextualScheduler(self)
         self._talos_app = TalosApp(scheduler, smm=self.smm)
+        start_termination_guard()
 
         continuous_switch = self.query_one("#continuous-control-switch", Switch)
         continuous_switch.value = (
@@ -180,6 +189,25 @@ class Interface(App):
             lambda: self.stop_mv_direction(Direction.RIGHT),
         )
 
+    @work
+    async def action_manage_connection(self):
+        await self.push_screen(
+            ManageConnectionScreen(self._talos_app), wait_for_dismiss=True
+        )
+        active_connection = self._talos_app.active_connection or Select.BLANK
+        connections = [
+            (conn, conn) for conn in self._talos_app.get_connections().keys()
+        ]
+        self.mutate_reactive(TextualInterface.active_connection)
+        self.mutate_reactive(TextualInterface.connections)
+
+    @on(Select.Changed, "#connection-select")
+    def handle_active_connection(self, active_connection: str | NoSelection):
+        if hasattr(self, "_talos_app") is False:
+            return
+        new_connection = active_connection if type(active_connection) is str else None
+        self._talos_app.set_active_connection(new_connection)
+
     def start_mv_direction(self, direction: Direction):
         print("Start move", direction)
         self._talos_app.start_move(direction)
@@ -190,4 +218,4 @@ class Interface(App):
 
 
 if __name__ == "__main__":
-    Interface().run()
+    TextualInterface().run()
