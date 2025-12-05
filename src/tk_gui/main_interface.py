@@ -188,7 +188,7 @@ class TKInterface(tk.Tk):
             self.model_frame,
             variable=tk.StringVar(value="None"),
             values=["None"] + MODEL_OPTIONS,
-            command=self.app.change_model,
+            command=self.change_model,
             **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
         ).grid(row=2, column=0, pady=5, padx=5, sticky="ew")
 
@@ -280,14 +280,17 @@ class TKInterface(tk.Tk):
             self.set_manual_control_btn_state("disabled")
             self.automatic_button.deselect()
             self.automatic_button.configure(state="disabled")
+            print("AUTOMATIC BUTTON DISABLED")
             self.cancel_display_loop()
             return self.update_connection_menu()
         if (connection := self.app.get_active_connection()) is None:
             return
         if self.app.get_director() is None or self.app.is_manual_only():
             self.automatic_button.configure(state="disabled")
+            print("AUTOMATIC BUTTON DISABLED")
         else:
             self.automatic_button.configure(state="normal")
+            print("AUTOMATIC BUTTON ENABLED")
         if connection.is_manual:
             self.set_manual_control_btn_state("normal")
             self.automatic_button.deselect()
@@ -355,6 +358,11 @@ class TKInterface(tk.Tk):
         Disables all other controls when in automatic mode.
         """
         self.app.toggle_director()
+        self.update_ui()
+
+    def change_model(self, model_name: str) -> None:
+        """Changes the detection model used by the active connection."""
+        self.app.change_model(model_name)
         self.update_ui()
 
     def set_manual_control_btn_state(
