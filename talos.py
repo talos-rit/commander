@@ -1,9 +1,8 @@
 import argparse
 import multiprocessing
+import multiprocessing.managers
 
-import cv2
-
-from src.directors.continuous_director import ContinuousDirector
+from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 
 
@@ -21,35 +20,21 @@ def main() -> None:
         "--source", type=str, default="", help="Path to video file or URL of stream"
     )
     parser.add_argument(
-        "--no_interface",
-        type=str,
-        default="false",
+        "-t",
+        "--terminal",
+        action="store_true",
         help="Path to video file or URL of stream",
     )
     args = parser.parse_args()
 
-    if args.no_interface == "true":
-        from tracking.media_pipe.media_pipe_pose_model import MediaPipePoseModel
-
-        tracker = MediaPipePoseModel(None, source=args.source)
-        # tracker = MediaPipeTracker(args.source, get_file_path("./config.yaml"))
-        # tracker = YOLOTracker(args.source, get_file_path("./config.yaml"))
-        # director = DiscreteDirector(tracker, get_file_path("./config.yaml"))
-        director = ContinuousDirector(tracker)
-
-        while True:
-            bounding_box, frame = tracker.detect_person(False)
-
-            # Helpful for bounding boxes on screen, this can be removed later
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-
-            if bounding_box is None or frame is None:
-                break
-            director.process_frame(bounding_box, frame, True)
-
-    interface = TKInterface()
-    interface.mainloop()
+    if args.terminal:
+        smm = multiprocessing.managers.SharedMemoryManager()
+        interface = TextualInterface()
+        interface.smm = smm
+        interface.run()
+    else:
+        interface = TKInterface()
+        interface.mainloop()
 
 
 if __name__ == "__main__":
