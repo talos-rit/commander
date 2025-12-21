@@ -216,7 +216,7 @@ class TextualInterface(App):
     def handle_active_connection(self, active_connection: str | NoSelection):
         if hasattr(self, "_talos_app") is False:
             return
-        new_connection = active_connection if type(active_connection) is str else None
+        new_connection = active_connection if isinstance(active_connection, str) else None
         self._talos_app.set_active_connection(new_connection)
 
     def start_mv_direction(self, direction: Direction):
