@@ -214,7 +214,7 @@ class TextualInterface(App):
 
     @on(Select.Changed, "#connection-select")
     def handle_active_connection(self, active_connection: str | NoSelection):
-        if hasattr(self, "_talos_app") is False:
+        if not hasattr(self, "_talos_app"):
             return
         new_connection = active_connection if isinstance(active_connection, str) else None
         self._talos_app.set_active_connection(new_connection)
