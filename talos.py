@@ -23,7 +23,7 @@ def main() -> None:
         "-t",
         "--terminal",
         action="store_true",
-        help="Path to video file or URL of stream",
+        help="Use the terminal (textual) interface instead of the Tk GUI",
     )
     args = parser.parse_args()
 
