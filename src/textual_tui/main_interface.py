@@ -34,6 +34,7 @@ class TextualInterface(App):
     _talos_app: TalosApp
     debounce_timers: dict[str, Timer] = dict()
     smm: SharedMemoryManager | None = None
+    connection_options = reactive([("None", None)])
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -69,11 +70,19 @@ class TextualInterface(App):
                             action="app.manage_connection()",
                         )
                         yield Select(
-                            [],
+                            self.connection_options,
                             id="connection-select",
                         )
             yield PrintViewer(classes="column")
         yield Footer()
+
+    def watch_connection_options(self, old_options, new_options):
+        """This function runs automatically when self.connection_options changes"""
+        if len(old_options) == len(new_options) and all(
+            o == n for o, n in zip(old_options, new_options)
+        ):
+            return
+        self.query_one("#connection-select", Select).set_options(new_options)
 
     def on_mount(self) -> None:
         print("Mounting Interface")
@@ -194,12 +203,14 @@ class TextualInterface(App):
         await self.push_screen(
             ManageConnectionScreen(self._talos_app), wait_for_dismiss=True
         )
-        active_connection = self._talos_app.active_connection or Select.BLANK
+
         connections = [
             (conn, conn) for conn in self._talos_app.get_connections().keys()
         ]
-        self.mutate_reactive(TextualInterface.active_connection)
-        self.mutate_reactive(TextualInterface.connections)
+        self.connection_options = connections
+        self.query_one("#connection-select", Select).value = (
+            self._talos_app.active_connection or Select.BLANK
+        )
 
     @on(Select.Changed, "#connection-select")
     def handle_active_connection(self, active_connection: str | NoSelection):
