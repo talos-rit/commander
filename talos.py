@@ -6,26 +6,21 @@ from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 
 
-def main() -> None:
-    # while (not Publisher.connection.is_connected):
-    #     print("Waiting to connect...")
-    #     time.sleep(5)
-
-    # This is a required call for pyinstaller
-    # https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing
-    multiprocessing.freeze_support()
-
+def create_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--source", type=str, default="", help="Path to video file or URL of stream"
-    )
     parser.add_argument(
         "-t",
         "--terminal",
         action="store_true",
         help="Use the terminal (textual) interface instead of the Tk GUI",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main(args) -> None:
+    # This is a required call for pyinstaller
+    # https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing
+    multiprocessing.freeze_support()
 
     if args.terminal:
         smm = multiprocessing.managers.SharedMemoryManager()
@@ -38,4 +33,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(create_args())
