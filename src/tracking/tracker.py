@@ -91,11 +91,12 @@ class Tracker:
         model=None,
         scheduler: Scheduler | None = None,
         video_buffer_size=1,
+        smm: SharedMemoryManager | None = None,
     ):
         self.video_buffer_size = video_buffer_size
         self.scheduler = scheduler
         self.model = model
-        self._smm = SharedMemoryManager()
+        self._smm = smm or SharedMemoryManager()
         self._smm.start()
         self.frame_delay = 1000 / self.max_fps
 
