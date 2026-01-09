@@ -1,12 +1,17 @@
 import argparse
 import multiprocessing
 import sys
+from pathlib import Path
 
 import cv2
 from loguru import logger
 
 from src.directors.continuous_director import ContinuousDirector
 from src.tk_gui.main_interface import TKInterface
+
+log_dir = Path(".log")
+if not log_dir.exists():
+    log_dir.mkdir()
 
 logger.add(
     ".log/log_{time}.log",
