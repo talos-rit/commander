@@ -1,10 +1,39 @@
 import argparse
 import multiprocessing
+import sys
+from pathlib import Path
 
 import cv2
+from loguru import logger
 
 from src.directors.continuous_director import ContinuousDirector
 from src.tk_gui.main_interface import TKInterface
+
+log_dir = Path(".log")
+if not log_dir.exists():
+    log_dir.mkdir()
+
+logger.add(
+    ".log/log_{time}.log",
+    enqueue=True,
+    retention="10 days",
+    backtrace=True,
+    diagnose=True,
+)
+
+
+class StreamToLoguru:
+    def write(self, message):
+        message = message.strip()
+        if message:
+            logger.info(message)
+
+    def flush(self):
+        pass  # Needed for file-like API
+
+
+sys.stdout = StreamToLoguru()
+sys.stderr = StreamToLoguru()
 
 
 def main() -> None:
@@ -48,6 +77,7 @@ def main() -> None:
                 break
             director.process_frame(bounding_box, frame, True)
 
+    logger.info("Starting TK Interface")
     interface = TKInterface()
     interface.mainloop()
 
