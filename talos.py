@@ -2,38 +2,33 @@ import argparse
 import multiprocessing
 import multiprocessing.managers
 import sys
-from pathlib import Path
 
 from loguru import logger
 
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 
-log_dir = Path(".log")
-if not log_dir.exists():
-    log_dir.mkdir()
 
-logger.add(
-    ".log/log_{time}.log",
-    enqueue=True,
-    retention="10 days",
-    backtrace=True,
-    diagnose=True,
-)
+def configure_logger():
+    logger.add(
+        ".log/log_{time}.log",
+        enqueue=True,
+        retention="10 days",
+        backtrace=True,
+        diagnose=True,
+    )
 
+    class StreamToLoguru:
+        def write(self, message):
+            message = message.strip()
+            if message:
+                logger.info(message)
 
-class StreamToLoguru:
-    def write(self, message):
-        message = message.strip()
-        if message:
-            logger.info(message)
+        def flush(self):
+            pass  # Needed for file-like API
 
-    def flush(self):
-        pass  # Needed for file-like API
-
-
-sys.stdout = StreamToLoguru()
-sys.stderr = StreamToLoguru()
+    sys.stdout = StreamToLoguru()
+    sys.stderr = StreamToLoguru()
 
 
 def create_args():
@@ -63,4 +58,5 @@ def main(args) -> None:
 
 
 if __name__ == "__main__":
+    configure_logger()
     main(create_args())
