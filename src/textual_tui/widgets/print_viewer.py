@@ -1,3 +1,4 @@
+from loguru import logger
 from textual import events
 from textual.app import ComposeResult
 from textual.widget import Widget
@@ -14,5 +15,12 @@ class PrintViewer(Widget):
         self.begin_capture_print()
 
     def on_print(self, event: events.Print) -> None:
+        txt = event.text.rstrip("\n")
+        if not txt:
+            return
         log = self.query_one("#log", RichLog)
-        log.write(event.text.rstrip("\n"))
+        log.write(txt)
+        if event.stderr:
+            logger.error(txt)
+        else:
+            logger.info(txt)
