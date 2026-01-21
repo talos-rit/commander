@@ -1,4 +1,5 @@
 from enum import StrEnum
+from multiprocessing.managers import SharedMemoryManager
 
 from .config import load_config
 from .connection.connection import Connection
@@ -27,12 +28,14 @@ class App:
     current_continuous_directions: set[Direction] = set()
     discrete_move_task: dict[Direction, IterativeTask] = dict()
 
-    def __init__(self, scheduler: Scheduler) -> None:
+    def __init__(
+        self, scheduler: Scheduler, smm: SharedMemoryManager | None = None
+    ) -> None:
         self.scheduler = scheduler
         self.config = load_config()
         self.connections = dict()
         self.active_connection: None | str = None
-        self.tracker = Tracker(scheduler=scheduler)
+        self.tracker = Tracker(scheduler=scheduler, smm=smm)
 
     def open_connection(
         self,
@@ -45,6 +48,7 @@ class App:
         Opens a connection to the given hostname.
         If port or camera is not provided, uses the values from the config.
         """
+        print(f"Opening connection to {hostname}")
         if hostname in self.connections:
             return print(f"Connection to {hostname} already exists")
         conf = self.config.get(hostname, {})
