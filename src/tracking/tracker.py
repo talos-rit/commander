@@ -1,3 +1,4 @@
+import threading
 from abc import ABC, abstractmethod
 from enum import Enum
 from multiprocessing import Event, Process, Queue, shared_memory
@@ -6,8 +7,9 @@ from queue import Empty, Full
 
 import cv2
 import numpy as np
+from loguru import logger
 
-from src.config import load_config, load_default_config
+from src.config import load_default_config
 from src.connection.connection import VideoConnection
 from src.scheduler import IterativeTask, Scheduler
 from src.utils import (
@@ -17,8 +19,10 @@ from src.utils import (
     remove_termination_handler,
 )
 
+from ..thread_scheduler import ThreadScheduler
+
 SHARED_MEM_FRAME_NAME = "frame"
-POLL_BBOX_CYCLE_INTERVAL_MS = 10
+POLL_BBOX_CYCLE_INTERVAL_MS = 100  # 10 FPS
 
 
 class BBOX_COLOR(Enum):
@@ -44,6 +48,7 @@ def _detect_person_worker(
     model_class,
     bbox_queue: Queue,
     stopper,
+    frame_ready_event,
     frame_mem: shared_memory.SharedMemory,
     frame_shape,
     frame_dtype,
@@ -55,7 +60,10 @@ def _detect_person_worker(
     model: ObjectModel = model_class()
     try:
         while not stopper.is_set():
+            frame_ready_event.wait()
+            # Not clear immediately to make a copy here safely
             bboxes = model.detect_person(frame=np.copy(frame))
+            frame_ready_event.clear()
             try:
                 bbox_queue.put_nowait(bboxes)
             except Full:
@@ -69,22 +77,25 @@ def _detect_person_worker(
 # Class for handling video feed and object detection model usage
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
-    config: dict = load_config()
     default_config: dict = load_default_config()
-    max_fps = 1  # this will be set dynamically based on captures
-    frame_delay: float = 0.0  # same as above
+    max_fps = POLL_BBOX_CYCLE_INTERVAL_MS  # this will be set dynamically based on configuration see max_fps
+    frame_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
+    bbox_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
     model = None
     captures: dict[str, VideoConnection] = dict()
     frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
     active_connection: str | None = None
     _bboxes: dict[str, list] = dict()
+    _bbox_lock: threading.Lock = threading.Lock()
     _frame_buf: np.ndarray
     _bbox_queue: Queue
     _detection_process: Process | None = None
     _term_handler_id: int | None = None
+    _thread_scheduler: ThreadScheduler
     _send_frame_task: IterativeTask | None = None
     _poll_bbox_task: IterativeTask | None = None
     _smm: SharedMemoryManager | None = None
+    _bbox_success_count: int = 0
 
     def __init__(
         self,
@@ -92,13 +103,22 @@ class Tracker:
         scheduler: Scheduler | None = None,
         video_buffer_size=1,
         smm: SharedMemoryManager | None = None,
+        threaded_scheduler: ThreadScheduler | None = None,
     ):
         self.video_buffer_size = video_buffer_size
         self.scheduler = scheduler
         self.model = model
         self._smm = smm or SharedMemoryManager()
         self._smm.start()
-        self.frame_delay = 1000 / self.max_fps
+        self._thread_scheduler = threaded_scheduler or ThreadScheduler()
+        if self.default_config.get("max_fps") is not None:
+            self.max_fps = self.default_config["max_fps"]
+        if self.default_config.get("fps") is not None:
+            self.frame_delay = 1000 / self.default_config["fps"]
+        else:
+            self.frame_delay = 1000 / self.max_fps
+        self.bbox_delay = 1000 / self.max_fps
+        logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
     def add_capture(self, host: str, camera: str | int) -> VideoConnection:
         """Adds a new video capture for a given host.
@@ -147,6 +167,7 @@ class Tracker:
         total_nbytes = self.get_nbytes_from_total_shape(total_shape)
 
         self.model_stopper = Event()
+        self.frame_ready_event = Event()
         # idk why but gc keeps deleting shared memory without me holding reference via "self."
         self._frame_memory = self._smm.SharedMemory(size=total_nbytes)
         self._frame_buf = np.ndarray(total_shape, np.uint8, self._frame_memory.buf)
@@ -158,6 +179,7 @@ class Tracker:
                 self.model,
                 self._bbox_queue,
                 self.model_stopper,
+                self.frame_ready_event,
                 self._frame_memory,
                 total_shape,
                 np.uint8,
@@ -167,16 +189,23 @@ class Tracker:
         self._detection_process.start()
         self._term_handler_id = add_termination_handler(self.stop)
         if self.scheduler:
-            print("Detection process started.")
-            self._poll_bbox_task = self.scheduler.set_interval(
-                self.frame_delay, self.poll_bboxes
+            logger.info(
+                f"Detection process started. {self.bbox_delay=} ms, {self.frame_delay=} ms"
             )
-            self._send_frame_task = self.scheduler.set_interval(
-                self.frame_delay, self.send_latest_frame
+            self._send_frame_task = self._thread_scheduler.set_interval(
+                int(self.frame_delay), self.send_latest_frame
             )
 
+            def schedule_poll(self=self):
+                self._poll_bbox_task = self._thread_scheduler.set_interval(
+                    int(self.bbox_delay), self.poll_bboxes
+                )
+
+            # Wait an arbitrary 2 seconds before starting bbox polling to allow model process to start
+            self.scheduler.set_timeout(3000, schedule_poll)
+
     def poll_bboxes(self) -> None:
-        print("Polling bounding boxes from detection process")
+        logger.debug("Polling bounding boxes from detection process")
         raw_bboxes: None | list[tuple[int, int, int, int]] = None
 
         try:
@@ -184,14 +213,26 @@ class Tracker:
         except ValueError:
             return
         except Empty:
+            if self._bbox_success_count < 1:
+                logger.debug("Frequent empty bbox queue detected. Reducing poll rate.")
+                self.decrease_bbox_frame_rate()
+            self._bbox_success_count -= 1
             return
-        assert raw_bboxes is not None
+        if raw_bboxes is None:
+            logger.info("No bounding boxes detected.")
+            return
+        self._bbox_success_count += 1
+        if self._bbox_success_count > 10:
+            logger.debug("Bounding box detection stabilized. Increasing poll rate.")
+            self._bbox_success_count = 0
+            self.increase_bbox_frame_rate()
 
         bboxes_by_host: dict = {host: [] for host, _ in self.frame_order}
 
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
-            self._bboxes = {host: raw_bboxes}
+            with self._bbox_lock:
+                self._bboxes = {host: raw_bboxes}
             return
 
         for x1, y1, x2, y2 in raw_bboxes:
@@ -209,7 +250,9 @@ class Tracker:
                         [max(0, x1 - dx), y1, max(0, x2 - dx), y2]
                     )
 
-        self._bboxes = bboxes_by_host
+        with self._bbox_lock:
+            self._bboxes = bboxes_by_host
+            logger.info(f"Updated bounding boxes: {self._bboxes}")
 
     def get_total_frame_shape(self):
         """
@@ -250,17 +293,21 @@ class Tracker:
         return h * w * c * np.dtype(np.uint8).itemsize
 
     def send_latest_frame(self) -> None:
+        if self.frame_ready_event.is_set():
+            # Previous frame not yet processed
+            return
+        logger.debug("Sending latest frame to detection process")
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
-            new_frame = self.captures[host].frame
-            if new_frame is not None:
-                np.copyto(self._frame_buf, new_frame)
+            self.new_frame = self.captures[host].get_frame()
+            if self.new_frame is not None and not self.frame_ready_event.is_set():
+                np.copyto(self._frame_buf, self.new_frame)
             return
 
-        frames = [self.captures[host].frame for host, _ in self.frame_order]
+        frames = [self.captures[host].get_frame() for host, _ in self.frame_order]
         frames = [f for f in frames if f is not None]
         if len(frames) == 0:
-            print("No frames available to update frame buffer.")
+            logger.warning("No frames available to update frame buffer.")
             return
         # Compare heights of frames and padd the bottom to the smaller ones to match the largest height
         max_height = max(frame.shape[0] for frame in frames)
@@ -283,21 +330,27 @@ class Tracker:
         if self._detection_process is None:
             return True
         assert self._smm is not None
-        self._send_frame_task.cancel() if self._send_frame_task else None
-        self._poll_bbox_task.cancel() if self._poll_bbox_task else None
-        self._bboxes = dict()
+        if self._send_frame_task is not None:
+            self._send_frame_task.cancel()
+            self._send_frame_task = None
+        if self._poll_bbox_task is not None:
+            self._poll_bbox_task.cancel()
+            self._poll_bbox_task = None
+        with self._bbox_lock:
+            self._bboxes = dict()
         if self._detection_process is not None:
             try:
+                self.frame_ready_event.clear()
                 self.model_stopper.set()
                 self._detection_process.join()
                 self._bbox_queue.close()
                 self._bbox_queue.join_thread()
                 self.model_stopper.clear()
             except Exception as e:
-                print("Exception occured:", e)
+                logger.error(f"Exception occured: {e}")
                 return False
             self._detection_process = None
-            print("Detection process stopped.")
+            logger.info("Detection process stopped.")
         return True
 
     def get_frame_shape(self, host):  # -> tuple[Any, ...] | None:
@@ -306,7 +359,8 @@ class Tracker:
             return conn.shape
 
     def get_bboxes(self):
-        return self._bboxes
+        with self._bbox_lock:
+            return self._bboxes.copy()
 
     def draw_visuals(self, bboxes, frame):  # -> Any:
         """
@@ -392,8 +446,9 @@ class Tracker:
             return
         if (cap := self.captures.get(host, None)) is None:
             return
-        active_frame = cap.frame
-        if (bboxes := self._bboxes.get(host, None)) is not None:
+        active_frame = cap.get_frame()
+        bboxes_dict = self.get_bboxes()
+        if (bboxes := bboxes_dict.get(host, None)) is not None:
             self.draw_visuals(bboxes, active_frame)
         return active_frame
 
@@ -421,3 +476,28 @@ class Tracker:
         if self.captures and self.model is not None:
             # do not start detection process if there are no captures, or if model is None
             self.start_detection_process()
+
+    def increase_bbox_frame_rate(self) -> None:
+        """Increase bbox polling rate by 10%, down to a minimum of max_fps in config."""
+        if self._poll_bbox_task is None:
+            return
+        current_interval = self.bbox_delay
+        new_interval = max(current_interval * 0.9, 1000.0 / self.max_fps)
+        self.reschedule_bbox_task(new_interval)
+        logger.debug(f"Increased bbox polling rate to {new_interval:.2f} ms.")
+
+    def decrease_bbox_frame_rate(self) -> None:
+        """Decrease bbox polling rate by 10%, up to a maximum of 1 FPS."""
+        if self._poll_bbox_task is None:
+            return
+        current_interval = self.bbox_delay
+        new_interval = min(current_interval * 1.1, 1000.0)  # Maximum 1 FPS
+        self.reschedule_bbox_task(new_interval)
+        logger.debug(f"Decreased bbox polling rate to {new_interval:.2f} ms.")
+
+    def reschedule_bbox_task(self, new_delay: float) -> None:
+        """Reschedule the bbox polling task with the current bbox_delay."""
+        if self._poll_bbox_task is None:
+            return
+        self.bbox_delay = new_delay
+        self._poll_bbox_task.set_interval(int(self.bbox_delay))

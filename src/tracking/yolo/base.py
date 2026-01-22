@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import torch
 from loguru import logger
-from ultralytics import YOLO
+from ultralytics import YOLO  # pyright: ignore[reportPrivateImportUsage]
 
 from assets import join_paths
 from src.tracking.tracker import ObjectModel

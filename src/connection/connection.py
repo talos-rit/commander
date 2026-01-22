@@ -1,7 +1,9 @@
+import threading
 from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
+from cv2.typing import MatLike
 
 from src.config import load_config
 from src.connection.publisher import Publisher
@@ -16,6 +18,7 @@ class VideoConnection:
     shape: tuple | None = field(init=False, default=None)
     dtype: np.dtype | None = field(init=False, default=None)
     _term: int | None = field(init=False)
+    _read_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
 
     def __post_init__(self):
         source = None
@@ -36,10 +39,12 @@ class VideoConnection:
         print("Unable to pull frame from camera")
         return
 
-    @property
-    def frame(self) -> np.ndarray | None:
+    def get_frame(self, mat: MatLike | None = None) -> np.ndarray | None:
         if self.cap is not None:
-            _, frame = self.cap.read()
+            with self._read_lock:
+                r, frame = self.cap.read(mat)
+            if not r:
+                return None
             return frame
 
     def close(self):
