@@ -9,7 +9,10 @@ from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 
 
-def configure_logger():
+def configure_logger(remove_existing: bool = False):
+    if remove_existing:
+        # Shuts up console output for loguru
+        logger.remove()
     logger.add(
         ".log/log_{time}.log",
         enqueue=True,
@@ -48,15 +51,16 @@ def main(args) -> None:
     multiprocessing.freeze_support()
 
     if args.terminal:
+        configure_logger(True)
         smm = multiprocessing.managers.SharedMemoryManager()
         interface = TextualInterface()
         interface.smm = smm
         interface.run()
     else:
+        configure_logger()
         interface = TKInterface()
         interface.mainloop()
 
 
 if __name__ == "__main__":
-    configure_logger()
     main(create_args())

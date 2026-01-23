@@ -1,6 +1,8 @@
 import threading
 from typing import Callable
 
+from loguru import logger
+
 from src.scheduler import IterativeTask, Scheduler
 
 
@@ -33,7 +35,7 @@ class ThreadIterativeTask(IterativeTask):
         try:
             self._func(*self._args)
         except Exception as e:
-            print(f"Error in scheduled task: {e}")
+            logger.error(f"Error in scheduled task: {e}")
         finally:
             self._schedule_next()
 

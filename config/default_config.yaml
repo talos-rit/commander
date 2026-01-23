@@ -15,9 +15,9 @@ horizontal_field_of_view: 89 # horizontal FOV of camera being used
 confirmation_delay: 0.25 # Amount of time subject is outside of acceptable box before a command is sent
 
 command_delay: 0.25 # Wait time before another command can be sent (while in discrete director mode)
-fps: 60 # Frame rate to update the gui video
+fps: 30 # Frame rate to update the gui video
 frame_width: 500 # Desired width of the video frame
-max_fps: 30 # Maximum fps for boundary box polling
+max_fps: 40 # Maximum fps for boundary box polling
 # frame_height: 400 # auto calculate if commented out
 
 manual_only: false # If true, the connection will only allow manual control

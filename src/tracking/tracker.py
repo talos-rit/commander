@@ -53,13 +53,15 @@ def _detect_person_worker(
     frame_shape,
     frame_dtype,
 ) -> None:
+    logger.info("Detection process started.")
     if model_class is None:
-        print("Model was not found please pass a model into Tracker to run.")
+        logger.error("Model was not found please pass a model into Tracker to run.")
         return
     frame = np.ndarray(frame_shape, dtype=frame_dtype, buffer=frame_mem.buf)
     model: ObjectModel = model_class()
     try:
         while not stopper.is_set():
+            logger.debug("Waiting for new frame...")
             frame_ready_event.wait()
             # Not clear immediately to make a copy here safely
             bboxes = model.detect_person(frame=np.copy(frame))
@@ -67,11 +69,12 @@ def _detect_person_worker(
             try:
                 bbox_queue.put_nowait(bboxes)
             except Full:
-                pass
+                logger.warning("bbox_queue is full, skipping frame")
     except KeyboardInterrupt:
+        logger.info("Detection process received KeyboardInterrupt, exiting.")
         pass
     except ValueError:
-        print("bbox_queue closed")
+        logger.error("bbox_queue closed")
 
 
 # Class for handling video feed and object detection model usage
@@ -190,7 +193,7 @@ class Tracker:
         self._term_handler_id = add_termination_handler(self.stop)
         if self.scheduler:
             logger.info(
-                f"Detection process started. {self.bbox_delay=} ms, {self.frame_delay=} ms"
+                f"Detection process started. bbox delay:{self.bbox_delay}ms, frame delay:{self.frame_delay}ms"
             )
             self._send_frame_task = self._thread_scheduler.set_interval(
                 int(self.frame_delay), self.send_latest_frame
@@ -214,7 +217,7 @@ class Tracker:
             return
         except Empty:
             if self._bbox_success_count < 1:
-                logger.debug("Frequent empty bbox queue detected. Reducing poll rate.")
+                logger.debug(f"Reducing poll rate. Counts: {self._bbox_success_count}")
                 self.decrease_bbox_frame_rate()
             self._bbox_success_count -= 1
             return
@@ -223,8 +226,7 @@ class Tracker:
             return
         self._bbox_success_count += 1
         if self._bbox_success_count > 10:
-            logger.debug("Bounding box detection stabilized. Increasing poll rate.")
-            self._bbox_success_count = 0
+            logger.debug(f"Increasing poll rate. Counts: {self._bbox_success_count}")
             self.increase_bbox_frame_rate()
 
         bboxes_by_host: dict = {host: [] for host, _ in self.frame_order}
@@ -294,7 +296,7 @@ class Tracker:
 
     def send_latest_frame(self) -> None:
         if self.frame_ready_event.is_set():
-            # Previous frame not yet processed
+            logger.debug("Frame ready event already set, skipping frame update")
             return
         logger.debug("Sending latest frame to detection process")
         if 1 == len(self.frame_order):
@@ -302,6 +304,7 @@ class Tracker:
             self.new_frame = self.captures[host].get_frame()
             if self.new_frame is not None and not self.frame_ready_event.is_set():
                 np.copyto(self._frame_buf, self.new_frame)
+                self.frame_ready_event.set()
             return
 
         frames = [self.captures[host].get_frame() for host, _ in self.frame_order]
@@ -324,6 +327,7 @@ class Tracker:
         ]
         hstack = np.hstack(resized_frames)
         np.copyto(self._frame_buf, hstack)
+        self.frame_ready_event.set()
 
     def stop_detection_process(self) -> bool:
         """Returns true if process properly closed"""
