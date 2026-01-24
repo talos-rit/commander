@@ -54,14 +54,14 @@ class App:
         conf = self.config.get(hostname, {})
         camera = conf["camera_index"] if camera is None else camera
         vid_conn = self.tracker.add_capture(hostname, camera)
-        conn = Connection(hostname, port or conf["socket_port"], vid_conn)
+        conn = Connection(hostname, port or conf["socket_port"], vid_conn, conf["tracking_priority"])
         self.connections[hostname] = conn
         self.set_active_connection(hostname)
         if write_config:
             self.config = load_config()
         if self.director is not None and vid_conn.shape is not None:
             self.director.add_control_feed(
-                hostname, conn.is_manual, vid_conn.shape, conn.publisher
+                hostname, conn.is_manual, vid_conn.shape, conn.publisher, conn.tracking_priority
             )
 
     def start_move(self, direction: Direction) -> None:

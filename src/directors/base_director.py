@@ -16,6 +16,7 @@ class ControlFeed:
     manual: bool
     frame_shape: tuple
     publisher: Publisher
+    tracking_priority: str
 
 
 class BaseDirector(ABC):
@@ -40,6 +41,7 @@ class BaseDirector(ABC):
                     manual=conn.is_manual,
                     frame_shape=shape,
                     publisher=conn.publisher,
+                    tracking_priority=conn.tracking_priority,
                 )
             else:
                 print(
@@ -50,10 +52,10 @@ class BaseDirector(ABC):
             self.start_auto_control()
 
     def add_control_feed(
-        self, host: str, manual: bool, frame_shape: tuple, publisher: Publisher
+        self, host: str, manual: bool, frame_shape: tuple, publisher: Publisher, tracking_priority: str
     ) -> ControlFeed:
         cf = ControlFeed(
-            host=host, manual=manual, frame_shape=frame_shape, publisher=publisher
+            host=host, manual=manual, frame_shape=frame_shape, publisher=publisher, tracking_priority=tracking_priority
         )
         self.control_feeds[host] = cf
         if self.scheduler is not None and self.control_task is None:
@@ -82,11 +84,18 @@ class BaseDirector(ABC):
         raise NotImplementedError("Subclasses must implement this method.")
 
     def track_obj(self) -> Any | None:
-        bboxes = self.tracker.get_bboxes()
-        for host, bbox in bboxes.items():
-            if host in self.control_feeds and bbox is not None and len(bbox) > 0:
+        all_bboxes = self.tracker.get_bboxes()
+        for host, bboxes in all_bboxes.items():
+            if host in self.control_feeds and bboxes is not None and len(bboxes) > 0:
                 if self.control_feeds[host].manual:
                     continue  # skip manual feeds
+                bbox = bboxes[0]
+                if len(bboxes) > 1: # Find which bbox to track
+                    match self.control_feeds[host].tracking_priority:
+                        case "largest":
+                            bbox = track_largest(bboxes)
+                        case "smallest":
+                            bbox = track_smallest(bboxes)
                 return self.process_frame(
                     host,
                     bbox,
@@ -114,3 +123,25 @@ class BaseDirector(ABC):
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None
+
+def track_largest(bboxes: list[list[int]]) -> list[int]:
+    '''Returns the largest bounding box from a list of bounding boxes.'''
+    largest_bbox = bboxes[0]
+    largest_area = (largest_bbox[2] - largest_bbox[0]) * (largest_bbox[3] - largest_bbox[1])
+    for bbox in bboxes:
+        bbox_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+        if bbox_area > largest_area:
+            largest_bbox = bbox
+            largest_area = bbox_area
+    return largest_bbox
+
+def track_smallest(bboxes: list[list[int]]) -> list[int]:
+    '''Returns the smallest bounding box from a list of bounding boxes.'''
+    smallest_bbox = bboxes[0]
+    smallest_area = (smallest_bbox[2] - smallest_bbox[0]) * (smallest_bbox[3] - smallest_bbox[1])
+    for bbox in bboxes:
+        bbox_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+        if bbox_area < smallest_area:
+            smallest_bbox = bbox
+            smallest_area = bbox_area
+    return smallest_bbox

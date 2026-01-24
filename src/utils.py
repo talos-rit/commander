@@ -64,7 +64,7 @@ def calculate_center_box(x, y, w, h):
     return (x + w) // 2, (y + h) // 2
 
 
-def calculate_center_bbox(bbox: tuple[int, int, int, int]):
+def calculate_center_bbox(bbox: list[int]):
     return calculate_center_box(*bbox)
 
 

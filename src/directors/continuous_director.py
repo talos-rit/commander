@@ -37,11 +37,10 @@ class ContinuousDirector(BaseDirector):
             acceptable_box_bottom,
         ) = calculate_acceptable_box(frame_width, frame_height)
 
-        # C alculate where the middle point of the bounding box lies in relation to the box
+        # Calculate where the middle point of the bounding box lies in relation to the box
         # Unpack bounding box
         # If there is a single speaker it should return one bounding box anyway
-        first_face = bounding_box[0]
-        x, y, w, h = first_face
+        x, y, w, h = bounding_box
 
         top = y
         bottom = y + h
@@ -49,7 +48,7 @@ class ContinuousDirector(BaseDirector):
         average = (top + bottom) // 2
 
         # Calculate the center of the bounding box
-        bbox_center_x, bbox_center_y = calculate_center_bbox(first_face)
+        bbox_center_x, bbox_center_y = calculate_center_bbox(bounding_box)
 
         # Are we inside the acceptable box
         if (

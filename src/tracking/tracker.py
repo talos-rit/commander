@@ -68,7 +68,7 @@ def _detect_person_worker(
 
 # Class for handling video feed and object detection model usage
 class Tracker:
-    speaker_bbox: tuple[int, int, int, int] | None = None
+    speaker_bbox: list[int] | None = None
     config: dict = load_config()
     default_config: dict = load_default_config()
     max_fps = 1  # this will be set dynamically based on captures

@@ -9,6 +9,7 @@ camera_index: 0
 # Link to camera feed to be used for video capture
 # camera_index: http://unctalos.student.rit.edu:5000/video_feed
 
+tracking_priority: 'largest' # Determines which bounding box to track when multiple are detected
 acceptable_box_percent: 0.4 # Percentage of the frame width and height used to define the size of the acceptable box
 vertical_field_of_view: 48 # vertical FOV of camera being used
 horizontal_field_of_view: 89 # horizontal FOV of camera being used

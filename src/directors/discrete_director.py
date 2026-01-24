@@ -44,7 +44,7 @@ class DiscreteDirector(BaseDirector):
         # TODO: Right now I am going to assume we only want the first face
 
         # Calculate the center of the bounding box
-        bbox_center_x, bbox_center_y = calculate_center_bbox(bounding_box[0])
+        bbox_center_x, bbox_center_y = calculate_center_bbox(bounding_box)
 
         # Are we inside the acceptable box
         if (

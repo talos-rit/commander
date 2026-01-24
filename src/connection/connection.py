@@ -56,6 +56,9 @@ class Connection:
     port: int
     video_connection: VideoConnection
     publisher: Publisher = field(init=False)
+    tracking_priority: str = field(
+        default_factory=lambda: load_config().get("tracking_priority", "largest") #default tracking priority will be largest bbox
+    )
     is_manual: bool = True
     is_manual_only: bool = field(
         default_factory=lambda: load_config().get("default_manual_only", False)
