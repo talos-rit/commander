@@ -1,5 +1,7 @@
 import time
 
+from loguru import logger
+
 from src.config import load_config
 from src.connection.publisher import Publisher
 from src.directors.base_director import BaseDirector
@@ -65,7 +67,7 @@ class KeepAwayDirector(BaseDirector):
         ):
             if not self.last_command_stop:
                 publisher.polar_pan_continuous_stop()
-                print("Stop")
+                logger.debug("Stop")
                 self.last_command_stop = True
 
             self.movement_detection_start_time = None

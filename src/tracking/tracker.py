@@ -19,7 +19,7 @@ from src.utils import (
     remove_termination_handler,
 )
 
-from ...talos import configure_logger
+from ..logger import configure_logger
 from ..thread_scheduler import ThreadScheduler
 
 SHARED_MEM_FRAME_NAME = "frame"
@@ -54,7 +54,7 @@ def _detect_person_worker(
     frame_shape,
     frame_dtype,
 ) -> None:
-    configure_logger(process_name="detection_process")
+    configure_logger(process_name="detection_process", remove_existing=True)
     logger.info("Detection process started.")
     if model_class is None:
         logger.error("Model was not found please pass a model into Tracker to run.")

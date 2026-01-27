@@ -1,6 +1,8 @@
 import tkinter
 from tkinter import ttk
 
+from loguru import logger
+
 from src.config import add_config, load_config
 
 
@@ -42,7 +44,7 @@ class TKConnectionManager(tkinter.Toplevel):
         ).pack(anchor="w", padx=5, pady=(5, 0))
         for _, cfg in config.items():
             if "socket_host" not in cfg or "socket_port" not in cfg:
-                print("config missing socket_host or socket_port, skipping")
+                logger.warning("config missing socket_host or socket_port, skipping")
                 continue
             frame = ttk.Frame(self.list_frame)
             frame.pack(fill="x", padx=10, pady=2)
@@ -123,7 +125,7 @@ class TKConnectionManager(tkinter.Toplevel):
             write_config = write_config_var.get()
 
             if not host or not port_str or not camera_str:
-                print("Host, port, and camera inputs are required.")
+                logger.warning("Host, port, and camera inputs are required.")
                 return
 
             try:
@@ -131,7 +133,7 @@ class TKConnectionManager(tkinter.Toplevel):
                 if port < 1 or port > 65535:
                     raise ValueError
             except ValueError:
-                print("Port must be an integer between 1 and 65535.")
+                logger.warning("Port must be an integer between 1 and 65535.")
                 return
 
             camera = int(camera_str) if camera_str.isdigit() else camera_str

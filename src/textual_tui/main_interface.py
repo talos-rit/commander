@@ -1,5 +1,6 @@
 from multiprocessing.managers import SharedMemoryManager
 
+from loguru import logger
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -85,7 +86,7 @@ class TextualInterface(App):
         self.query_one("#connection-select", Select).set_options(new_options)
 
     def on_mount(self) -> None:
-        print("Mounting Interface")
+        logger.debug("Mounting Interface")
         scheduler = TextualScheduler(self)
         self._talos_app = TalosApp(scheduler, smm=self.smm)
         start_termination_guard()
@@ -222,11 +223,11 @@ class TextualInterface(App):
         self._talos_app.set_active_connection(new_connection)
 
     def start_mv_direction(self, direction: Direction):
-        print("Start move", direction)
+        logger.info(f"Start move {direction}")
         self._talos_app.start_move(direction)
 
     def stop_mv_direction(self, direction: Direction):
-        print("Stop move", direction)
+        logger.info(f"Stop move {direction}")
         self._talos_app.stop_move(direction)
 
 

@@ -1,5 +1,7 @@
 from enum import StrEnum
 
+from loguru import logger
+
 from src.directors import BaseDirector, ContinuousDirector
 
 from .haar_cascade.basic_model import BasicModel
@@ -32,10 +34,10 @@ try:
     USABLE_MODELS[ModelOption.MEDIAPIPEPOSE] = (MediaPipeModel, ContinuousDirector)
     USABLE_MODELS[ModelOption.MEDIAPIPE] = (MediaPipePoseModel, ContinuousDirector)
 except ImportError as e:
-    print(
-        e,
-        "Failed to import mediapipe. This is an optional import, but may limit the ability to run this model",
-        "This can be installed using `uv sync --extra mediapipe` or `uv sync --all-extras`",
+    logger.warning(
+        f"""{e}
+        Failed to import mediapipe. This is an optional import, but may limit the ability to run this model.
+        This can be installed using `uv sync --extra mediapipe` or `uv sync --all-extras`"""
     )
 
 try:
@@ -53,10 +55,10 @@ try:
     USABLE_MODELS[ModelOption.YOLO_LARGE] = (YOLOLargeModel, ContinuousDirector)
     USABLE_MODELS[ModelOption.YOLO_XLARGE] = (YOLOXLargeModel, ContinuousDirector)
 except ImportError as e:
-    print(
-        e,
-        "Failed to import Yolo model. This is an optional import, but may limit the ability to run this model",
-        "This can be installed using `uv sync --extra yolo` or `uv sync --all-extras`",
+    logger.warning(
+        f"""{e}
+        Failed to import Yolo model. This is an optional import, but may limit the ability to run this model.
+        This can be installed using `uv sync --extra yolo` or `uv sync --all-extras`"""
     )
 
 MODEL_OPTIONS = list(USABLE_MODELS.keys())

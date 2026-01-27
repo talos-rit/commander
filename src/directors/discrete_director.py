@@ -1,5 +1,7 @@
 import time
 
+from loguru import logger
+
 from src.config import load_config
 from src.connection.publisher import Publisher
 from src.directors.base_director import BaseDirector
@@ -84,7 +86,7 @@ class DiscreteDirector(BaseDirector):
             ):
                 horizontal_dpp = horizontal_field_of_view / frame_width
                 rotation = -(change_in_x * horizontal_dpp)
-                print(rotation)
+                logger.info(rotation)
                 rotation = int(round(rotation))
                 publisher.polar_pan_discrete(rotation, 0, 0, 3000)
                 self.last_command_time = current_time
@@ -98,7 +100,7 @@ class DiscreteDirector(BaseDirector):
             ):
                 vertical_dpp = vertical_field_of_view / frame_height
                 rotation = change_in_y * vertical_dpp
-                print(rotation)
+                logger.info(rotation)
                 rotation = int(round(rotation))
                 # publisher.rotate_altitude(rotation)
                 # publisher.polar_pan_discrete(0, rotation, 0, 3000)

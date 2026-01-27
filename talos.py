@@ -1,35 +1,10 @@
 import argparse
 import multiprocessing
 import multiprocessing.managers
-import sys
 
-from loguru import logger
-
+from src.logger import configure_logger
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
-
-
-def configure_logger(remove_existing: bool = False, process_name: str = "log"):
-    if remove_existing:
-        # Shuts up console output for loguru
-        logger.remove()
-    logger.add(
-        f".log/{process_name}_{{time}}.log",
-        enqueue=True,
-        level="DEBUG",
-    )
-
-    class StreamToLoguru:
-        def write(self, message):
-            message = message.strip()
-            if message:
-                logger.info(message)
-
-        def flush(self):
-            pass  # Needed for file-like API
-
-    sys.stdout = StreamToLoguru()
-    sys.stderr = StreamToLoguru()
 
 
 def create_args():

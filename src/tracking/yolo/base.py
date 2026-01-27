@@ -166,7 +166,7 @@ class YOLOBaseModel(ObjectModel):
                     smaller_box = self.getCroppedBox(box, frame)
                     color = self.get_dominant_color(smaller_box)
                     self.speaker_color = color
-                    print("Speaker detected with X pose:", self.speaker_bbox)
+                    logger.info(f"Speaker detected with X pose: {self.speaker_bbox}")
                     return [self.speaker_bbox]
 
             # While speaker not yet locked, return all detected bounding boxes.
@@ -198,7 +198,9 @@ class YOLOBaseModel(ObjectModel):
                 self.lost_counter = 0
 
         if self.lost_counter >= self.lost_threshold:
-            print("Speaker lost for too many frames. Resetting single speaker.")
+            logger.warning(
+                "Speaker lost for too many frames. Resetting single speaker."
+            )
             self.speaker_bbox = None
             self.speaker_color = None
             self.lost_counter = 0
