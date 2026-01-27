@@ -1,7 +1,7 @@
 import cv2
 import mediapipe as mp
 import numpy as np
-from loguru import Logger, logger
+from loguru import logger
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 

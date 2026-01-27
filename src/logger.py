@@ -1,5 +1,3 @@
-import sys
-
 from loguru import logger
 
 
@@ -22,5 +20,5 @@ def configure_logger(remove_existing: bool = False, process_name: str = "log"):
         def flush(self):
             pass  # Needed for file-like API
 
-    sys.stdout = StreamToLoguru()
-    sys.stderr = StreamToLoguru()
+    # sys.stdout = StreamToLoguru()
+    # sys.stderr = StreamToLoguru()
