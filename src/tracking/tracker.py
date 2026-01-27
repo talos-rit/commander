@@ -114,12 +114,8 @@ class Tracker:
         self._smm = smm or SharedMemoryManager()
         self._smm.start()
         self._thread_scheduler = threaded_scheduler or ThreadScheduler()
-        if self.default_config.get("max_fps") is not None:
-            self.max_fps = self.default_config["max_fps"]
-        if self.default_config.get("fps") is not None:
-            self.frame_delay = 1000 / self.default_config["fps"]
-        else:
-            self.frame_delay = 1000 / self.max_fps
+        self.max_fps = self.default_config.get("max_fps", self.max_fps)
+        self.frame_delay = 1000 / self.default_config.get("fps", self.max_fps)
         self.bbox_delay = 1000 / self.max_fps
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
@@ -165,7 +161,7 @@ class Tracker:
         if self._detection_process is not None:
             return  # Already running
         assert self._smm is not None
-        print("Starting detection process...")
+        logger.info("Starting detection process...")
         total_shape = self.get_total_frame_shape()
         total_nbytes = self.get_nbytes_from_total_shape(total_shape)
 
@@ -438,18 +434,13 @@ class Tracker:
 
     def get_frame(self, host: str | None = None):
         """This adds bounding box to the frame
-        and returns the tkimage created.
-        If the frame is supplied that frame will be used,
-        else its latest internal frames will be used.
-        If the bbox is not supplied the last stored frame will be used
-
-        Returns:
-            - bboxes
-            - ImageTk.PhotoImage
+        and return the latest frame of the active connection.
         """
-        if host is None and (host := self.active_connection) is None:
-            return
-        if (cap := self.captures.get(host, None)) is None:
+        if (
+            host is None
+            and (host := self.active_connection) is None
+            or (cap := self.captures.get(host, None)) is None
+        ):
             return
         active_frame = cap.get_frame()
         bboxes_dict = self.get_bboxes()
@@ -478,7 +469,7 @@ class Tracker:
             print("Failed to stop detection model")
             return
         self.model = new_model
-        if self.captures and self.model is not None:
+        if self.captures is not None and self.model is not None:
             # do not start detection process if there are no captures, or if model is None
             self.start_detection_process()
 
