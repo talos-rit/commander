@@ -10,7 +10,7 @@ from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 from src.pyside_gui.main_interface import PySide6Interface
 if sys.platform == "win32":
-    os.add_dll_directory(".venv/Lib/site-packages/PySide6/")
+    os.add_dll_directory(".venv\Lib\site-packages\PySide6")
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
 
