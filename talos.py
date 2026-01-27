@@ -2,10 +2,9 @@ import argparse
 import multiprocessing
 import multiprocessing.managers
 
+from src.logger import configure_logger
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
-
-from .src.logger import configure_logger
 
 
 def create_args():

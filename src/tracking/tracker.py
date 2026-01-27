@@ -19,7 +19,7 @@ from src.utils import (
     remove_termination_handler,
 )
 
-from ...talos import configure_logger
+from ..logger import configure_logger
 from ..thread_scheduler import ThreadScheduler
 
 SHARED_MEM_FRAME_NAME = "frame"
