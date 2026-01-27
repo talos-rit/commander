@@ -54,7 +54,7 @@ def _detect_person_worker(
     frame_shape,
     frame_dtype,
 ) -> None:
-    configure_logger(process_name="detection_process")
+    configure_logger(process_name="detection_process", remove_existing=True)
     logger.info("Detection process started.")
     if model_class is None:
         logger.error("Model was not found please pass a model into Tracker to run.")
