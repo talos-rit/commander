@@ -33,7 +33,7 @@ class TextualInterface(App):
     ]
     _talos_app: TalosApp
     debounce_timers: dict[str, Timer] = dict()
-    smm: SharedMemoryManager | None = None
+    smm: SharedMemoryManager = SharedMemoryManager()
     connection_options = reactive([("None", None)])
 
     def compose(self) -> ComposeResult:
@@ -216,7 +216,9 @@ class TextualInterface(App):
     def handle_active_connection(self, active_connection: str | NoSelection):
         if not hasattr(self, "_talos_app"):
             return
-        new_connection = active_connection if isinstance(active_connection, str) else None
+        new_connection = (
+            active_connection if isinstance(active_connection, str) else None
+        )
         self._talos_app.set_active_connection(new_connection)
 
     def start_mv_direction(self, direction: Direction):

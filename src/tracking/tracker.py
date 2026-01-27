@@ -88,13 +88,13 @@ class Tracker:
     captures: dict[str, VideoConnection] = dict()
     frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
     active_connection: str | None = None
+    _scheduler: Scheduler
     _bboxes: dict[str, list] = dict()
     _bbox_lock: threading.Lock = threading.Lock()
     _frame_buf: np.ndarray
     _bbox_queue: Queue
     _detection_process: Process | None = None
     _term_handler_id: int | None = None
-    _thread_scheduler: ThreadScheduler
     _send_frame_task: IterativeTask | None = None
     _poll_bbox_task: IterativeTask | None = None
     _smm: SharedMemoryManager | None = None
@@ -102,21 +102,23 @@ class Tracker:
 
     def __init__(
         self,
+        scheduler: Scheduler = ThreadScheduler(),
+        smm: SharedMemoryManager = SharedMemoryManager(),
         model=None,
-        scheduler: Scheduler | None = None,
-        video_buffer_size=1,
-        smm: SharedMemoryManager | None = None,
-        threaded_scheduler: ThreadScheduler | None = None,
     ):
-        self.video_buffer_size = video_buffer_size
-        self.scheduler = scheduler
+        """
+        Args:
+            scheduler (Scheduler, optional): Scheduler for data pipeline tasks. Defaults to ThreadScheduler().
+            smm (SharedMemoryManager, optional): Shared memory manager. Defaults to SharedMemoryManager().
+            model (_type_, optional): Object detection model. Defaults to None.
+        """
+        self._scheduler = scheduler
         self.model = model
-        self._smm = smm or SharedMemoryManager()
-        self._smm.start()
-        self._thread_scheduler = threaded_scheduler or ThreadScheduler()
-        self.max_fps = self.default_config.get("max_fps", self.max_fps)
+        self._smm = smm
+        self.max_fps = self.default_config.get("max_fps", POLL_BBOX_CYCLE_INTERVAL_MS)
         self.frame_delay = 1000 / self.default_config.get("fps", self.max_fps)
         self.bbox_delay = 1000 / self.max_fps
+        self._smm.start()
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
     def add_capture(self, host: str, camera: str | int) -> VideoConnection:
@@ -187,22 +189,15 @@ class Tracker:
         )
         self._detection_process.start()
         self._term_handler_id = add_termination_handler(self.stop)
-        if self.scheduler is None:
-            return
         logger.info(
             f"Detection process started. bbox delay:{self.bbox_delay}ms, frame delay:{self.frame_delay}ms"
         )
-        self._send_frame_task = self._thread_scheduler.set_interval(
+        self._send_frame_task = self._scheduler.set_interval(
             int(self.frame_delay), self.send_latest_frame
         )
-
-        def schedule_poll(self=self):
-            self._poll_bbox_task = self._thread_scheduler.set_interval(
-                int(self.bbox_delay), self.poll_bboxes
-            )
-
-        # Wait an arbitrary 2 seconds before starting bbox polling to allow model process to start
-        self.scheduler.set_timeout(3000, schedule_poll)
+        self._poll_bbox_task = self._scheduler.set_interval(
+            int(self.bbox_delay), self.poll_bboxes
+        )
 
     def poll_bboxes(self) -> None:
         logger.debug("Polling bounding boxes from detection process")

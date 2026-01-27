@@ -6,6 +6,7 @@ from .connection.connection import Connection
 from .connection.publisher import Direction
 from .directors import BaseDirector
 from .scheduler import IterativeTask, Scheduler
+from .thread_scheduler import ThreadScheduler
 from .tracking import USABLE_MODELS, Tracker
 
 
@@ -29,7 +30,9 @@ class App:
     discrete_move_task: dict[Direction, IterativeTask] = dict()
 
     def __init__(
-        self, scheduler: Scheduler, smm: SharedMemoryManager | None = None
+        self,
+        scheduler: Scheduler = ThreadScheduler(),
+        smm: SharedMemoryManager = SharedMemoryManager(),
     ) -> None:
         self.scheduler = scheduler
         self.config = load_config()
