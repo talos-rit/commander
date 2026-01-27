@@ -68,7 +68,7 @@ def _detect_person_worker(
 
 # Class for handling video feed and object detection model usage
 class Tracker:
-    speaker_bbox: tuple[int, int, int, int] | None = None
+    speaker_bbox: list[int] | None = None
     config: dict = load_config()
     default_config: dict = load_default_config()
     max_fps = 1  # this will be set dynamically based on captures
@@ -189,6 +189,7 @@ class Tracker:
 
         bboxes_by_host: dict = {host: [] for host, _ in self.frame_order}
 
+        # Return the bboxes straightaway if there's only one host
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
             self._bboxes = {host: raw_bboxes}
@@ -209,7 +210,49 @@ class Tracker:
                         [max(0, x1 - dx), y1, max(0, x2 - dx), y2]
                     )
 
-        self._bboxes = bboxes_by_host
+        # culled_bboxes: dict[str, ] = self.cull_bboxes(bboxes_by_host)
+
+        # self._bboxes = culled_bboxes
+
+    # def cull_bboxes(self, bboxes_by_host) -> dict[str, ]:
+    #     print(f"before: {bboxes_by_host}")
+    #     # Eliminate hosts that are in manual mode, and find the relevant bbox to track for those with multiple in frame
+    #     culled_bboxes = dict()
+    #     for host, bboxes in bboxes_by_host.items():
+    #         if self.config[host].manual:
+    #             continue
+    #         if len(bboxes) > 1:
+    #             match self.config[host].tracking_priority:
+    #                 case "largest":
+    #                     bbox = self.track_largest(bboxes)
+    #                 case "smallest":
+    #                     bbox = self.track_smallest(bboxes)
+    #             culled_bboxes[host] = bbox
+    #         else:
+    #             culled_bboxes[host] = bboxes
+    #     print(f"after: {bboxes_by_host}")
+
+    # def track_largest(self, bboxes: list[list[int]]) -> list[int]:
+    #     '''Returns the largest bounding box from a list of bounding boxes.'''
+    #     largest_bbox = bboxes[0]
+    #     largest_area = (largest_bbox[2] - largest_bbox[0]) * (largest_bbox[3] - largest_bbox[1])
+    #     for bbox in bboxes:
+    #         bbox_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+    #         if bbox_area > largest_area:
+    #             largest_bbox = bbox
+    #             largest_area = bbox_area
+    #     return largest_bbox
+
+    # def track_smallest(self, bboxes: list[list[int]]) -> list[int]:
+    #     '''Returns the smallest bounding box from a list of bounding boxes.'''
+    #     smallest_bbox = bboxes[0]
+    #     smallest_area = (smallest_bbox[2] - smallest_bbox[0]) * (smallest_bbox[3] - smallest_bbox[1])
+    #     for bbox in bboxes:
+    #         bbox_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+    #         if bbox_area < smallest_area:
+    #             smallest_bbox = bbox
+    #             smallest_area = bbox_area
+    #     return smallest_bbox
 
     def get_total_frame_shape(self):
         """
