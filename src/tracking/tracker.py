@@ -191,21 +191,22 @@ class Tracker:
         )
         self._detection_process.start()
         self._term_handler_id = add_termination_handler(self.stop)
-        if self.scheduler:
-            logger.info(
-                f"Detection process started. bbox delay:{self.bbox_delay}ms, frame delay:{self.frame_delay}ms"
-            )
-            self._send_frame_task = self._thread_scheduler.set_interval(
-                int(self.frame_delay), self.send_latest_frame
+        if self.scheduler is None:
+            return
+        logger.info(
+            f"Detection process started. bbox delay:{self.bbox_delay}ms, frame delay:{self.frame_delay}ms"
+        )
+        self._send_frame_task = self._thread_scheduler.set_interval(
+            int(self.frame_delay), self.send_latest_frame
+        )
+
+        def schedule_poll(self=self):
+            self._poll_bbox_task = self._thread_scheduler.set_interval(
+                int(self.bbox_delay), self.poll_bboxes
             )
 
-            def schedule_poll(self=self):
-                self._poll_bbox_task = self._thread_scheduler.set_interval(
-                    int(self.bbox_delay), self.poll_bboxes
-                )
-
-            # Wait an arbitrary 2 seconds before starting bbox polling to allow model process to start
-            self.scheduler.set_timeout(3000, schedule_poll)
+        # Wait an arbitrary 2 seconds before starting bbox polling to allow model process to start
+        self.scheduler.set_timeout(3000, schedule_poll)
 
     def poll_bboxes(self) -> None:
         logger.debug("Polling bounding boxes from detection process")
