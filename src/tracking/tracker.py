@@ -461,7 +461,7 @@ class Tracker:
     def swap_model(self, new_model) -> None:
         """This will stop the current detection process and start a new process on the new model"""
         if not self.stop_detection_process():
-            print("Failed to stop detection model")
+            logger.error("Failed to stop detection model")
             return
         self.model = new_model
         if self.captures is not None and self.model is not None:
@@ -481,8 +481,7 @@ class Tracker:
         """Decrease bbox polling rate by 10%, up to a maximum of 1 FPS."""
         if self._poll_bbox_task is None:
             return
-        current_interval = self.bbox_delay
-        new_interval = min(current_interval * 1.1, 1000.0)  # Maximum 1 FPS
+        new_interval = min(self.bbox_delay * 1.1, 1000.0)  # Maximum 1 FPS
         self.reschedule_bbox_task(new_interval)
         logger.debug(f"Decreased bbox polling rate to {new_interval:.2f} ms.")
 
