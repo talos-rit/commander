@@ -9,16 +9,14 @@ from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 
 
-def configure_logger(remove_existing: bool = False):
+def configure_logger(remove_existing: bool = False, process_name: str = "log"):
     if remove_existing:
         # Shuts up console output for loguru
         logger.remove()
     logger.add(
-        ".log/log_{time}.log",
+        f".log/{process_name}_{{time}}.log",
         enqueue=True,
-        retention="10 days",
-        backtrace=True,
-        diagnose=True,
+        level="DEBUG",
     )
 
     class StreamToLoguru:
