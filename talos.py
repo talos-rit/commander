@@ -7,6 +7,9 @@ from loguru import logger
 
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
+from src.pyside_gui.main_interface import PySide6Interface
+from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QFont
 
 
 def configure_logger():
@@ -39,6 +42,12 @@ def create_args():
         action="store_true",
         help="Use the terminal (textual) interface instead of the Tk GUI",
     )
+    parser.add_argument(
+        "-tk",
+        "--tkinter",
+        action="store_true",
+        help="Use the Tkinter GUI instead of the PySide6 GUI",
+    )
     return parser.parse_args()
 
 
@@ -52,10 +61,20 @@ def main(args) -> None:
         interface = TextualInterface()
         interface.smm = smm
         interface.run()
-    else:
+    elif args.tkinter:
         interface = TKInterface()
         interface.mainloop()
-
+    else:
+        app = QApplication(sys.argv)
+        
+        # Set application font
+        font = QFont("Cascadia Code", 10)
+        app.setFont(font)
+        
+        window = PySide6Interface()
+        window.show()
+        
+        sys.exit(app.exec())
 
 if __name__ == "__main__":
     configure_logger()
