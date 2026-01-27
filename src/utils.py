@@ -2,6 +2,8 @@ import os.path as path
 import signal
 import sys
 
+from loguru import logger
+
 
 def get_file_path(relative_path: str) -> str:
     """
@@ -91,7 +93,7 @@ ID_GEN = id_generator()
 
 
 def start_termination_guard():
-    print("Setting up cleanup handlers")
+    logger.debug("Setting up cleanup handlers")
     global TERMINATION_HANDLERS
     TERMINATION_HANDLERS = list()
     signal.signal(signal.SIGINT, terminate)
@@ -107,13 +109,15 @@ def add_termination_handler(call):
 
 def terminate(signum, frame):
     global TERMINATION_HANDLERS
-    print(f"\nSignal {signum} received! Executing handler.")
-    print(f"Performing cleanup or specific action... {len(TERMINATION_HANDLERS)}")
+    logger.debug(f"\nSignal {signum} received! Executing handler.")
+    logger.debug(
+        f"Performing cleanup or specific action... {len(TERMINATION_HANDLERS)}"
+    )
 
     while len(TERMINATION_HANDLERS) > 0:
         handler = TERMINATION_HANDLERS.pop()
         handler()
-    print("Finished clean up")
+    logger.info("Finished clean up")
 
 
 def remove_termination_handler(id: int):

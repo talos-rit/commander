@@ -1,5 +1,7 @@
 from enum import StrEnum
 
+from loguru import logger
+
 from src.directors import BaseDirector, ContinuousDirector
 
 from .haar_cascade.basic_model import BasicModel
@@ -8,7 +10,11 @@ from .tracker import ObjectModel, Tracker
 
 
 class ModelOption(StrEnum):
-    YOLO = "yolo"
+    YOLO_NANO = "yolo_nano"
+    YOLO_SMALL = "yolo_small"
+    YOLO_MEDIUM = "yolo_medium"
+    YOLO_LARGE = "yolo_large"
+    YOLO_XLARGE = "yolo_xlarge"
     MEDIAPIPE = "mediapipe"
     MEDIAPIPEPOSE = "mediapipepose"
     KEEPAWAY = "keepaway"
@@ -28,21 +34,31 @@ try:
     USABLE_MODELS[ModelOption.MEDIAPIPEPOSE] = (MediaPipeModel, ContinuousDirector)
     USABLE_MODELS[ModelOption.MEDIAPIPE] = (MediaPipePoseModel, ContinuousDirector)
 except ImportError as e:
-    print(
-        e,
-        "Failed to import mediapipe. This is an optional import, but may limit the ability to run this model",
-        "This can be installed using `uv sync --extra mediapipe` or `uv sync --extra all`",
+    logger.warning(
+        f"""{e}
+        Failed to import mediapipe. This is an optional import, but may limit the ability to run this model.
+        This can be installed using `uv sync --extra mediapipe` or `uv sync --all-extras`"""
     )
 
 try:
-    from .yolo.yolo_model import YOLOModel
+    from .yolo.model import (
+        YOLOLargeModel,
+        YOLOMediumModel,
+        YOLONanoModel,
+        YOLOSmallModel,
+        YOLOXLargeModel,
+    )
 
-    USABLE_MODELS[ModelOption.YOLO] = (YOLOModel, ContinuousDirector)
+    USABLE_MODELS[ModelOption.YOLO_NANO] = (YOLONanoModel, ContinuousDirector)
+    USABLE_MODELS[ModelOption.YOLO_SMALL] = (YOLOSmallModel, ContinuousDirector)
+    USABLE_MODELS[ModelOption.YOLO_MEDIUM] = (YOLOMediumModel, ContinuousDirector)
+    USABLE_MODELS[ModelOption.YOLO_LARGE] = (YOLOLargeModel, ContinuousDirector)
+    USABLE_MODELS[ModelOption.YOLO_XLARGE] = (YOLOXLargeModel, ContinuousDirector)
 except ImportError as e:
-    print(
-        e,
-        "Failed to import Yolo model. This is an optional import, but may limit the ability to run this model",
-        "This can be installed using `uv sync --extra yolo` or `uv sync --extra all`",
+    logger.warning(
+        f"""{e}
+        Failed to import Yolo model. This is an optional import, but may limit the ability to run this model.
+        This can be installed using `uv sync --extra yolo` or `uv sync --all-extras`"""
     )
 
 MODEL_OPTIONS = list(USABLE_MODELS.keys())

@@ -1,6 +1,7 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+from loguru import logger
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
@@ -102,7 +103,7 @@ class MediaPipePoseModel(ObjectModel):
             left_wrist = pose_landmarks[15]
             right_wrist = pose_landmarks[16]
         except (IndexError, TypeError) as e:
-            print("Error extracting landmarks:", e)
+            logger.error("Error extracting landmarks:", e)
             return False
 
         # Check that the left wrist is to the left of the left shoulder and
@@ -151,7 +152,7 @@ class MediaPipePoseModel(ObjectModel):
                 smaller_box = self.get_cropped_box(box, frame)
                 color = self.get_dominant_color(smaller_box)
                 self.speaker_color = color
-                print("Speaker detected with X pose:", self.speaker_bbox)
+                logger.info(f"Speaker detected with X pose: {self.speaker_bbox}")
                 return self.speaker_bbox
 
             # While speaker not yet locked, return all detected bounding boxes.
@@ -183,7 +184,7 @@ class MediaPipePoseModel(ObjectModel):
                 self.lost_counter = 0
 
         if self.lost_counter >= self.lost_threshold:
-            print("Speaker lost for too many frames. Resetting single speaker.")
+            logger.info("Speaker lost for too many frames. Resetting single speaker.")
             self.speaker_bbox = None
             self.speaker_color = None
             self.lost_counter = 0

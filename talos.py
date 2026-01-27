@@ -1,34 +1,10 @@
 import argparse
 import multiprocessing
 import multiprocessing.managers
-import sys
 
-from loguru import logger
-
+from src.logger import configure_logger
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
-
-
-def configure_logger():
-    logger.add(
-        ".log/log_{time}.log",
-        enqueue=True,
-        retention="10 days",
-        backtrace=True,
-        diagnose=True,
-    )
-
-    class StreamToLoguru:
-        def write(self, message):
-            message = message.strip()
-            if message:
-                logger.info(message)
-
-        def flush(self):
-            pass  # Needed for file-like API
-
-    sys.stdout = StreamToLoguru()
-    sys.stderr = StreamToLoguru()
 
 
 def create_args():
@@ -48,15 +24,16 @@ def main(args) -> None:
     multiprocessing.freeze_support()
 
     if args.terminal:
+        configure_logger(True)
         smm = multiprocessing.managers.SharedMemoryManager()
         interface = TextualInterface()
         interface.smm = smm
         interface.run()
     else:
+        configure_logger()
         interface = TKInterface()
         interface.mainloop()
 
 
 if __name__ == "__main__":
-    configure_logger()
     main(create_args())

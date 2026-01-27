@@ -8,16 +8,20 @@ class TKIterativeTask(IterativeTask):
     is_running = True
     _stop_flag = False
     _call_id: str | None = None
+    _ms: int
 
-    def __init__(self, root: Tk, ms, func, *args):
+    def __init__(self, root: Tk, ms: int, func, *args):
         super().__init__()
         self.root = root
-        self.iterative_call(int(ms), func, *args)
+        self._ms = ms
+        self._args = args
+        self._func = func
+        self._iterative_call(self._func, *self._args)
 
-    def iterative_call(self, ms, func, *args):
-        self._call_id = self.root.after(ms, func, *args)
+    def _iterative_call(self, func, *args):
+        self.root.after(self._ms, func, *args)
         if not self._stop_flag:
-            self.root.after(ms, self.iterative_call, ms, func, *args)
+            self._call_id = self.root.after(self._ms, self._iterative_call, func, *args)
         else:
             self.is_running = False
 
@@ -25,6 +29,12 @@ class TKIterativeTask(IterativeTask):
         self._stop_flag = True
         if self._call_id is not None:
             self.root.after_cancel(self._call_id)
+
+    def set_interval(self, ms: int):
+        self._ms = ms
+
+    def get_interval(self) -> int:
+        return self._ms
 
 
 class TKScheduler(Scheduler):
