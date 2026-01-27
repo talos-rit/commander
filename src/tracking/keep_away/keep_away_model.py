@@ -3,6 +3,7 @@ import time
 import cv2
 import mediapipe as mp
 import numpy as np
+from loguru import logger
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
@@ -104,7 +105,7 @@ class KeepAwayModel(ObjectModel):
             left_wrist = pose_landmarks[15]
             right_wrist = pose_landmarks[16]
         except (IndexError, TypeError) as e:
-            print("Error extracting landmarks:", e)
+            logger.error("Error extracting landmarks:", e)
             return False
 
         # Check that the left wrist is to the left of the left shoulder and
@@ -155,8 +156,8 @@ class KeepAwayModel(ObjectModel):
                 self.countdown_start = time.time()
                 self.game_over = False
                 self.keep_away_mode = True
-                print("Speaker detected with X pose:", self.speaker_bbox)
-                print("Game Started!")
+                logger.info(f"Speaker detected with X pose: {self.speaker_bbox}")
+                logger.info("Game Started!")
                 return [self.speaker_bbox]
 
             # While speaker not yet locked, return all detected bounding boxes.
@@ -191,7 +192,7 @@ class KeepAwayModel(ObjectModel):
                 self.lost_counter = 0
 
         if self.lost_counter >= self.lost_threshold:
-            print("Speaker lost for too many frames. Resetting single speaker.")
+            logger.info("Speaker lost for too many frames. Resetting single speaker.")
             self.speaker_bbox = None
             self.speaker_color = None
             self.lost_counter = 0

@@ -1,5 +1,7 @@
 from enum import IntEnum
 
+from loguru import logger
+
 from src.connection.operator_connections import OperatorConnection
 from src.icd_config import Command, CTypesInt, toBytes
 
@@ -56,7 +58,7 @@ class Publisher:
 
     def start_socket_connection(self):
         self.connection.connect_on_thread()
-        print(
+        logger.info(
             f"Started socket connection to {self.connection.host}:{self.connection.port}"
         )
 

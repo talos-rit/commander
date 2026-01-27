@@ -2,6 +2,8 @@ import socket
 import threading
 import time
 
+from loguru import logger
+
 from src.icd_config import CTypesInt, toBytes, toInt
 from src.utils import add_termination_handler, remove_termination_handler
 
@@ -35,28 +37,30 @@ class OperatorConnection:
                 return  # Exit since this connection is not needed anymore
             try:
                 self.socket.connect((self.host, self.port))
-                print(f"Bound to socket: {self.host}:{self.port}")
+                logger.info(f"Bound to socket: {self.host}:{self.port}")
                 break
             except OSError as e:
-                print(f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}")
+                logger.error(
+                    f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}"
+                )
                 time.sleep(5)
         else:
             return  # Failed to connect after retries
 
-        print("Starting to listen!")
+        logger.info("Starting to listen!")
         self.socket.listen()
         while self.is_running:
             try:
                 connection, address = self.socket.accept()
-                print("Got connection from", address)
+                logger.info(f"Got connection from {address}")
                 self.listen(connection)
             except OSError as e:
-                print("OS Error:", e)
+                logger.error(f"OS Error: {e}")
                 break
 
     def close(self):
         """Cleanly close the socket port and stop listening to new connections."""
-        print("Closing socket")
+        logger.info("Closing socket")
         self.is_running = False
         if self.thread is not None:
             self.thread.join()
@@ -64,7 +68,7 @@ class OperatorConnection:
             remove_termination_handler(self._term)
             self._term = None
         self.socket.close()
-        print("Socket closed cleanly")
+        logger.info("Socket closed cleanly")
 
     def publish(self, command: int, payload: bytes | None = None):
         """
@@ -105,7 +109,7 @@ class OperatorConnection:
         try:
             self.socket.sendall(message)  # safer than send()
         except OSError as e:
-            print(f"Socket send to {self.host} failed: {e}")
+            logger.error(f"Socket send to {self.host} failed: {e}")
             return -1
 
         # TODO: Implement response handling if needed
@@ -123,8 +127,8 @@ class OperatorConnection:
         connection.close()  # Closes this client's connection socket only
 
     def on_message(self, connection: socket.socket, message: bytes):
-        print(f"RECEIVED MESSAGE: {message.decode()}")
-        print("subclass must implement on_message method")
+        logger.info(f"RECEIVED MESSAGE: {message.decode()}")
+        logger.info("subclass must implement on_message method")
 
 
 class CommandConnection(OperatorConnection):

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import cv2
 import numpy as np
 from cv2.typing import MatLike
+from loguru import logger
 
 from src.config import load_config
 from src.connection.publisher import Publisher
@@ -36,7 +37,7 @@ class VideoConnection:
                 self.shape = frame.shape
                 self.dtype = frame.dtype
                 return
-        print("Unable to pull frame from camera")
+        logger.warning("Unable to pull frame from camera")
         return
 
     def get_frame(self, mat: MatLike | None = None) -> np.ndarray | None:

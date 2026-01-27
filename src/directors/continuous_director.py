@@ -1,5 +1,7 @@
 import time
 
+from loguru import logger
+
 from src.config import load_config
 from src.connection.publisher import Publisher
 from src.directors.base_director import BaseDirector
@@ -82,10 +84,10 @@ class ContinuousDirector(BaseDirector):
             center_bottom = center + frame_buffer
 
             if average < center_top:
-                print(f"Move camera up: Average:{average} Center:{center}")
+                logger.info(f"Move camera up: Average:{average} Center:{center}")
                 change_in_y = average - center_top
             elif average > center_bottom:
-                print(f"Move camera down: Average:{average} Center:{center}")
+                logger.info(f"Move camera down: Average:{average} Center:{center}")
                 change_in_y = average - center_bottom
 
             if change_in_x > 0:
@@ -110,7 +112,7 @@ class ContinuousDirector(BaseDirector):
             return
         if not self.last_command_stop:
             publisher.polar_pan_continuous_stop()
-            print("Stop")
+            logger.info("Stop")
             self.last_command_stop = True
 
         self.movement_detection_start_time = None

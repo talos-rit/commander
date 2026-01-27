@@ -1,6 +1,7 @@
 import os
 
 import yaml
+from loguru import logger
 
 from src.utils import get_file_path
 
@@ -71,7 +72,7 @@ def add_config(socket_host: str, port: int, camera_index: int):
 
     # Cancel if overwriting an existing configuration
     if config.get(socket_host):
-        print(
+        logger.warning(
             f"[WARNING] Configuration for '{socket_host}' already exists in config.local.yaml, not overwriting"
         )
         return
