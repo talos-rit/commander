@@ -40,6 +40,7 @@ class VideoThread(QThread):
         
     def run(self):
         while self.running:
+            logger.debug("VideoThread fetching frame")
             frame = self.app.get_active_frame()
             if frame is not None:
                 self.frame_processed.emit(frame)
@@ -214,7 +215,7 @@ class PySide6Interface(QMainWindow):
         
         # Connect signals
         self.connection_changed.connect(self.open_connection)
-        
+        self.update_connection_list()
         self.update_ui()
         
     def keyPressEvent(self, event: QKeyEvent):
@@ -250,6 +251,7 @@ class PySide6Interface(QMainWindow):
     
     def update_video_frame(self, frame):
         """Update the video display with new frame"""
+        logger.debug("Updating video frame in UI")
         if frame is None:
             return
             
@@ -277,16 +279,20 @@ class PySide6Interface(QMainWindow):
         self.video_label.setPixmap(pixmap)
     
     def open_connection(self, hostname, port=None, camera=None, write_config=False):
+        logger.info(f"open_connection called for {hostname}")
         """Open a new connection"""
         self.app.open_connection(
             hostname, port=port, camera=camera, write_config=write_config
         )
         self.update_ui()
+        self.update_connection_list()
     
     def close_connection(self, hostname):
         """Close connection if it exists"""
+        logger.info(f"close_connection called for {hostname}")
         self.app.remove_connection(hostname)
         self.update_ui()
+        self.update_connection_list()
     
     def manage_connections(self):
         """Open connection manager dialog"""
@@ -295,17 +301,18 @@ class PySide6Interface(QMainWindow):
         
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.update_ui()
+            self.update_connection_list()
     
     def set_active_connection(self, option):
         """Set the active connection"""
+        logger.info(f"set_active_connection called for {option}")
         self.app.set_active_connection(option if option != "None" else None)
-        # self.update_ui()
-    
-    def update_ui(self):
-        """Update UI state based on current connections"""
-        connections = self.app.get_connections()
+        self.update_ui()
         
-        # Update connection combo
+    def update_connection_list(self):
+        """Update the connection combo box list"""
+        connections = self.app.get_connections()
+
         self.connection_combo.clear()
         options = list(connections.keys()) or ["None"]
         self.connection_combo.addItems(options)
@@ -314,7 +321,21 @@ class PySide6Interface(QMainWindow):
         current_connection = self.app.get_active_connection()
         current_host = "None" if current_connection is None else current_connection.host
         self.connection_combo.setCurrentText(current_host)
+    
+    def update_ui(self):
+        """Update UI state based on current connections"""
+        connections = self.app.get_connections()
         
+        # Update connection combo
+        # self.connection_combo.clear()
+        # options = list(connections.keys()) or ["None"]
+        # self.connection_combo.addItems(options)
+        
+        # # Set current selection
+        # current_connection = self.app.get_active_connection()
+        # current_host = "None" if current_connection is None else current_connection.host
+        # self.connection_combo.setCurrentText(current_host)
+        logger.debug(f"Updating UI with connections: {list(connections.keys())}")
         if len(connections) == 0:
             self.set_manual_control_btn_state(False)
             self.automatic_button.setChecked(False)
@@ -346,6 +367,7 @@ class PySide6Interface(QMainWindow):
             self.app.get_control_mode() == ControlMode.CONTINUOUS
         )
         
+        logger.debug("video thread is running: " + str(self.video_thread.isRunning()))
         # Start video thread if not running
         if not self.video_thread.isRunning():
             self.video_thread.start()
