@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from loguru import logger
+
 from src.config import add_config, load_config
 
 
@@ -59,7 +61,7 @@ class QTConnectionManager(QDialog):
         
         for _, cfg in config.items():
             if "socket_host" not in cfg or "socket_port" not in cfg:
-                print("config missing socket_host or socket_port, skipping")
+                logger.warning("config missing socket_host or socket_port, skipping")
                 continue
                 
             row = QFrame()

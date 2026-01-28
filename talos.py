@@ -8,6 +8,14 @@ from src.logger import configure_logger
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 
+from src.pyside_gui.main_interface import PySide6Interface
+if sys.platform == "win32":
+    os.environ["PATH"] += os.pathsep + r".venv\Lib\site-packages\PySide6"
+
+    os.add_dll_directory(r".venv\Lib\site-packages\PySide6")
+from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QFont
+
 
 def create_args():
     parser = argparse.ArgumentParser()
@@ -42,6 +50,7 @@ def main(args) -> None:
         interface = TKInterface()
         interface.mainloop()
     else:
+        configure_logger()
         app = QApplication(sys.argv)
         
         # Set application font

@@ -26,6 +26,8 @@ from src.utils import (
     terminate,
 )
 
+from loguru import logger
+
 
 class VideoThread(QThread):
     """Thread for processing video frames"""
@@ -101,7 +103,7 @@ class PySide6Interface(QMainWindow):
         self.setup_ui()
         
         # Setup keyboard controls
-        self.setup_keyboard_controls()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         
         # Initial UI state
         self.set_manual_control_btn_state(False)
@@ -205,7 +207,7 @@ class PySide6Interface(QMainWindow):
         connection_layout.addWidget(self.manage_connections_btn)
         
         self.connection_combo = QComboBox()
-        self.connection_combo.currentTextChanged.connect(self.set_active_connection)
+        self.connection_combo.currentTextChanged.connect(lambda option: self.set_active_connection(option))
         connection_layout.addWidget(self.connection_combo)
         
         main_layout.addWidget(connection_frame, 3, 2)
@@ -213,9 +215,7 @@ class PySide6Interface(QMainWindow):
         # Connect signals
         self.connection_changed.connect(self.open_connection)
         
-    def setup_keyboard_controls(self):
-        """Setup keyboard event handling"""
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.update_ui()
         
     def keyPressEvent(self, event: QKeyEvent):
         """Handle key press events for directional controls"""
@@ -299,7 +299,7 @@ class PySide6Interface(QMainWindow):
     def set_active_connection(self, option):
         """Set the active connection"""
         self.app.set_active_connection(option if option != "None" else None)
-        self.update_ui()
+        # self.update_ui()
     
     def update_ui(self):
         """Update UI state based on current connections"""
