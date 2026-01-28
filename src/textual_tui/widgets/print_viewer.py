@@ -12,6 +12,18 @@ class PrintViewer(Widget):
         yield RichLog(id="log")
 
     def on_mount(self) -> None:
+        def log_handler(message) -> None:
+            record = message.record
+            log = self.query_one("#log", RichLog)
+            # log.write(
+            #     f"{record['time']} | {record['level'].name} | {record['function']} - {record['message']}"
+            # )
+            log.write(record["message"])
+
+        logger.add(
+            log_handler,
+            format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        )
         self.begin_capture_print()
 
     def on_print(self, event: events.Print) -> None:

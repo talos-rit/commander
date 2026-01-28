@@ -1,15 +1,46 @@
+from enum import StrEnum
 from os import path
 
 import cv2
 import numpy as np
 import torch
-from ultralytics import YOLO
+from loguru import logger
+from ultralytics import YOLO  # pyright: ignore[reportPrivateImportUsage]
 
 from assets import join_paths
 from src.tracking.tracker import ObjectModel
 
 
-class YOLOModel(ObjectModel):
+class YOLOModelSize(StrEnum):
+    NANO = "nano"
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+    XLARGE = "xlarge"
+
+    @property
+    def pt_file(self):
+        return {
+            YOLOModelSize.NANO: "yolo11n.pt",
+            YOLOModelSize.SMALL: "yolo11s.pt",
+            YOLOModelSize.MEDIUM: "yolo11m.pt",
+            YOLOModelSize.LARGE: "yolo11l.pt",
+            YOLOModelSize.XLARGE: "yolo11x.pt",
+        }[self]
+
+    @property
+    def pose_pt_file(self):
+        return {
+            YOLOModelSize.NANO: "yolo11n-pose.pt",
+            YOLOModelSize.SMALL: "yolo11s-pose.pt",
+            YOLOModelSize.MEDIUM: "yolo11m-pose.pt",
+            YOLOModelSize.LARGE: "yolo11l-pose.pt",
+            YOLOModelSize.XLARGE: "yolo11x-pose.pt",
+        }[self]
+
+
+class YOLOBaseModel(ObjectModel):
+    model_size: YOLOModelSize = YOLOModelSize.MEDIUM
     speaker_color: int | None = None
     color_threshold: int = 15
     lost_threshold: int = 300
@@ -18,12 +49,18 @@ class YOLOModel(ObjectModel):
     def __init__(
         self,
         _yolo_pt_dir=join_paths("yolo"),
+        _pt_file: str | None = None,
+        _pt_pose_file: str | None = None,
     ):
         self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
-
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.object_detector = YOLO(path.join(_yolo_pt_dir, "yolo11m.pt"))
-        self.pose_detector = YOLO(path.join(_yolo_pt_dir, "yolo11m-pose.pt"))
+        logger.info(f"Using YOLO model size: {self.model_size}, device: {self.device}")
+        self.object_detector = YOLO(
+            path.join(_yolo_pt_dir, _pt_file or self.model_size.pt_file)
+        )
+        self.pose_detector = YOLO(
+            path.join(_yolo_pt_dir, _pt_pose_file or self.model_size.pose_pt_file)
+        )
         self.lost_counter = 0
 
     # Detect people in the frame
@@ -129,7 +166,7 @@ class YOLOModel(ObjectModel):
                     smaller_box = self.getCroppedBox(box, frame)
                     color = self.get_dominant_color(smaller_box)
                     self.speaker_color = color
-                    print("Speaker detected with X pose:", self.speaker_bbox)
+                    logger.info(f"Speaker detected with X pose: {self.speaker_bbox}")
                     return [self.speaker_bbox]
 
             # While speaker not yet locked, return all detected bounding boxes.
@@ -161,7 +198,9 @@ class YOLOModel(ObjectModel):
                 self.lost_counter = 0
 
         if self.lost_counter >= self.lost_threshold:
-            print("Speaker lost for too many frames. Resetting single speaker.")
+            logger.warning(
+                "Speaker lost for too many frames. Resetting single speaker."
+            )
             self.speaker_bbox = None
             self.speaker_color = None
             self.lost_counter = 0
