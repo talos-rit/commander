@@ -84,7 +84,8 @@ class VideoConnection:
         frame = None
         for _ in range(6):
             ret, frame, *rest = self.cap.read()
-            logger.info(f"{rest=}")
+            if len(rest) > 0:
+                logger.debug(f"{rest=}")
             if ret and frame is not None:
                 self.shape = frame.shape
                 self.dtype = frame.dtype
@@ -96,7 +97,8 @@ class VideoConnection:
         if self.cap is not None:
             with self._read_lock:
                 r, frame, *rest = self.cap.read()
-                logger.info(f"{rest=}")
+                if len(rest) > 0:
+                    logger.debug(f"{rest=}")
             if not r:
                 return None
             return frame
