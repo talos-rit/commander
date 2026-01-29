@@ -32,7 +32,7 @@ class QTConnectionManager(QDialog):
         self.setParent(parent)
         # self.parent = parent
         self.setWindowTitle("Connection Manager")
-        self.setGeometry(100, 100, 350, 300)
+        self.setGeometry(100, 100, 500, 450)
         self.setModal(True)
 
         self.setup_ui()
@@ -76,21 +76,25 @@ class QTConnectionManager(QDialog):
                 logger.warning("config missing socket_host or socket_port, skipping")
                 continue
 
-            row = QFrame()
-            row_layout = QHBoxLayout(row)
+            config_item = QFrame()
+            config_item_layout = QHBoxLayout(config_item)
 
-            label = QLabel(f"{cfg['socket_host']} : {cfg['socket_port']}")
-            row_layout.addWidget(label)
+            url_text = f"{cfg['socket_host']}:{cfg['socket_port']}"
+            url_label = QLabel(url_text)
+            url_label.setMaximumWidth(350)
+            url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            url_label.setToolTip(url_text)
+            config_item_layout.addWidget(url_label)
 
             connect_btn = QPushButton("Connect")
             connect_btn.clicked.connect(
-                lambda checked, hostname=cfg["socket_host"]: self.add_from_config(
+                lambda _, hostname=cfg["socket_host"]: self.add_from_config(
                     hostname
                 )
             )
-            row_layout.addWidget(connect_btn)
+            config_item_layout.addWidget(connect_btn)
 
-            self.list_layout.addWidget(row)
+            self.list_layout.addWidget(config_item)
 
         # Current connections section
         connections_label = QLabel("Current Connections:")
@@ -98,21 +102,23 @@ class QTConnectionManager(QDialog):
         self.list_layout.addWidget(connections_label)
 
         for hostname, connData in self.connections.items():
-            row = QFrame()
-            row_layout = QHBoxLayout(row)
-
-            label = QLabel(f"{hostname} : {connData.port}")
-            row_layout.addWidget(label)
+            connection_item = QFrame()
+            connection_item_layout = QHBoxLayout(connection_item)
+            url_text = f"{hostname}:{connData.port}"
+            url_label = QLabel(url_text)
+            url_label.setMaximumWidth(350)
+            url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            url_label.setToolTip(url_text)
+            connection_item_layout.addWidget(url_label)
 
             remove_btn = QPushButton("X")
             remove_btn.setFixedWidth(30)
             remove_btn.clicked.connect(
-                lambda checked, h=hostname: self.remove_connection(h)
+                lambda _, h=hostname: self.remove_connection(h)
             )
-            row_layout.addWidget(remove_btn)
+            connection_item_layout.addWidget(remove_btn)
 
-            self.list_layout.addWidget(row)
-
+            self.list_layout.addWidget(connection_item)
         # Add spacer at the end
         self.list_layout.addStretch()
 
