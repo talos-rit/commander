@@ -1,24 +1,19 @@
-import sys
 from enum import StrEnum
-from typing import Optional
 
 from PySide6.QtWidgets import (
-    QApplication,
     QMainWindow,
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QGridLayout,
     QLabel,
     QPushButton,
     QFrame,
     QComboBox,
     QCheckBox,
-    QScrollArea,
     QSizePolicy,
     QDialog,
 )
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread
+from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QKeyEvent
 import cv2
 import numpy as np
@@ -27,7 +22,7 @@ from src.config import load_default_config
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
 from src.pyside_gui.connection_manager import QTConnectionManager
-from src.pyside_gui.styles import get_main_stylesheet, COLORS
+from src.pyside_gui.styles import get_main_stylesheet
 from src.pyside_gui.qtscheduler import QTScheduler
 from src.tracking import MODEL_OPTIONS
 from src.utils import (

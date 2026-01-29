@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QWidget,
     QLineEdit,
     QCheckBox,
-    QGridLayout,
     QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal
@@ -82,15 +81,15 @@ class QTConnectionManager(QDialog):
             url_text = f"{cfg['socket_host']}:{cfg['socket_port']}"
             url_label = QLabel(url_text)
             url_label.setMaximumWidth(350)
-            url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            url_label.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
             url_label.setToolTip(url_text)
             config_item_layout.addWidget(url_label)
 
             connect_btn = QPushButton("Connect")
             connect_btn.clicked.connect(
-                lambda _, hostname=cfg["socket_host"]: self.add_from_config(
-                    hostname
-                )
+                lambda _, hostname=cfg["socket_host"]: self.add_from_config(hostname)
             )
             config_item_layout.addWidget(connect_btn)
 
@@ -107,15 +106,15 @@ class QTConnectionManager(QDialog):
             url_text = f"{hostname}:{connData.port}"
             url_label = QLabel(url_text)
             url_label.setMaximumWidth(350)
-            url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            url_label.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
             url_label.setToolTip(url_text)
             connection_item_layout.addWidget(url_label)
 
             remove_btn = QPushButton("X")
             remove_btn.setFixedWidth(30)
-            remove_btn.clicked.connect(
-                lambda _, h=hostname: self.remove_connection(h)
-            )
+            remove_btn.clicked.connect(lambda _, h=hostname: self.remove_connection(h))
             connection_item_layout.addWidget(remove_btn)
 
             self.list_layout.addWidget(connection_item)
@@ -130,6 +129,10 @@ class QTConnectionManager(QDialog):
             self.render_list()
 
     def add_connection(self, host, port, camera, write_config):
+        # add connection to config if needed
+        # Do this here since config is reloaded in App class
+        if write_config:
+            add_config(host, port, camera)
         # Emit signal to parent
         self.connection_requested.emit(host, port, camera, write_config)
         self.accept()
