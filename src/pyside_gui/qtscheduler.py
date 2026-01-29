@@ -7,11 +7,12 @@ class QTIterativeTask(IterativeTask):
 
     def __init__(self, ms, func, *args):
         super().__init__()
+        self._ms = ms
         self.is_running = True
         self._stop_flag = False
         self._timer = QTimer()
         self._timer.timeout.connect(lambda: self._execute(func, *args))
-        self._timer.start(ms)
+        self._timer.start(self._ms)
 
     def _execute(self, func, *args):
         if not self._stop_flag:
@@ -23,6 +24,13 @@ class QTIterativeTask(IterativeTask):
         self._stop_flag = True
         self._timer.stop()
         self.is_running = False
+
+    def set_interval(self, ms: int):
+        self._ms = ms
+
+    def get_interval(self) -> int:
+        return self._ms
+
 
 
 class QTScheduler(Scheduler):
