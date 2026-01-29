@@ -40,7 +40,6 @@ class VideoThread(QThread):
         
     def run(self):
         while self.running:
-            logger.debug("VideoThread fetching frame")
             frame = self.app.get_active_frame()
             if frame is not None:
                 self.frame_processed.emit(frame)
@@ -251,7 +250,6 @@ class PySide6Interface(QMainWindow):
     
     def update_video_frame(self, frame):
         """Update the video display with new frame"""
-        logger.debug("Updating video frame in UI")
         if frame is None:
             return
             
@@ -305,7 +303,7 @@ class PySide6Interface(QMainWindow):
     
     def set_active_connection(self, option):
         """Set the active connection"""
-        logger.info(f"set_active_connection called for {option}")
+        logger.debug(f"set_active_connection called for {option}")
         self.app.set_active_connection(option if option != "None" else None)
         self.update_ui()
         
@@ -335,7 +333,6 @@ class PySide6Interface(QMainWindow):
         # current_connection = self.app.get_active_connection()
         # current_host = "None" if current_connection is None else current_connection.host
         # self.connection_combo.setCurrentText(current_host)
-        logger.debug(f"Updating UI with connections: {list(connections.keys())}")
         if len(connections) == 0:
             self.set_manual_control_btn_state(False)
             self.automatic_button.setChecked(False)
@@ -366,10 +363,10 @@ class PySide6Interface(QMainWindow):
         self.continuous_button.setChecked(
             self.app.get_control_mode() == ControlMode.CONTINUOUS
         )
-        
-        logger.debug("video thread is running: " + str(self.video_thread.isRunning()))
+
         # Start video thread if not running
         if not self.video_thread.isRunning():
+            self.video_thread.running = True
             self.video_thread.start()
     
     def toggle_command_mode(self, checked):
