@@ -231,6 +231,7 @@ yolo = [
 dev = [
     { name = "pyinstaller" },
     { name = "textual-dev" },
+    { name = "textual-serve" },
 ]
 
 [package.metadata]
@@ -260,6 +261,7 @@ provides-extras = ["mediapipe", "yolo"]
 dev = [
     { name = "pyinstaller", specifier = ">=6.16.0" },
     { name = "textual-dev", specifier = ">=1.8.0" },
+    { name = "textual-serve" },
 ]
 
 [[package]]

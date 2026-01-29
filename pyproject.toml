@@ -21,7 +21,7 @@ requires-python = "==3.12.*"
 version = "0.1.0"
 
 [dependency-groups]
-dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0"]
+dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0", "textual-serve"]
 
 [project.optional-dependencies]
 mediapipe = [
