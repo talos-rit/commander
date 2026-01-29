@@ -17,6 +17,7 @@ dependencies = [
     # "PySide6>=6.10.1" # includes pyside6-essentials and pyside6-addons
     "pyside6-essentials>=6.10.1",
     # "qtwidgets" # for Toggle Switch Widget. Might be able to just take the code directly since it is MIT licensed
+    "av>=16.1.0",
 ]
 name = "commander"
 requires-python = "==3.12.*"
