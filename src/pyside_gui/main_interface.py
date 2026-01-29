@@ -332,9 +332,9 @@ class PySide6Interface(QMainWindow):
 
     def set_active_connection(self, option):
         """Set the active connection"""
-        logger.debug(f"set_active_connection called for {option}")
-        self.app.set_active_connection(option if option != "None" else None)
-        self.update_ui()
+        if option:
+            self.app.set_active_connection(option if option != "None" else None)
+            self.update_ui()
 
     def update_connection_list(self):
         """Update the connection combo box list"""
@@ -353,15 +353,6 @@ class PySide6Interface(QMainWindow):
         """Update UI state based on current connections"""
         connections = self.app.get_connections()
 
-        # Update connection combo
-        # self.connection_combo.clear()
-        # options = list(connections.keys()) or ["None"]
-        # self.connection_combo.addItems(options)
-
-        # # Set current selection
-        # current_connection = self.app.get_active_connection()
-        # current_host = "None" if current_connection is None else current_connection.host
-        # self.connection_combo.setCurrentText(current_host)
         if len(connections) == 0:
             self.set_manual_control_btn_state(False)
             self.automatic_button.setChecked(False)
