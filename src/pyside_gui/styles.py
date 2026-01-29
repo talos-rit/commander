@@ -13,8 +13,13 @@ COLOR_PALLETTE = {
     "white": "#ffffff",
 }
 
-THEME_WINDOW_BG_COLOR = COLOR_PALLETTE["gray_1"] if IS_SYSTEM_DARK else COLOR_PALLETTE["white"]
-THEME_FRAME_BG_COLOR = COLOR_PALLETTE["gray_2"] if IS_SYSTEM_DARK else COLOR_PALLETTE["gray_5"]
+THEME_WINDOW_BG_COLOR = (
+    COLOR_PALLETTE["gray_1"] if IS_SYSTEM_DARK else COLOR_PALLETTE["white"]
+)
+THEME_FRAME_BG_COLOR = (
+    COLOR_PALLETTE["gray_2"] if IS_SYSTEM_DARK else COLOR_PALLETTE["gray_5"]
+)
+
 
 # Qt Stylesheets
 def get_main_stylesheet():
@@ -116,6 +121,7 @@ def get_main_stylesheet():
             }
         """
 
+
 # Button styles for programmatic use
 CONTROL_BTN_STYLE = {
     "font": "bold 16px 'Cascadia Code'",
@@ -127,5 +133,5 @@ CONTROL_BTN_STYLE = {
 COLORS = {
     "window_bg": THEME_WINDOW_BG_COLOR,
     "frame_bg": THEME_FRAME_BG_COLOR,
-    **COLOR_PALLETTE
+    **COLOR_PALLETTE,
 }

@@ -4,6 +4,7 @@ from src.scheduler import IterativeTask, Scheduler
 
 class QTIterativeTask(IterativeTask):
     """Replacement for TKIterativeTask using QTimer"""
+
     def __init__(self, ms, func, *args):
         super().__init__()
         self.is_running = True
@@ -26,6 +27,7 @@ class QTIterativeTask(IterativeTask):
 
 class QTScheduler(Scheduler):
     """Replacement for TKScheduler using Qt timers"""
+
     def __init__(self):
         self._timers = []
 
