@@ -1,5 +1,6 @@
 from PySide6.QtCore import QTimer
 from src.scheduler import IterativeTask, Scheduler
+from src.utils import add_termination_handler
 
 
 class QTIterativeTask(IterativeTask):
@@ -38,6 +39,7 @@ class QTScheduler(Scheduler):
 
     def __init__(self):
         self._timers = []
+        add_termination_handler(self.cleanup)
 
     def set_timeout(self, ms, func, *args):
         """Execute function after ms milliseconds"""

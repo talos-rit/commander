@@ -44,6 +44,7 @@ class VideoThread(QThread):
         super().__init__()
         self.app = app
         self.running = True
+        add_termination_handler(self.stop)
 
     def run(self):
         while self.running:
@@ -412,10 +413,6 @@ class PySide6Interface(QMainWindow):
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None
-
-        # Stop video thread
-        if self.video_thread.isRunning():
-            self.video_thread.stop()
 
         # Cleanup scheduler
         if hasattr(self.scheduler, "cleanup"):
