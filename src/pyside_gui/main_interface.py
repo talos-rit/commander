@@ -64,7 +64,7 @@ class ButtonText(StrEnum):
     DOWN = "↓"
     LEFT = "←"
     RIGHT = "→"
-    HOME = "🏠 Home"
+    HOME = "Home"
     CONTINUOUS_MODE_LABEL = "Continuous"
     AUTOMATIC_MODE_LABEL = "Automatic"
 
