@@ -1,6 +1,7 @@
 import darkdetect
 
 IS_SYSTEM_DARK = darkdetect.isDark()
+# IS_SYSTEM_DARK = False  # Temporarily disable dark mode detection for testing
 
 # Colors remain the same
 COLOR_PALLETTE = {
@@ -26,45 +27,45 @@ def get_main_stylesheet():
     """Generate Qt stylesheet based on theme"""
     if IS_SYSTEM_DARK:
         return """
-            QMainWindow, QDialog {
+            /* QMainWindow, QDialog {
                 background-color: #1c1c1c;
                 color: #ffffff;
-            }
+            } */
             QFrame {
-                background-color: #2B2B2B;
+                /* background-color: #2B2B2B; */
                 border: 2px solid #3a3a3a;
                 border-radius: 10px;
             }
             QPushButton {
-                background-color: #1c1c1c;
-                color: #e5e5e5;
+                /* background-color: #1c1c1c;
+                color: #e5e5e5; */
                 border: 2px solid #3a3a3a;
                 border-radius: 10px;
                 padding: 10px;
                 font: bold 16px "Cascadia Code";
             }
-            QPushButton:hover {
+            /* QPushButton:hover {
                 background-color: #2B2B2B;
             }
             QPushButton:disabled {
                 color: #7A7A7A;
-            }
+            } */
             QLabel {
-                color: #ffffff;
+                /* color: #ffffff; */
                 font: 16px "Cascadia Code";
             }
             QComboBox {
-                background-color: #1c1c1c;
-                color: #e5e5e5;
+                /* background-color: #1c1c1c;
+                color: #e5e5e5; */
                 border: 2px solid #3a3a3a;
                 border-radius: 5px;
                 padding: 5px;
             }
-            QComboBox:hover {
+            /* QComboBox:hover {
                 background-color: #2B2B2B;
-            }
+            } */
             QCheckBox {
-                color: #ffffff;
+                /* color: #ffffff; */
                 font: 16px "Cascadia Code";
             }
             QCheckBox::indicator {
@@ -74,45 +75,45 @@ def get_main_stylesheet():
         """
     else:
         return """
-            QMainWindow, QDialog {
+            /* QMainWindow, QDialog {
                 background-color: #ffffff;
                 color: #000000;
-            }
+            } */
             QFrame {
-                background-color: #DADADA;
+                /* background-color: #DADADA; */
                 border: 2px solid #c7c7c7;
                 border-radius: 10px;
             }
             QPushButton {
-                background-color: #e5e5e5;
-                color: #1c1c1c;
+                /* background-color: #e5e5e5; 
+                color: #1c1c1c; */
                 border: 2px solid #c7c7c7;
                 border-radius: 10px;
                 padding: 10px;
                 font: bold 16px "Cascadia Code";
             }
-            QPushButton:hover {
+            /* QPushButton:hover {
                 background-color: #c7c7c7;
             }
             QPushButton:disabled {
                 color: #7A7A7A;
-            }
+            } */
             QLabel {
-                color: #000000;
+                /* color: #000000; */
                 font: 16px "Cascadia Code";
             }
             QComboBox {
-                background-color: #e5e5e5;
-                color: #1c1c1c;
+                /* background-color: #e5e5e5;
+                color: #1c1c1c; */
                 border: 2px solid #c7c7c7;
                 border-radius: 5px;
                 padding: 5px;
             }
-            QComboBox:hover {
+            /*QComboBox:hover {
                 background-color: #c7c7c7;
-            }
+            }*/
             QCheckBox {
-                color: #000000;
+                /* color: #000000; */
                 font: 16px "Cascadia Code";
             }
             QCheckBox::indicator {
@@ -121,17 +122,3 @@ def get_main_stylesheet():
             }
         """
 
-
-# Button styles for programmatic use
-CONTROL_BTN_STYLE = {
-    "font": "bold 16px 'Cascadia Code'",
-    "padding": "10px",
-    "border-radius": "10px",
-}
-
-# Color constants for programmatic access
-COLORS = {
-    "window_bg": THEME_WINDOW_BG_COLOR,
-    "frame_bg": THEME_FRAME_BG_COLOR,
-    **COLOR_PALLETTE,
-}
