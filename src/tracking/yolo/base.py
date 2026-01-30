@@ -64,7 +64,7 @@ class YOLOBaseModel(ObjectModel):
         self.lost_counter = 0
 
     # Detect people in the frame
-    def detectPerson(self, object_detector, frame, inHeight=500, inWidth=None):
+    def detectPerson(self, object_detector: YOLO, frame, inHeight=500, inWidth=None):
         inWidth = inWidth or int((frame.shape[1] / frame.shape[0]) * inHeight)
         frameOpenCV = frame.copy()
         frameHeight = frameOpenCV.shape[0]
@@ -74,9 +74,13 @@ class YOLOBaseModel(ObjectModel):
         frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
 
         detection_result = object_detector(
-            frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device
+            frameRGB,
+            stream=True,
+            classes=0,
+            verbose=False,
+            imgsz=(inWidth, inHeight),
+            device=self.device,
         )
-        # print(detection_result)
         if not detection_result:
             return []
 
