@@ -29,6 +29,17 @@ You can also opt in to install several other object detection models.
     * Run `uv sync --all-extras`
     * This will add all of the extra model options in the dropdown menu
 
+## How to Run the commander
+
+1. Main Tkinter interface
+    `uv run talos.py`
+2. Terminal interface
+    `uv run talos.py -t` or `uv run terminal_talos.py`
+3. Browser access of terminal interface*
+    `uv run textual serve terminal_talos.py --host <device_ip> --port 8080`
+
+* Install textual-serve dependency via `uv sync --group dev`
+
 ### Creating an executable
 [Pyinstaller](https://pyinstaller.org/en/stable/) can be used to create an executable (on any OS) for easier launching/distribution of the application. Follow the steps below to create an executable:
 
