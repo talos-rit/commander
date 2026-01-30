@@ -64,7 +64,8 @@ def _detect_person_worker(
     try:
         while not stopper.is_set():
             logger.debug("Waiting for new frame...")
-            frame_ready_event.wait()
+            if not frame_ready_event.is_set():
+                continue
             # Not clear immediately to make a copy here safely
             bboxes = model.detect_person(frame=np.copy(frame))
             frame_ready_event.clear()
@@ -340,7 +341,12 @@ class Tracker:
             try:
                 self.frame_ready_event.clear()
                 self.model_stopper.set()
-                self._detection_process.join()
+                self._detection_process.join(1.0)
+                if self._detection_process.is_alive():
+                    logger.warning(
+                        "Detection process did not terminate in time. Forcing termination."
+                    )
+                    self._detection_process.terminate()
                 self._bbox_queue.close()
                 self._bbox_queue.join_thread()
                 self.model_stopper.clear()
