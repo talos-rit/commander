@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  pull_request: # Uncomment this to test the action in your PR if you change this file
+  # pull_request: # Uncomment this to test the action in your PR if you change this file
 
 jobs:
   build:
