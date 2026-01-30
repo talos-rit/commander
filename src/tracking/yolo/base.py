@@ -21,21 +21,21 @@ class YOLOModelSize(StrEnum):
     @property
     def pt_file(self):
         return {
-            YOLOModelSize.NANO: "yolo11n.pt",
-            YOLOModelSize.SMALL: "yolo11s.pt",
-            YOLOModelSize.MEDIUM: "yolo11m.pt",
-            YOLOModelSize.LARGE: "yolo11l.pt",
-            YOLOModelSize.XLARGE: "yolo11x.pt",
+            YOLOModelSize.NANO: "yolo26n.pt",
+            YOLOModelSize.SMALL: "yolo26s.pt",
+            YOLOModelSize.MEDIUM: "yolo26m.pt",
+            YOLOModelSize.LARGE: "yolo26l.pt",
+            YOLOModelSize.XLARGE: "yolo26x.pt",
         }[self]
 
     @property
     def pose_pt_file(self):
         return {
-            YOLOModelSize.NANO: "yolo11n-pose.pt",
-            YOLOModelSize.SMALL: "yolo11s-pose.pt",
-            YOLOModelSize.MEDIUM: "yolo11m-pose.pt",
-            YOLOModelSize.LARGE: "yolo11l-pose.pt",
-            YOLOModelSize.XLARGE: "yolo11x-pose.pt",
+            YOLOModelSize.NANO: "yolo26n-pose.pt",
+            YOLOModelSize.SMALL: "yolo26s-pose.pt",
+            YOLOModelSize.MEDIUM: "yolo26m-pose.pt",
+            YOLOModelSize.LARGE: "yolo26l-pose.pt",
+            YOLOModelSize.XLARGE: "yolo26x-pose.pt",
         }[self]
 
 
