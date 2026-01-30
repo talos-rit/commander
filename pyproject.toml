@@ -25,10 +25,11 @@ dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0"]
 
 [project.optional-dependencies]
 mediapipe = [
-    "mediapipe>=0.10.32",
+    "mediapipe>=0.10.32; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "torch>=2.6.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # --- Platform-Specific Dependencies ---
     # For x86_64 macOS: use specific versions due to compatibility issues
+    "mediapipe==0.10.21; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "jax[cpu]==0.4.38; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
