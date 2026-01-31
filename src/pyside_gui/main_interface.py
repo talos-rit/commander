@@ -4,12 +4,12 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QGridLayout,
     QLabel,
     QPushButton,
     QFrame,
     QComboBox,
-    QCheckBox,
     QSizePolicy,
     QDialog,
 )
@@ -18,6 +18,7 @@ from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QKeyEvent
 import cv2
 import numpy as np
 
+from src.pyside_gui.qtwidgets import Toggle
 from src.config import load_default_config
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
@@ -129,6 +130,9 @@ class PySide6Interface(QMainWindow):
         main_layout.setRowStretch(1, 1)
         main_layout.setRowStretch(2, 1)
         main_layout.setRowStretch(3, 1)
+        main_layout.setColumnStretch(0, 1)
+        main_layout.setColumnStretch(1, 1)
+        main_layout.setColumnStretch(2, 1)
 
         # Video display
         self.video_label = QLabel()
@@ -147,20 +151,46 @@ class PySide6Interface(QMainWindow):
 
         # Toggle group frame
         toggle_frame = QFrame()
+        toggle_frame.setSizePolicy(
+            QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred
+        )
+        toggle_frame.setMaximumWidth(240)
         toggle_layout = QVBoxLayout(toggle_frame)
 
         # Automatic mode toggle
-        self.automatic_button = QCheckBox(ButtonText.AUTOMATIC_MODE_LABEL)
-        self.automatic_button.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.automatic_button.toggled.connect(self.toggle_command_mode)
-        self.automatic_button.setEnabled(False)
-        toggle_layout.addWidget(self.automatic_button)
+        automatic_row_layout = QHBoxLayout()
+        automatic_row_layout.setContentsMargins(0, 0, 0, 0)
+        automatic_row_layout.setSpacing(10)
+
+        self.automatic_slider = Toggle()
+        self.automatic_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
+        self.automatic_slider.toggled.connect(self.toggle_command_mode)
+        self.automatic_slider.setEnabled(False)
+
+        automatic_label = QLabel(ButtonText.AUTOMATIC_MODE_LABEL)
+        automatic_label.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
+
+        automatic_row_layout.addWidget(self.automatic_slider)
+        automatic_row_layout.addWidget(automatic_label)
+        automatic_row_layout.addStretch(1)
+        toggle_layout.addLayout(automatic_row_layout)
 
         # Continuous mode toggle
-        self.continuous_button = QCheckBox(ButtonText.CONTINUOUS_MODE_LABEL)
-        self.continuous_button.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.continuous_button.toggled.connect(self.app.toggle_control_mode)
-        toggle_layout.addWidget(self.continuous_button)
+        continuous_row_layout = QHBoxLayout()
+        continuous_row_layout.setContentsMargins(0, 0, 0, 0)
+        continuous_row_layout.setSpacing(10)
+
+        self.continuous_slider = Toggle()
+        self.continuous_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
+        self.continuous_slider.toggled.connect(self.app.toggle_control_mode)
+
+        continuous_label = QLabel(ButtonText.CONTINUOUS_MODE_LABEL)
+        continuous_label.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
+
+        continuous_row_layout.addWidget(self.continuous_slider)
+        continuous_row_layout.addWidget(continuous_label)
+        continuous_row_layout.addStretch(1)
+        toggle_layout.addLayout(continuous_row_layout)
 
         main_layout.addWidget(toggle_frame, 1, 0)
 
@@ -168,30 +198,50 @@ class PySide6Interface(QMainWindow):
         # Home button
         self.home_button = QPushButton(ButtonText.HOME)
         self.home_button.setFont(QFont("Cascadia Code", 16, QFont.Weight.Bold))
+        self.home_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.home_button.setMinimumSize(80, 80)
         self.home_button.clicked.connect(self.app.move_home)
         main_layout.addWidget(self.home_button, 2, 1)
 
         # Directional buttons
         self.up_button = QPushButton(ButtonText.UP)
         self.up_button.setFont(QFont("Cascadia Code", 16, QFont.Weight.Bold))
+        self.up_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.up_button.setMinimumSize(80, 80)
         self.up_button.pressed.connect(lambda: self.app.start_move(Direction.UP))
         self.up_button.released.connect(lambda: self.app.stop_move(Direction.UP))
         main_layout.addWidget(self.up_button, 1, 1)
 
         self.down_button = QPushButton(ButtonText.DOWN)
         self.down_button.setFont(QFont("Cascadia Code", 16, QFont.Weight.Bold))
+        self.down_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.down_button.setMinimumSize(80, 80)
         self.down_button.pressed.connect(lambda: self.app.start_move(Direction.DOWN))
         self.down_button.released.connect(lambda: self.app.stop_move(Direction.DOWN))
         main_layout.addWidget(self.down_button, 3, 1)
 
         self.left_button = QPushButton(ButtonText.LEFT)
         self.left_button.setFont(QFont("Cascadia Code", 16, QFont.Weight.Bold))
+        self.left_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.left_button.setMinimumSize(80, 80)
         self.left_button.pressed.connect(lambda: self.app.start_move(Direction.LEFT))
         self.left_button.released.connect(lambda: self.app.stop_move(Direction.LEFT))
         main_layout.addWidget(self.left_button, 2, 0)
 
         self.right_button = QPushButton(ButtonText.RIGHT)
         self.right_button.setFont(QFont("Cascadia Code", 16, QFont.Weight.Bold))
+        self.right_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.right_button.setMinimumSize(80, 80)
         self.right_button.pressed.connect(lambda: self.app.start_move(Direction.RIGHT))
         self.right_button.released.connect(lambda: self.app.stop_move(Direction.RIGHT))
         main_layout.addWidget(self.right_button, 2, 2)
@@ -351,8 +401,8 @@ class PySide6Interface(QMainWindow):
 
         if len(connections) == 0:
             self.set_manual_control_btn_state(False)
-            self.automatic_button.setChecked(False)
-            self.automatic_button.setEnabled(False)
+            self.automatic_slider.setChecked(False)
+            self.automatic_slider.setEnabled(False)
             self.video_thread.stop()
             self.draw_no_signal_display()
             return
@@ -363,20 +413,20 @@ class PySide6Interface(QMainWindow):
 
         # Update automatic button state
         if self.app.get_director() is None or self.app.is_manual_only():
-            self.automatic_button.setEnabled(False)
+            self.automatic_slider.setEnabled(False)
         else:
-            self.automatic_button.setEnabled(True)
+            self.automatic_slider.setEnabled(True)
 
         # Update control mode
         if connection.is_manual:
             self.set_manual_control_btn_state(True)
-            self.automatic_button.setChecked(False)
+            self.automatic_slider.setChecked(False)
         else:
             self.set_manual_control_btn_state(False)
-            self.automatic_button.setChecked(True)
+            self.automatic_slider.setChecked(True)
 
         # Update continuous mode
-        self.continuous_button.setChecked(
+        self.continuous_slider.setChecked(
             self.app.get_control_mode() == ControlMode.CONTINUOUS
         )
 
