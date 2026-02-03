@@ -12,6 +12,7 @@ from av import VideoFrame
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from loguru import logger
 
 from src.talos_app import App as TalosApp
 
@@ -77,6 +78,7 @@ class Context:
 
 async def ctx():
     if _talos_app_instance is None:
+        logger.error("Talos app instance is not initialized")
         raise RuntimeError("Talos app instance is not initialized")
     return Context(talos_app=_talos_app_instance)
 
@@ -87,7 +89,7 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request, context: Context = Depends(ctx)):
-    connections = [hostname for hostname in context.talos_app.get_connections()]
+    connections = context.talos_app.get_connections().keys()
 
     return templates.TemplateResponse(
         request=request,
@@ -104,9 +106,7 @@ async def read_index(request: Request, context: Context = Depends(ctx)):
 async def read_index_hostname(
     request: Request, hostname: str, context: Context = Depends(ctx)
 ):
-    connections = [
-        {"hostname": hostname} for hostname in context.talos_app.get_connections()
-    ]
+    connections = context.talos_app.get_connections().keys()
 
     return templates.TemplateResponse(
         request=request,
@@ -137,6 +137,7 @@ async def stream_video(hostname: str, context: Context = Depends(ctx)):
     tApp = context.talos_app
 
     if hostname not in tApp.get_connections():
+        logger.error(f"Hostname not found for video stream: {hostname}")
         raise HTTPException(status_code=404, detail="Hostname not found")
 
     return {"type": "hostname", "hostname": hostname}
@@ -172,6 +173,7 @@ async def handle_offer(data: dict, context: Context = Depends(ctx)):
     else:
         hostname = data.get("hostname")
         if not hostname or hostname not in tApp.get_connections():
+            logger.error(f"Hostname not found for video track: {hostname}")
             raise HTTPException(status_code=404, detail="Hostname not found")
         video_track = TalosVideoTrack(lambda: tApp.get_frame(hostname), peer_id)
 
@@ -206,6 +208,7 @@ async def handle_ice(data: dict):
     sdp_m_line_index = data.get("sdpMLineIndex")
 
     if not peer_id or peer_id not in _peer_connections:
+        logger.error(f"Peer connection not found for ICE: {peer_id}")
         raise HTTPException(status_code=404, detail="Peer connection not found")
 
     if candidate_str:
@@ -230,6 +233,7 @@ async def close_peer(peer_id: str):
         await pc.close()
         return {"status": "closed"}
 
+    logger.error(f"Peer connection not found for close: {peer_id}")
     raise HTTPException(status_code=404, detail="Peer connection not found")
 
 
@@ -253,6 +257,7 @@ class TalosEndpoint:
             target=self._run_uvicorn, args=(host, port), daemon=True
         )
         self.thread.start()
+        return self.thread
 
     def _run_uvicorn(self, host: str, port: int):
         uvicorn.run(app, host=host, port=port)
