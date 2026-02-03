@@ -19,6 +19,7 @@ from src.tracking import MODEL_OPTIONS
 
 from ..talos_endpoint import TalosEndpoint
 from ..tk_gui.main_interface import start_termination_guard
+from ..utils import terminate
 
 MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)
 
@@ -242,4 +243,7 @@ class TextualInterface(App):
 
 
 if __name__ == "__main__":
-    TextualInterface().run()
+    try:
+        TextualInterface().run()
+    finally:
+        terminate(0, 0)

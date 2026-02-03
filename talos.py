@@ -6,7 +6,7 @@ from src.logger import configure_logger
 from src.talos_app import App
 from src.talos_endpoint import TalosEndpoint
 from src.textual_tui.main_interface import TextualInterface
-from src.tk_gui.main_interface import TKInterface
+from src.tk_gui.main_interface import TKInterface, terminate
 
 
 def create_args():
@@ -35,7 +35,10 @@ def main(args) -> None:
         smm = multiprocessing.managers.SharedMemoryManager()
         interface = TextualInterface()
         interface.smm = smm
-        interface.run()
+        try:
+            interface.run()
+        finally:
+            terminate(0, 0)
     else:
         configure_logger()
         interface = TKInterface()
