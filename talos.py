@@ -3,6 +3,8 @@ import multiprocessing
 import multiprocessing.managers
 
 from src.logger import configure_logger
+from src.talos_app import App
+from src.talos_endpoint import TalosEndpoint
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 
@@ -16,6 +18,11 @@ def create_args():
         help="Use the terminal (textual) interface instead of the Tk GUI",
     )
     return parser.parse_args()
+
+
+def run_server(app: App):
+    endpoint = TalosEndpoint(app)
+    endpoint.run()
 
 
 def main(args) -> None:
@@ -32,6 +39,10 @@ def main(args) -> None:
     else:
         configure_logger()
         interface = TKInterface()
+        # TODO: TKinter is incapable of running this much resource intensive tasks
+        # in the same thread as the mainloop, so will be resolved later.
+        # app = interface.get_app()
+        # run_server(app)
         interface.mainloop()
 
 

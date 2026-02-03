@@ -3,6 +3,7 @@ import time
 from dataclasses import dataclass, field
 
 import av
+import av.video
 import cv2
 import numpy as np
 from loguru import logger
@@ -25,9 +26,19 @@ class PyAVCapture:
         self._term = add_termination_handler(self.release)
 
     def _get_frame_iter(self):
+        """
+        Generator that yields decoded video frames from the container.
+
+        Iterates through packets from the demultiplexed video stream and decodes
+        each packet into individual frames, yielding them one at a time.
+
+        Yields:
+            frame: A decoded video frame from the packet.
+        """
         for packet in self.container.demux(self.video_stream):
             for frame in packet.decode():
-                yield frame
+                if isinstance(frame, av.video.frame.VideoFrame):
+                    yield frame
 
     def read(self):
         try:

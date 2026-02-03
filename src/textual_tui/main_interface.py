@@ -17,6 +17,7 @@ from src.textual_tui.widgets.button import ReactiveButton
 from src.textual_tui.widgets.print_viewer import PrintViewer
 from src.tracking import MODEL_OPTIONS
 
+from ..talos_endpoint import TalosEndpoint
 from ..tk_gui.main_interface import start_termination_guard
 
 MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)
@@ -85,10 +86,16 @@ class TextualInterface(App):
             return
         self.query_one("#connection-select", Select).set_options(new_options)
 
+    def run_server(self):
+        endpoint = TalosEndpoint(self._talos_app)
+        endpoint.run()
+
     def on_mount(self) -> None:
         logger.debug("Mounting Interface")
         scheduler = TextualScheduler(self)
         self._talos_app = TalosApp(scheduler, smm=self.smm)
+        self.run_server()
+
         start_termination_guard()
 
         continuous_switch = self.query_one("#continuous-control-switch", Switch)
@@ -229,6 +236,9 @@ class TextualInterface(App):
     def stop_mv_direction(self, direction: Direction):
         logger.info(f"Stop move {direction}")
         self._talos_app.stop_move(direction)
+
+    def get_app(self) -> TalosApp:
+        return self._talos_app
 
 
 if __name__ == "__main__":

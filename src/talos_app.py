@@ -190,6 +190,10 @@ class App:
         if self.director is not None:
             self.director.remove_control_feed(hostname)
 
+    def get_active_hostname(self) -> str | None:
+        """Gets the active connection's hostname"""
+        return self.active_connection
+
     def get_active_connection(self) -> Connection | None:
         """Gets the active connection"""
         if self.active_connection is None:
@@ -201,6 +205,12 @@ class App:
         if self.active_connection is None:
             return None
         return self.tracker.get_frame(self.active_connection)
+
+    def get_frame(self, hostname: str):
+        """Gets the specified connection's current video frame"""
+        if hostname not in self.connections:
+            return None
+        return self.tracker.get_frame(hostname)
 
     def get_active_config(self) -> dict | None:
         """Gets the active connection's configuration"""
