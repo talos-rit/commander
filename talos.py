@@ -4,6 +4,10 @@ import multiprocessing.managers
 import os
 import sys
 
+# Set the start method for multiprocessing to 'spawn' to avoid fork issues in multi-threaded Qt app
+if sys.platform == "darwin" or sys.platform == "linux":
+    multiprocessing.set_start_method("spawn", force=True)
+
 from src.logger import configure_logger
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
