@@ -1,0 +1,19 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    restart: unless-stopped
+    networks:
+      - mediamtx_net
+    ports:
+      - "8554:8554"  # RTSP (ffmpeg)
+      - "1935:1935"  # RTMP (optional)
+      - "8888:8888"  # HLS + built-in web UI
+      - "8889:8889"  # WebRTC
+      - "8890:8890"  # SRT (optional)
+    environment:
+      MTX_LOGLEVEL: info
+
+networks:
+  mediamtx_net:
+    name: mediamtx_net

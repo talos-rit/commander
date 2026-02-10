@@ -6,7 +6,6 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.timer import Timer
-from textual.types import NoSelection
 from textual.widgets import Button, Footer, Header, Select, Static, Switch
 
 from src.talos_app import App as TalosApp
@@ -217,17 +216,16 @@ class TextualInterface(App):
             (conn, conn) for conn in self._talos_app.get_connections().keys()
         ]
         self.connection_options = connections
-        self.query_one("#connection-select", Select).value = (
-            self._talos_app.active_connection or Select.BLANK
-        )
+        self.query_one(
+            "#connection-select", Select
+        ).value = self._talos_app.get_active_hostname()
 
     @on(Select.Changed, "#connection-select")
-    def handle_active_connection(self, active_connection: str | NoSelection):
+    def handle_active_connection(self, active_connection: Select.Changed):
+        logger.info(f"Active connection changed to: {active_connection.value}")
         if not hasattr(self, "_talos_app"):
             return
-        new_connection = (
-            active_connection if isinstance(active_connection, str) else None
-        )
+        new_connection = str(active_connection.value)
         self._talos_app.set_active_connection(new_connection)
 
     def start_mv_direction(self, direction: Direction):

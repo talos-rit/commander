@@ -8,6 +8,7 @@ from .connection.connection import Connection
 from .connection.publisher import Direction
 from .directors import BaseDirector
 from .scheduler import IterativeTask, Scheduler
+from .streaming import FfmpegStreamController, StreamConfig
 from .thread_scheduler import ThreadScheduler
 from .tracking import USABLE_MODELS, Tracker
 
@@ -30,6 +31,7 @@ class App:
     # State for continuous and discrete movements
     current_continuous_directions: set[Direction] = set()
     discrete_move_task: dict[Direction, IterativeTask] = dict()
+    _streamer: FfmpegStreamController | None = None
 
     def __init__(
         self,
@@ -41,6 +43,7 @@ class App:
         self.connections = dict()
         self.active_connection: None | str = None
         self.tracker = Tracker(scheduler=scheduler, smm=smm)
+        self._streamer = None
 
     def open_connection(
         self,
@@ -163,6 +166,7 @@ class App:
 
     def set_active_connection(self, hostname: str | None) -> None:
         """Sets the active connection by hostname"""
+        logger.info(f"Setting active connection to {hostname}")
         if hostname is None:
             self.tracker.set_active_connection(None)
             self.active_connection = None
@@ -207,7 +211,7 @@ class App:
         return self.tracker.get_frame(self.active_connection)
 
     def get_frame(self, hostname: str):
-        """Gets the specified connection's current video frame"""
+        """Gets the specified connection's video frame"""
         if hostname not in self.connections:
             return None
         return self.tracker.get_frame(hostname)
@@ -276,3 +280,58 @@ class App:
         else:
             self.control_mode = ControlMode.CONTINUOUS
         return self.control_mode
+
+    def start_stream(
+        self,
+        output_url: str,
+        hostname: str | None = None,
+        fps: int | None = None,
+        use_docker: bool = False,
+        docker_image: str | None = None,
+        docker_network: str | None = None,
+    ) -> None:
+        """Start streaming the active (or specified) connection via ffmpeg."""
+        logger.info("Starting stream to {}", output_url)
+        if hostname is None:
+            frame_getter = self.get_active_frame
+            cfg = self.get_active_config() or {}
+        else:
+            if hostname not in self.connections:
+                raise ValueError(f"Connection to {hostname} does not exist")
+
+            def frame_getter():
+                logger.debug(f"Getting frame for {hostname}")
+                return self.get_frame(hostname)
+
+            cfg = self.config.get(hostname, {})
+
+        if fps is None:
+            fps = cfg.get("fps")
+
+        if self._streamer is not None:
+            self._streamer.stop()
+            self._streamer = None
+
+        stream_config = StreamConfig(
+            output_url=output_url,
+            fps=fps,
+            use_docker=use_docker,
+            docker_image=docker_image or StreamConfig.docker_image,
+            docker_network=docker_network,
+        )
+        self._streamer = FfmpegStreamController(frame_getter, stream_config)
+        try:
+            self._streamer.start()
+        except RuntimeError as exc:
+            logger.error("Failed to start stream: {}", exc)
+            self._streamer = None
+
+    def stop_stream(self) -> None:
+        """Stop an active ffmpeg stream if running."""
+        if self._streamer is None:
+            return
+        self._streamer.stop()
+        self._streamer = None
+
+    def is_streaming(self) -> bool:
+        return self._streamer is not None and self._streamer.is_running()

@@ -1,74 +1,47 @@
+import os
 import threading
-import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from pathlib import Path
 
-import cv2
-import numpy as np
 import uvicorn
-from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
-from aiortc.sdp import candidate_from_sdp
-from av import VideoFrame
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 from loguru import logger
 
 from src.talos_app import App as TalosApp
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if _talos_app_instance is None:
+        logger.error("Talos app instance is not initialized")
+        yield
+        return
+    # Don't auto-start stream on startup - wait for a connection to be opened
+    logger.info("Talos endpoint started. Waiting for camera connection...")
+    try:
+        yield
+    finally:
+        _talos_app_instance.stop_stream()
+
+
+app = FastAPI(lifespan=lifespan)
 _talos_app_instance: TalosApp | None = None
 """
 Global variable to hold the Talos app instance
 This must be readonly after initialization for thread safety
 """
 
-
-class TalosVideoTrack(MediaStreamTrack):
-    """
-    Custom video track that captures frames from Talos app.
-    Subclasses MediaStreamTrack and provides video frames as numpy arrays.
-    """
-
-    kind = "video"
-
-    def __init__(self, frame_getter, track_id: str):
-        super().__init__()
-        self.frame_getter = frame_getter
-        self.track_id = track_id
-
-    async def recv(self) -> VideoFrame:
-        """
-        Receive the next frame from the Talos app.
-        Converts numpy arrays to av.VideoFrame for WebRTC transmission.
-        """
-        # Get frame from app
-        frame = self.frame_getter()
-
-        # If no frame available, return a black frame
-        if frame is None:
-            frame = np.zeros((480, 640, 3), dtype=np.uint8)
-
-        # Convert frame if necessary
-        if frame.ndim == 2:  # grayscale
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-
-        # Resize if needed
-        if frame.shape[0] != 480 or frame.shape[1] != 640:
-            frame = cv2.resize(frame, (640, 480))
-
-        # Ensure uint8 dtype
-        frame = frame.astype(np.uint8)
-
-        # Create VideoFrame from numpy array (BGR format for OpenCV)
-        # Let aiortc handle timing - do not set pts or time_base
-        video_frame = VideoFrame.from_ndarray(frame, format="bgr24")
-
-        return video_frame
-
-
-# Store peer connections for cleanup
-_peer_connections: dict[str, RTCPeerConnection] = {}
+MEDIAMTX_BASE_URL = os.getenv("MEDIAMTX_BASE_URL", "http://localhost:8888")
+MEDIAMTX_STREAM_PATH = os.getenv("MEDIAMTX_STREAM_PATH", "stream")
+MEDIAMTX_RTSP_URL = os.getenv("MEDIAMTX_RTSP_URL", "rtsp://localhost:8554/stream")
+MEDIAMTX_USE_DOCKER = os.getenv("MEDIAMTX_USE_DOCKER", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+MEDIAMTX_DOCKER_NETWORK = os.getenv("MEDIAMTX_DOCKER_NETWORK", "mediamtx_net")
+MEDIAMTX_FPS = os.getenv("MEDIAMTX_FPS")
 
 
 @dataclass(frozen=True)
@@ -83,158 +56,67 @@ async def ctx():
     return Context(talos_app=_talos_app_instance)
 
 
-# Templates directory
-templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
-
-
-@app.get("/", response_class=HTMLResponse)
-async def read_index(request: Request, context: Context = Depends(ctx)):
-    connections = context.talos_app.get_connections().keys()
-
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
-            "title": "WebRTC Video Stream",
-            "connections": connections,
-            "active_connection": "_auto_",
-        },
+def _ensure_stream_started(talos_app: TalosApp) -> None:
+    logger.debug(f"_ensure_stream_started called: is_streaming={talos_app.is_streaming()}")
+    if talos_app.is_streaming():
+        logger.debug("Stream already running, skipping start")
+        return
+    
+    # Check App's active connection first, then fallback to tracker's active connection
+    active_host = talos_app.get_active_hostname()
+    logger.debug(f"Active hostname from App: {active_host}")
+    logger.debug(f"Tracker active connection: {talos_app.tracker.active_connection}")
+    logger.debug(f"Connections dict: {list(talos_app.connections.keys())}")
+    
+    if active_host is None:
+        logger.warning("Cannot start stream: No active camera connection")
+        return
+    
+    logger.info(f"Calling start_stream for {active_host}")
+    talos_app.start_stream(
+        output_url=MEDIAMTX_RTSP_URL,
+        fps=int(MEDIAMTX_FPS) if MEDIAMTX_FPS else None,
+        use_docker=MEDIAMTX_USE_DOCKER,
+        docker_network=MEDIAMTX_DOCKER_NETWORK if MEDIAMTX_USE_DOCKER else None,
     )
+    logger.debug(f"After start_stream: is_streaming={talos_app.is_streaming()}")
 
 
-@app.get("/app/{hostname}", response_class=HTMLResponse)
-async def read_index_hostname(
-    request: Request, hostname: str, context: Context = Depends(ctx)
-):
-    connections = context.talos_app.get_connections().keys()
-
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
-            "title": "WebRTC Video Stream",
-            "connections": connections,
-            "active_connection": hostname,
-        },
-    )
-
-
-@app.get("/video")
-async def stream_default_video(context: Context = Depends(ctx)):
-    """
-    WebRTC video info endpoint (for default stream).
-    Actual video flows over WebRTC, not HTTP.
-    """
-    return {"type": "default"}
-
-
-@app.get("/video/{hostname}")
-async def stream_video(hostname: str, context: Context = Depends(ctx)):
-    """
-    WebRTC video info endpoint (for specific hostname).
-    Actual video flows over WebRTC, not HTTP.
-    """
-    tApp = context.talos_app
-
-    if hostname not in tApp.get_connections():
-        logger.error(f"Hostname not found for video stream: {hostname}")
-        raise HTTPException(status_code=404, detail="Hostname not found")
-
-    return {"type": "hostname", "hostname": hostname}
-
-
-@app.post("/offer")
-async def handle_offer(data: dict, context: Context = Depends(ctx)):
-    """
-    WebRTC signaling endpoint.
-
-    Accepts SDP offer from client, creates peer connection with video track,
-    and returns SDP answer. Video media flows over WebRTC (RTP), not HTTP.
-
-    Request: { "sdp": string, "type": "offer", "track_type": "default" | "hostname", "hostname": string }
-    Response: { "sdp": string, "type": "answer", "peer_id": string }
-    """
-    offer_sdp: str | None = data.get("sdp")
-    track_type = data.get("track_type", "default")
-
-    if offer_sdp is None:
-        raise HTTPException(status_code=400, detail="Missing SDP offer")
-
-    # Create peer connection for this client
-    pc = RTCPeerConnection()
-    peer_id = str(uuid.uuid4())
-    _peer_connections[peer_id] = pc
-
-    tApp = context.talos_app
-
-    # Create and add video track BEFORE setting remote description
-    if track_type == "default":
-        video_track = TalosVideoTrack(tApp.get_active_frame, peer_id)
-    else:
-        hostname = data.get("hostname")
-        if not hostname or hostname not in tApp.get_connections():
-            logger.error(f"Hostname not found for video track: {hostname}")
-            raise HTTPException(status_code=404, detail="Hostname not found")
-        video_track = TalosVideoTrack(lambda: tApp.get_frame(hostname), peer_id)
-
-    pc.addTransceiver(trackOrKind="video", direction="sendonly").sender.replaceTrack(
-        video_track
-    )
-
-    # Set remote description (client's offer)
-    offer = RTCSessionDescription(sdp=offer_sdp, type="offer")
-    await pc.setRemoteDescription(offer)
-
-    # Create and set local description (server's answer)
-    answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
-
-    return {
-        "sdp": pc.localDescription.sdp,
-        "type": pc.localDescription.type,
-        "peer_id": peer_id,
-    }
-
-
-@app.post("/ice")
-async def handle_ice(data: dict):
-    """
-    Handle ICE candidates from client.
-    Expects: { "peer_id": string, "candidate": string, "sdpMid": string, "sdpMLineIndex": number }
-    """
-    peer_id = data.get("peer_id")
-    candidate_str = data.get("candidate")
-    sdp_mid = data.get("sdpMid")
-    sdp_m_line_index = data.get("sdpMLineIndex")
-
-    if not peer_id or peer_id not in _peer_connections:
-        logger.error(f"Peer connection not found for ICE: {peer_id}")
-        raise HTTPException(status_code=404, detail="Peer connection not found")
-
-    if candidate_str:
-        # Parse the candidate string and create ICE candidate with required fields
-        ice_candidate = candidate_from_sdp(candidate_str)
-        ice_candidate.sdpMid = sdp_mid
-        ice_candidate.sdpMLineIndex = sdp_m_line_index
-
-        await _peer_connections[peer_id].addIceCandidate(ice_candidate)
-
-    return {"status": "ok"}
-
-
-@app.delete("/offer/{peer_id}")
-async def close_peer(peer_id: str):
-    """
-    Close a peer connection.
-    Called when client disconnects or connection is no longer needed.
-    """
-    if peer_id in _peer_connections:
-        pc = _peer_connections.pop(peer_id)
-        await pc.close()
-        return {"status": "closed"}
-
-    logger.error(f"Peer connection not found for close: {peer_id}")
-    raise HTTPException(status_code=404, detail="Peer connection not found")
+@app.get("/")
+async def root(context: Context = Depends(ctx)):
+    active_host = context.talos_app.get_active_hostname()
+    logger.debug(f"Root endpoint called: App active_hostname={active_host}, tracker active={context.talos_app.tracker.active_connection}")
+    
+    # Fallback to tracker's active connection if App's is None
+    if active_host is None and context.talos_app.tracker.active_connection:
+        active_host = context.talos_app.tracker.active_connection
+        logger.info(f"Syncing active connection from tracker: {active_host}")
+        context.talos_app.active_connection = active_host
+        logger.debug(f"After sync: App active_hostname={context.talos_app.get_active_hostname()}")
+    
+    logger.debug(f"Root endpoint: active_hostname={active_host}, connections={list(context.talos_app.connections.keys())}")
+    
+    if active_host is None:
+        logger.warning("No active connection found, returning 503")
+        raise HTTPException(
+            status_code=503,
+            detail="No active camera connection. Please open a connection first through the GUI/TUI.",
+        )
+    
+    logger.debug("Calling _ensure_stream_started")
+    _ensure_stream_started(context.talos_app)
+    
+    logger.debug(f"After _ensure_stream_started: is_streaming={context.talos_app.is_streaming()}")
+    if not context.talos_app.is_streaming():
+        logger.error("Stream failed to start, returning 503")
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to start stream. Check logs for details.",
+        )
+    
+    hls_url = f"{MEDIAMTX_BASE_URL.rstrip('/')}/{MEDIAMTX_STREAM_PATH}/"
+    logger.info(f"Redirecting to HLS viewer: {hls_url}")
+    return RedirectResponse(hls_url)
 
 
 @app.get("/health")
@@ -242,6 +124,54 @@ async def health():
     if _talos_app_instance is None:
         return {"status": "uninitialized"}
     return {"status": "ok"}
+
+
+@app.get("/status")
+async def status(context: Context = Depends(ctx)):
+    """Get detailed status of the application and connections."""
+    return {
+        "active_hostname": context.talos_app.get_active_hostname(),
+        "connections": list(context.talos_app.connections.keys()),
+        "is_streaming": context.talos_app.is_streaming(),
+        "tracker_active_connection": context.talos_app.tracker.active_connection,
+    }
+
+
+@app.post("/stream/start")
+async def start_stream(data: dict, context: Context = Depends(ctx)):
+    """
+    Start an ffmpeg stream from the active (or specified) connection.
+
+    Request: {
+        "output_url": "rtsp://localhost:8554/stream",
+        "hostname": "optional-hostname",
+        "fps": 30,
+        "use_docker": false,
+        "docker_image": "jrottenberg/ffmpeg:6.1-alpine",
+        "docker_network": "mediamtx_net"
+    }
+    """
+    output_url = data.get("output_url")
+    if not output_url:
+        raise HTTPException(status_code=400, detail="Missing output_url")
+
+    context.talos_app.start_stream(
+        output_url=output_url,
+        hostname=data.get("hostname"),
+        fps=data.get("fps"),
+        use_docker=bool(data.get("use_docker", False)),
+        docker_image=data.get("docker_image"),
+        docker_network=data.get("docker_network"),
+    )
+
+    return {"status": "started", "output_url": output_url}
+
+
+@app.post("/stream/stop")
+async def stop_stream(context: Context = Depends(ctx)):
+    """Stop an active ffmpeg stream if one is running."""
+    context.talos_app.stop_stream()
+    return {"status": "stopped"}
 
 
 class TalosEndpoint:
