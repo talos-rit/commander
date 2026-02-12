@@ -117,15 +117,6 @@ class FfmpegStreamController:
         assert self._process is not None
         assert self._process.stdin is not None
 
-        # Calculate frame timing for real-time playback
-        target_fps = self._config.fps or 30  # Default to 30 FPS if not specified
-        frame_interval = 1.0 / target_fps
-        next_frame_time = time.monotonic()
-
-        logger.info(
-            f"Stream loop configured for {target_fps} FPS (frame interval: {frame_interval:.3f}s)"
-        )
-
         while not self._stop_event.is_set():
             frame = self._frame_getter()
             if frame is None:
@@ -133,46 +124,32 @@ class FfmpegStreamController:
                 continue
 
             if frame.shape[0] != height or frame.shape[1] != width:
-                frame = self._resize_to_fit(frame, width, height)
+                frame = cv2.resize(frame, (width, height))
 
             try:
                 self._process.stdin.write(frame.tobytes())
+                self._process.stdin.flush()
             except BrokenPipeError:
                 logger.error("ffmpeg stdin closed; stopping stream")
                 break
 
-            # Enforce real-time frame rate
-            next_frame_time += frame_interval
-            sleep_time = next_frame_time - time.monotonic()
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-            else:
-                # We're behind schedule, reset timing to catch up
-                next_frame_time = time.monotonic()
-
         self._stop_event.set()
-
-    def _resize_to_fit(self, frame: np.ndarray, width: int, height: int) -> np.ndarray:
-
-        return cv2.resize(frame, (width, height))
 
     def _build_command(self, width: int, height: int) -> list[str]:
         cfg = self._config
-        fps = cfg.fps or 30  # Default to 30 FPS
 
         base_cmd = [
             cfg.ffmpeg_bin,
-            "-hide_banner",
-            "-loglevel",
-            cfg.loglevel,
             "-f",
             "rawvideo",
             "-pix_fmt",
             "bgr24",
             "-s",
             f"{width}x{height}",
-            "-r",
-            str(fps),  # Input frame rate
+            "-fflags",
+            "nobuffer",
+            "-flags",
+            "low_delay",
             "-i",
             "pipe:0",
             "-an",  # No audio
@@ -184,18 +161,6 @@ class FfmpegStreamController:
             cfg.preset or "ultrafast",
             "-tune",
             cfg.tune or "zerolatency",
-            "-fflags",
-            "+genpts",
-            # "-g",
-            # str(fps * 2),  # GOP size (2 seconds of keyframes)
-            # "-b:v",
-            # "2M",  # Target bitrate
-            # "-maxrate",
-            # "2M",
-            # "-bufsize",
-            # "4M",
-            "-vsync",
-            "cfr",  # Constant frame rate
         ]
 
         if cfg.output_url.startswith("rtsp://"):
