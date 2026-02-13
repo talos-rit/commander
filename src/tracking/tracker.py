@@ -9,7 +9,8 @@ import cv2
 import numpy as np
 from loguru import logger
 
-from src.config import load_default_config
+# TODO: Stop get rid of this import once AppSettings is implemented for non-connection specific settings/defaults
+from src.config import DEFAULT_ROBOT_CONFIG
 from src.connection.connection import VideoConnection
 from src.scheduler import IterativeTask, Scheduler
 from src.utils import (
@@ -82,7 +83,6 @@ def _detect_person_worker(
 # Class for handling video feed and object detection model usage
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
-    default_config: dict = load_default_config()
     max_fps = POLL_BBOX_CYCLE_INTERVAL_MS  # this will be set dynamically based on configuration see max_fps
     frame_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
     bbox_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
@@ -117,8 +117,8 @@ class Tracker:
         self._scheduler = scheduler
         self.model = model
         self._smm = smm
-        self.max_fps = self.default_config.get("max_fps", POLL_BBOX_CYCLE_INTERVAL_MS)
-        self.frame_delay = 1000 / self.default_config.get("fps", self.max_fps)
+        self.max_fps = DEFAULT_ROBOT_CONFIG.max_fps
+        self.frame_delay = 1000 / DEFAULT_ROBOT_CONFIG.fps
         self.bbox_delay = 1000 / self.max_fps
         self._smm.start()
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")

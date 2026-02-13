@@ -210,7 +210,7 @@ class TextualInterface(App):
         ]
         self.connection_options = connections
         self.query_one("#connection-select", Select).value = (
-            self._talos_app.active_connection or Select.BLANK
+            self._talos_app._active_connection or Select.BLANK
         )
 
     @on(Select.Changed, "#connection-select")

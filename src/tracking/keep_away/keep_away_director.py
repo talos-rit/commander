@@ -2,7 +2,7 @@ import time
 
 from loguru import logger
 
-from src.config import load_config
+from src.config import CONFIG
 from src.connection.publisher import Publisher
 from src.directors.base_director import BaseDirector
 from src.utils import (
@@ -12,7 +12,7 @@ from src.utils import (
 
 
 class KeepAwayDirector(BaseDirector):
-    config = load_config()
+    config = CONFIG
     # Time when the person first moved outside the box
     movement_detection_start_time: float | None = None
     # Track the time of the last command
@@ -30,7 +30,7 @@ class KeepAwayDirector(BaseDirector):
         Then it sends a polar pan stop.
         """
         # Load config values
-        confirmation_delay = self.config[hostname]["confirmation_delay"]
+        confirmation_delay = CONFIG[hostname].confirmation_delay
 
         frame_height = frame_shape[0]
         frame_width = frame_shape[1]

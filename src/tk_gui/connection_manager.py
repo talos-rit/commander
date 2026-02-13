@@ -3,17 +3,19 @@ from tkinter import ttk
 
 from loguru import logger
 
-from src.config import add_config, load_config
+from src.config import CONFIG, ConnectionConfig, editor
+from src.talos_app import App
 
 
 class TKConnectionManager(tkinter.Toplevel):
-    def __init__(self, parent, connections):
+    def __init__(self, parent, app: App, connections, update_gui_callback):
         super().__init__(parent)
         self.title("Connection Manager")
         self.geometry("350x300")
         self.connections = connections
         self.parent = parent
-
+        self.app = app
+        self.update_gui_callback = update_gui_callback
         self.transient(parent)
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -37,25 +39,20 @@ class TKConnectionManager(tkinter.Toplevel):
     def render_list(self):
         for widget in self.list_frame.winfo_children():
             widget.destroy()
-        config = load_config()
-
         ttk.Label(
             self.list_frame, text="Available Configs:", font=("Segoe UI", 10, "bold")
         ).pack(anchor="w", padx=5, pady=(5, 0))
-        for _, cfg in config.items():
-            if "socket_host" not in cfg or "socket_port" not in cfg:
-                logger.warning("config missing socket_host or socket_port, skipping")
-                continue
+        for cfg in CONFIG.values():
             frame = ttk.Frame(self.list_frame)
             frame.pack(fill="x", padx=10, pady=2)
 
-            ttk.Label(frame, text=f"{cfg['socket_host']} : {cfg['socket_port']}").pack(
+            ttk.Label(frame, text=f"{cfg.socket_host} : {cfg.socket_port}").pack(
                 side="left", fill="x", expand=True
             )
             ttk.Button(
                 frame,
                 text="Connect",
-                command=lambda hostname=cfg["socket_host"]: self.add_from_config(
+                command=lambda hostname=cfg.socket_host: self.add_from_config(
                     hostname
                 ),
             ).pack(side="right")
@@ -77,17 +74,18 @@ class TKConnectionManager(tkinter.Toplevel):
 
     def remove_connection(self, hostname):
         if hostname in self.connections:
-            self.parent.close_connection(hostname)
+            self.app.remove_connection(hostname)
+            self.update_gui_callback()
             self.render_list()
 
-    def add_connection(self, host, port, camera, write_config):
-        if write_config:
-            add_config(host, port, camera)
-        self.parent.open_connection(host, port, camera, write_config)
+    def add_connection(self, conn: ConnectionConfig):
+        self.app.open_connection(conn.socket_host)
+        self.update_gui_callback()
         self.render_list()
 
     def add_from_config(self, hostname):
-        self.parent.open_connection(hostname)
+        self.app.open_connection(hostname)
+        self.update_gui_callback()
         self.render_list()
 
     def show_host_port_input(self, parent=None):
@@ -110,36 +108,23 @@ class TKConnectionManager(tkinter.Toplevel):
         camera_var = tkinter.StringVar()
         ttk.Entry(popup, textvariable=camera_var).pack(fill="x", padx=20)
 
-        write_config_var = tkinter.BooleanVar(value=True)
-        ttk.Checkbutton(popup, text="Save to config", variable=write_config_var).pack(
-            anchor="w", padx=20, pady=(10, 5)
-        )
-
-        result = None
-
         def submit():
-            nonlocal result
             host = host_var.get().strip()
             port_str = port_var.get().strip()
             camera_str = camera_var.get().strip()
-            write_config = write_config_var.get()
 
             if not host or not port_str or not camera_str:
                 logger.warning("Host, port, and camera inputs are required.")
                 return
 
-            try:
-                port = int(port_str)
-                if port < 1 or port > 65535:
-                    raise ValueError
-            except ValueError:
-                logger.warning("Port must be an integer between 1 and 65535.")
+            valid, conf, error_msg = editor.validate_connection_config(host, port_str, camera_str)
+            if not valid or conf is None:
+                logger.warning(f"Invalid connection config: {error_msg}")
                 return
-
-            camera = int(camera_str) if camera_str.isdigit() else camera_str
-
+            
+            editor.add_config(conf)
             popup.destroy()
-            self.add_connection(host, port, camera, write_config)
+            self.add_connection(conf)
 
         ttk.Button(popup, text="Submit", command=submit).pack(pady=15)
         popup.bind("<Return>", lambda e: submit())

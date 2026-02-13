@@ -2,7 +2,7 @@ import time
 
 from loguru import logger
 
-from src.config import load_config
+from src.config import CONFIG
 from src.connection.publisher import Publisher
 from src.directors.base_director import BaseDirector
 from src.utils import (
@@ -12,7 +12,7 @@ from src.utils import (
 
 
 class DiscreteDirector(BaseDirector):
-    config = load_config()
+    config = CONFIG
     last_command_time = 0  # Track the time of the last command
 
     # Time when the person first moved outside the box
@@ -23,10 +23,10 @@ class DiscreteDirector(BaseDirector):
         self, hostname: str, bounding_box: list, frame_shape, publisher: Publisher
     ):
         # Load config values
-        horizontal_field_of_view = self.config[hostname]["horizontal_field_of_view"]
-        vertical_field_of_view = self.config[hostname]["vertical_field_of_view"]
-        confirmation_delay = self.config[hostname]["confirmation_delay"]
-        command_delay = self.config[hostname]["command_delay"]
+        horizontal_field_of_view = CONFIG[hostname].horizontal_field_of_view
+        vertical_field_of_view = CONFIG[hostname].vertical_field_of_view
+        confirmation_delay = CONFIG[hostname].confirmation_delay
+        command_delay = CONFIG[hostname].command_delay
         # Do something with the frame
 
         # Getting frame width and frame height
