@@ -116,8 +116,8 @@ class Connection:
     host: str
     port: int
     video_connection: VideoConnection
-    publisher: Publisher = field(init=False)
     is_manual: bool = True
+    publisher: Publisher = field(init=False)
 
     def __post_init__(self):
         self.publisher = Publisher(self.host, self.port)

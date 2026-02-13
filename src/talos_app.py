@@ -6,10 +6,11 @@ from loguru import logger
 from .config import CONFIG, ConnectionConfig
 from .connection.connection import Connection
 from .connection.publisher import Direction
-from .directors.base_director import BaseDirector
+from .directors import BaseDirector
 from .scheduler import IterativeTask, Scheduler
 from .thread_scheduler import ThreadScheduler
-from .tracking import USABLE_MODELS, Tracker
+from .tracking import USABLE_MODELS
+from .tracking.tracker import Tracker
 
 
 class ControlMode(StrEnum):
@@ -57,9 +58,7 @@ class App:
         self.connections[hostname] = conn
         self.set_active_connection(hostname)
         if self.director is not None and vid_conn.shape is not None:
-            self.director.add_control_feed(
-                hostname, conn.is_manual, vid_conn.shape, conn.publisher
-            )
+            self.director.add_connection(conn)
 
     def start_move(self, direction: Direction) -> None:
         """
@@ -232,9 +231,9 @@ class App:
 
     def is_manual_only(self) -> bool | None:
         """Gets the active connection's manual configuration"""
-        if (connection := self.get_active_connection()) is None:
+        if (connection := self.get_active_config()) is None:
             return None
-        return connection.is_manual
+        return connection.manual_only
 
     def toggle_director(self) -> None:
         """Toggles the active connection's manual/automatic control mode"""
@@ -243,8 +242,6 @@ class App:
         if self.is_manual_only():
             return logger.error(f"{connection} is set to manual only")
         connection.toggle_manual()
-        if self.director is not None:
-            self.director.update_control_feed(connection.host, connection.is_manual)
 
     def toggle_control_mode(self) -> ControlMode:
         """

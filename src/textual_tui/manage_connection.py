@@ -45,7 +45,6 @@ class ManageConnectionScreen(Screen):
         host = e.button.name
         if self._app is None or host is None:
             return
-        config = self.config_connections[host]
         self._app.open_connection(hostname=host)
         self.mutate_reactive(ManageConnectionScreen.current_connections)
 
@@ -61,7 +60,7 @@ class ManageConnectionScreen(Screen):
 
         for key, cfg in config_connections.items():
             yield Vertical(
-                Static(f"{cfg['socket_host']}:{cfg['socket_port']}"),
+                Static(f"{cfg.socket_host}:{cfg.socket_port}"),
                 Button(
                     "Open",
                     name=key,
