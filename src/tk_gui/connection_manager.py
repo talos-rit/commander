@@ -1,5 +1,6 @@
 import tkinter
 from tkinter import ttk
+from typing import Callable
 
 from loguru import logger
 
@@ -8,7 +9,7 @@ from src.talos_app import App
 
 
 class TKConnectionManager(tkinter.Toplevel):
-    def __init__(self, parent, app: App, connections, update_gui_callback):
+    def __init__(self, parent, app: App, connections, update_gui_callback: Callable[[], None]):
         super().__init__(parent)
         self.title("Connection Manager")
         self.geometry("350x300")
@@ -46,7 +47,7 @@ class TKConnectionManager(tkinter.Toplevel):
             frame = ttk.Frame(self.list_frame)
             frame.pack(fill="x", padx=10, pady=2)
 
-            ttk.Label(frame, text=f"{cfg.socket_host} : {cfg.socket_port}").pack(
+            ttk.Label(frame, text=f"{cfg.socket_host}:{cfg.socket_port}").pack(
                 side="left", fill="x", expand=True
             )
             ttk.Button(
@@ -65,7 +66,7 @@ class TKConnectionManager(tkinter.Toplevel):
         for _, (hostname, connData) in enumerate(self.connections.items()):
             row = ttk.Frame(self.list_frame)
             row.pack(fill="x", pady=2, padx=5)
-            ttk.Label(row, text=f"{hostname} : {connData.port}").pack(
+            ttk.Label(row, text=f"{hostname}:{connData.port}").pack(
                 side="left", expand=True, fill="x"
             )
             ttk.Button(
