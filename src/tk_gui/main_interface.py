@@ -257,7 +257,7 @@ class TKInterface(tk.Tk):
 
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
-        TKConnectionManager(self, self.app, self.app.get_connections(), self.update_ui)
+        TKConnectionManager(self, self.app, self.update_ui)
 
     def set_active_connection(self, option) -> None:
         self.app.set_active_connection(option if option != "None" else None)

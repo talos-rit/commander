@@ -9,13 +9,13 @@ from src.talos_app import App
 
 
 class TKConnectionManager(tkinter.Toplevel):
-    def __init__(self, parent, app: App, connections, update_gui_callback: Callable[[], None]):
+    def __init__(self, parent, app: App, update_gui_callback: Callable[[], None]):
         super().__init__(parent)
         self.title("Connection Manager")
         self.geometry("350x300")
-        self.connections = connections
         self.parent = parent
         self.app = app
+        self.connections = app.get_connections()
         self.update_gui_callback = update_gui_callback
         self.transient(parent)
         self.grab_set()
