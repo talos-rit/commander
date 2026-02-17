@@ -93,8 +93,7 @@ class TKInterface(tk.Tk):
         if icon_type == "icns":
             set_mac_icon(icon_path)
             icon_path, icon_type = assets.get_icon(override_is_mac=False)
-            logger.debug(f"Setting non-mac icon with path: {icon_path}")
-            self.iconbitmap(icon_path)
+            self.iconphoto(True, tk.PhotoImage(file=assets.get_mac_png_path()))
         else:
             self.iconbitmap(icon_path)
         self.no_signal_display = self.draw_no_signal_display()
