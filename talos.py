@@ -20,7 +20,7 @@ def create_args():
     return parser.parse_args()
 
 
-def terminal_interface(args):
+def terminal_interface(args=None):
     configure_logger(True)
     smm = multiprocessing.managers.SharedMemoryManager()
     interface = TextualInterface()
@@ -28,7 +28,7 @@ def terminal_interface(args):
     interface.run()
 
 
-def tk_interface(args):
+def tk_interface(args=None):
     configure_logger()
     interface = TKInterface()
     interface.mainloop()
