@@ -13,15 +13,6 @@ def join_paths(*paths: str) -> str:
     return get_file_path(path.join(ASSET_DIRPATH, *paths))
 
 
-def get_mac_png_path() -> str:
-    """Returns the file path to the correct mac icon based on dark mode."""
-    is_dark_mode = darkdetect.isDark() if darkdetect.isDark() is not None else False
-    is_light_mode = darkdetect.isLight() if darkdetect.isLight() is not None else False
-    if is_dark_mode and not is_light_mode:
-        return join_paths("images", "mac_dark_icon_512x512.png")
-    return join_paths("images", "mac_default_icon_512x512.png")
-
-
 def get_icon(
     override_is_mac: bool | None = None, override_is_dark_mode: bool | None = None
 ) -> tuple[str, Literal["icns", "ico"]]:
