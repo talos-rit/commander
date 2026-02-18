@@ -92,7 +92,6 @@ class TKInterface(tk.Tk):
         icon_path, icon_type = assets.get_icon()
         if icon_type == "icns":
             set_mac_icon(icon_path)
-            self.iconbitmap(assets.get_mac_title_bar_icon())
         else:
             self.iconbitmap(icon_path)
         self.no_signal_display = self.draw_no_signal_display()
