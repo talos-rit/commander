@@ -37,3 +37,15 @@ def get_icon(
     elif is_dark_mode:
         return join_paths("images", "windows-linux-dark.ico"), "ico"
     return join_paths("images", "windows-linux-light.ico"), "ico"
+
+
+def get_mac_title_bar_icon() -> str:
+    """This is such a horrible workaround but this sets the title bar icon on mac to be the same as the application icon.
+    The two directories contains a meta file that changes the icons of the directories on macs, so when those directories are set on the title bar,
+    the icon of those directories are used."""
+    is_dark_mode = darkdetect.isDark() if darkdetect.isDark() is not None else False
+    is_light_mode = darkdetect.isLight() if darkdetect.isLight() is not None else False
+    if is_dark_mode and not is_light_mode:
+        return join_paths("images", "dark-mac-icon")
+    else:
+        return join_paths("images", "default-mac-icon")
