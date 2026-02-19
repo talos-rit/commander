@@ -82,13 +82,27 @@ Activate your virtual environment (update 2025: no longer needed with uv)
 source venv/py3.12/bin/activate
 ```
 
+## Running
+
+Using uv, run the general app entry point:
+```bash
+uv run commander
+```
+
+Run the TUI interface:
+```bash
+uv run commander-terminal
+```
+
+Run the Tk GUI interface:
+```bash
+uv run commander-tk
+```
+
 ## Running with Operator
 1. Edit `config/network_config.yaml` to set the host and port for the operator to connect to. (The Pi is unctalos.student.rit.edu:61616)
 2. Turn on the robot arm and connect it to the pi via USB.
-3. SSH into the Pi (username: pi, password: raspberry, IP: unctalos.student.rit.edu) and ensure the robot arm is connected by running:
-```bash
-    /home/pi/talos/build/bin/erv
-```
+3. SSH into the Pi and run the operator script
 4. Run the commander and it should connect to the operator. Try a home command to test the connection.
 
 

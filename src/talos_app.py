@@ -183,16 +183,16 @@ class App:
         """
         if hostname not in self.connections:
             return logger.error(f"Connection to {hostname} does not exist")
-        if hostname == self.active_connection:
-            hosts = list(self.connections.keys())
-            if len(hosts) > 1:
-                self.set_active_connection(hosts[0])
-            else:
-                self.set_active_connection(None)
         self.tracker.remove_capture(hostname)
         self.connections.pop(hostname).close()
         if self.director is not None:
             self.director.remove_control_feed(hostname)
+        if hostname == self.active_connection:
+            hosts = list(self.connections.keys())
+            if len(hosts) > 0:
+                self.set_active_connection(hosts[0])
+            else:
+                self.set_active_connection(None)
 
     def get_active_hostname(self) -> str | None:
         """Gets the active connection's hostname"""

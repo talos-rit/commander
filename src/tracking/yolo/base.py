@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from loguru import logger
 from ultralytics import YOLO  # pyright: ignore[reportPrivateImportUsage]
+from ultralytics.engine.model import Model  # pyright: ignore[reportPrivateImportUsage]
 
 from assets import join_paths
 from src.tracking.tracker import ObjectModel
@@ -53,18 +54,18 @@ class YOLOBaseModel(ObjectModel):
         _pt_pose_file: str | None = None,
     ):
         self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         logger.info(f"Using YOLO model size: {self.model_size}, device: {self.device}")
-        self.object_detector = YOLO(
+        self.object_detector: Model = YOLO(
             path.join(_yolo_pt_dir, _pt_file or self.model_size.pt_file)
         )
-        self.pose_detector = YOLO(
+        self.pose_detector: Model = YOLO(
             path.join(_yolo_pt_dir, _pt_pose_file or self.model_size.pose_pt_file)
         )
         self.lost_counter = 0
 
     # Detect people in the frame
-    def detectPerson(self, object_detector, frame, inHeight=500, inWidth=None):
+    def detectPerson(self, frame, inHeight=500, inWidth=None):
         inWidth = inWidth or int((frame.shape[1] / frame.shape[0]) * inHeight)
         frameOpenCV = frame.copy()
         frameHeight = frameOpenCV.shape[0]
@@ -73,7 +74,7 @@ class YOLOBaseModel(ObjectModel):
         frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
         frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
 
-        detection_result = object_detector(
+        detection_result = self.object_detector(
             frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device
         )
         # print(detection_result)
@@ -140,7 +141,7 @@ class YOLOBaseModel(ObjectModel):
 
     # Capture a frame from the source and detect faces in the frame
     def detect_person(self, frame):
-        bboxes = self.detectPerson(self.object_detector, frame)
+        bboxes = self.detectPerson(frame)
 
         if self.speaker_bbox is None:
             # If no speaker is locked in yet, look for the X pose.

@@ -1,3 +1,5 @@
+#!/usr/bin/env -S uv run --script
+
 import argparse
 import multiprocessing
 import multiprocessing.managers
@@ -25,29 +27,40 @@ def run_server(app: App):
     endpoint.run()
 
 
-def main(args) -> None:
+def run_server(app: App):
+    endpoint = TalosEndpoint(app)
+    endpoint.run()
+
+
+def terminal_interface(args=None):
+    configure_logger(True)
+    smm = multiprocessing.managers.SharedMemoryManager()
+    interface = TextualInterface()
+    interface.smm = smm
+    interface.run()
+
+
+def tk_interface(args=None):
+    configure_logger()
+    interface = TKInterface()
+    # TODO: TKinter is incapable of running this much resource intensive tasks
+    # in the same thread as the mainloop, so will be resolved later.
+    # app = interface.get_app()
+    # run_server(app)
+    interface.mainloop()
+
+
+def main() -> None:
+    args = create_args()
     # This is a required call for pyinstaller
     # https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing
     multiprocessing.freeze_support()
 
     if args.terminal:
-        configure_logger(True)
-        smm = multiprocessing.managers.SharedMemoryManager()
-        interface = TextualInterface()
-        interface.smm = smm
-        try:
-            interface.run()
-        finally:
-            terminate(0, 0)
+        terminal_interface(args)
     else:
-        configure_logger()
-        interface = TKInterface()
-        # TODO: TKinter is incapable of running this much resource intensive tasks
-        # in the same thread as the mainloop, so will be resolved later.
-        # app = interface.get_app()
-        # run_server(app)
-        interface.mainloop()
+        tk_interface(args)
 
 
 if __name__ == "__main__":
-    main(create_args())
+    main()
