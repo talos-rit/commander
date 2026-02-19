@@ -5,7 +5,6 @@ from loguru import logger
 from src.directors import BaseDirector, ContinuousDirector
 
 from .haar_cascade.basic_model import BasicModel
-from .keep_away.keep_away_director import KeepAwayDirector
 from .tracker import ObjectModel, Tracker
 
 
@@ -27,10 +26,9 @@ USABLE_MODELS: dict[str, tuple[ObjectModel.__class__, BaseDirector.__class__]] =
 USABLE_MODELS["basic"] = (BasicModel, ContinuousDirector)
 
 try:
-    from .keep_away.keep_away_model import KeepAwayModel
     from .media_pipe import MediaPipeModel, MediaPipePoseModel
 
-    USABLE_MODELS[ModelOption.KEEPAWAY] = (KeepAwayModel, KeepAwayDirector)
+    # USABLE_MODELS[ModelOption.KEEPAWAY] = (KeepAwayModel, KeepAwayDirector)
     USABLE_MODELS[ModelOption.MEDIAPIPEPOSE] = (MediaPipeModel, ContinuousDirector)
     USABLE_MODELS[ModelOption.MEDIAPIPE] = (MediaPipePoseModel, ContinuousDirector)
 except ImportError as e:

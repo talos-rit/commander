@@ -1,6 +1,8 @@
 import threading
 import time
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Callable
 
 import av
 import cv2
@@ -9,7 +11,10 @@ from loguru import logger
 
 from src.config import load_config
 from src.connection.publisher import Publisher
-from src.utils import add_termination_handler, remove_termination_handler
+from src.utils import (
+    add_termination_handler,
+    remove_termination_handler,
+)
 
 
 class PyAVCapture:
@@ -129,8 +134,64 @@ class Connection:
     def set_manual(self, manual: bool) -> None:
         self.is_manual = manual
 
-    def toggle_manual(self) -> None:
+    def toggle_manual(self) -> bool:
         self.is_manual = not self.is_manual
+        return self.is_manual
 
     def close(self) -> None:
         self.publisher.close()
+
+
+class ConnectionCollectionEvent(Enum):
+    ADDED = "added"
+    REMOVED = "removed"
+
+
+class ConnectionCollection(dict[str, Connection]):
+    _active_host: str | None = None
+    _listeners: list[Callable[[ConnectionCollectionEvent, str, Connection], None]] = []
+
+    def set_active(self, hostname: str | None) -> None:
+        if hostname is not None and hostname not in self:
+            return logger.error(f"Connection to {hostname} does not exist")
+        self._active_host = hostname
+
+    def get_active(self) -> Connection | None:
+        if self._active_host is None:
+            return None
+        return self.get(self._active_host, None)
+
+    def add_listener(
+        self, listener: Callable[[ConnectionCollectionEvent, str, Connection], None]
+    ) -> None:
+        self._listeners.append(listener)
+
+    def remove_listener(
+        self, listener: Callable[[ConnectionCollectionEvent, str, Connection], None]
+    ) -> None:
+        self._listeners.remove(listener)
+
+    def _notify_listeners(
+        self, event: ConnectionCollectionEvent, hostname: str, connection: Connection
+    ) -> None:
+        for listener in self._listeners:
+            listener(event, hostname, connection)
+
+    def __setitem__(self, hostname: str, connection: Connection) -> None:
+        super().__setitem__(hostname, connection)
+        if isinstance(connection, Connection):
+            self._notify_listeners(
+                ConnectionCollectionEvent.ADDED, hostname, connection
+            )
+
+    def __delitem__(self, key: str) -> None:
+        if key in self:
+            connection = self[key]
+            self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+        return super().__delitem__(key)
+
+    def pop(self, key: str, default=None) -> Connection | None:
+        if key in self:
+            connection = self[key]
+            self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+        return super().pop(key, default)

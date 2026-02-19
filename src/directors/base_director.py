@@ -1,21 +1,15 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any
+
+from loguru import logger
 
 from src.connection.connection import Connection
 from src.connection.publisher import Publisher
 from src.scheduler import IterativeTask, Scheduler
+from src.talos_app import ConnectionCollection
 from src.utils import add_termination_handler, remove_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
-
-
-@dataclass
-class ControlFeed:
-    host: str
-    manual: bool
-    frame_shape: tuple
-    publisher: Publisher
 
 
 class BaseDirector(ABC):
@@ -26,49 +20,28 @@ class BaseDirector(ABC):
     def __init__(
         self,
         tracker,
-        connections: dict[str, Connection],
+        connections: ConnectionCollection,
         scheduler: Scheduler | None = None,
     ):
         self.tracker = tracker
         self.scheduler = scheduler
-        self.control_feeds: dict[str, ControlFeed] = dict()
-        for conn in connections.values():
-            shape = conn.video_connection.shape
-            if shape is not None:
-                self.control_feeds[conn.host] = ControlFeed(
-                    host=conn.host,
-                    manual=conn.is_manual,
-                    frame_shape=shape,
-                    publisher=conn.publisher,
-                )
-            else:
-                print(
-                    f"Warning: Connection {conn.host} has no frame shape set. "
-                    "Make sure the video capture is properly initialized."
-                )
-        if self.control_feeds:
+        self.connections: dict[str, Connection] = connections
+        if len(self.connections) > 0 and self.scheduler is not None:
             self.start_auto_control()
 
     def add_control_feed(
-        self, host: str, manual: bool, frame_shape: tuple, publisher: Publisher
-    ) -> ControlFeed:
-        cf = ControlFeed(
-            host=host, manual=manual, frame_shape=frame_shape, publisher=publisher
-        )
-        self.control_feeds[host] = cf
-        if self.scheduler is not None and self.control_task is None:
+        self, conn: Connection, start_auto_ctrl: bool = True
+    ) -> Connection:
+        self.connections[conn.host] = conn
+        if self.scheduler is not None and self.control_task is None and start_auto_ctrl:
             self.start_auto_control()
-        return cf
+        return conn
 
     def remove_control_feed(self, host: str) -> None:
-        if host in self.control_feeds:
-            del self.control_feeds[host]
-        if not self.control_feeds:
+        if host in self.connections:
+            del self.connections[host]
+        if not self.connections:
             self.stop_auto_control()
-
-    def update_control_feed(self, host: str, manual: bool) -> None:
-        if host in self.control_feeds:
-            self.control_feeds[host].manual = manual
 
     # Processes the bounding box and sends commands
     @abstractmethod
@@ -84,18 +57,21 @@ class BaseDirector(ABC):
     def track_obj(self) -> Any | None:
         bboxes = self.tracker.get_bboxes()
         for host, bbox in bboxes.items():
-            if host in self.control_feeds and bbox is not None and len(bbox) > 0:
-                if self.control_feeds[host].manual:
+            if host in self.connections and bbox is not None and len(bbox) > 0:
+                if self.connections[host].is_manual:
                     continue  # skip manual feeds
+                assert (
+                    frame_shape := self.connections[host].video_connection.shape
+                ) is not None
                 return self.process_frame(
                     host,
                     bbox,
-                    self.control_feeds[host].frame_shape,
-                    self.control_feeds[host].publisher,
+                    frame_shape,
+                    self.connections[host].publisher,
                 )
             else:
-                print(
-                    "[NOTICE]Boundary box not found. Make sure the object recognition is running."
+                logger.warning(
+                    f"Boundary box not found for host {host}. Make sure the object recognition is running."
                 )
 
     def start_auto_control(self) -> None:

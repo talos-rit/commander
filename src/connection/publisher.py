@@ -66,10 +66,7 @@ class Publisher:
         self.connection.close()
 
     def handshake(self):
-        # Handshake sends an empty payload
-        payload = b""
-
-        self.connection.publish(command=Command.HANDSHAKE, payload=payload)
+        self.connection.publish(command=Command.HANDSHAKE, payload=b"")
 
     def polar_pan_discrete(
         self,

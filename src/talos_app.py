@@ -4,7 +4,7 @@ from multiprocessing.managers import SharedMemoryManager
 from loguru import logger
 
 from .config import load_config
-from .connection.connection import Connection
+from .connection.connection import Connection, ConnectionCollection
 from .connection.publisher import Direction
 from .directors import BaseDirector
 from .scheduler import IterativeTask, Scheduler
@@ -17,10 +17,18 @@ class ControlMode(StrEnum):
     DISCRETE = "discrete"
 
 
+DIRECTION_MAP = {
+    Direction.UP: (0, 10),
+    Direction.DOWN: (0, -10),
+    Direction.LEFT: (-10, 0),
+    Direction.RIGHT: (10, 0),
+}
+
+
 class App:
     scheduler: Scheduler
     config: dict
-    connections: dict[str, Connection]
+    connections: ConnectionCollection
     active_connection: str | None
     tracker: Tracker
     director: BaseDirector | None = None
@@ -38,7 +46,7 @@ class App:
     ) -> None:
         self.scheduler = scheduler
         self.config = load_config()
-        self.connections = dict()
+        self.connections = ConnectionCollection()
         self.active_connection: None | str = None
         self.tracker = Tracker(scheduler=scheduler, smm=smm)
 
@@ -65,9 +73,7 @@ class App:
         if write_config:
             self.config = load_config()
         if self.director is not None and vid_conn.shape is not None:
-            self.director.add_control_feed(
-                hostname, conn.is_manual, vid_conn.shape, conn.publisher
-            )
+            self.director.add_control_feed(conn)
 
     def start_move(self, direction: Direction) -> None:
         """
@@ -78,7 +84,9 @@ class App:
         if (connection := self.get_active_connection()) is None:
             return logger.error(f"No connection found for {self.active_connection}")
         if not connection.is_manual:
-            return
+            return logger.error(
+                f"Active connection {self.active_connection} is not in manual mode"
+            )
         if self.control_mode == ControlMode.CONTINUOUS:
             return self.continuous_move(direction)
         if self.discrete_move_task.get(direction) is not None:
@@ -91,20 +99,8 @@ class App:
         """Sends a single discrete movement command in the given direction."""
         if (connection := self.get_active_connection()) is None:
             return logger.error(f"No connection found for {self.active_connection}")
-        publisher = connection.publisher
-        match direction:
-            case Direction.UP:
-                publisher.polar_pan_discrete(0, 10, 1000, 3000)
-                logger.info("Polar pan discrete up")
-            case Direction.DOWN:
-                publisher.polar_pan_discrete(0, -10, 1000, 3000)
-                logger.info("Polar pan discrete down")
-            case Direction.LEFT:
-                publisher.polar_pan_discrete(10, 0, 1000, 3000)
-                logger.info("Polar pan discrete left")
-            case Direction.RIGHT:
-                publisher.polar_pan_discrete(-10, 0, 1000, 3000)
-                logger.info("Polar pan discrete right")
+        logger.info(f"Polar pan discrete {direction.name.lower()}")
+        connection.publisher.polar_pan_discrete(*DIRECTION_MAP[direction], 1000, 3000)
 
     def continuous_move(self, direction: Direction) -> None:
         """
@@ -185,10 +181,7 @@ class App:
             self.director.remove_control_feed(hostname)
         if hostname == self.active_connection:
             hosts = list(self.connections.keys())
-            if len(hosts) > 0:
-                self.set_active_connection(hosts[0])
-            else:
-                self.set_active_connection(None)
+            self.set_active_connection(hosts[0] if len(hosts) > 0 else None)
 
     def get_active_connection(self) -> Connection | None:
         """Gets the active connection"""
@@ -249,10 +242,11 @@ class App:
         if (connection := self.get_active_connection()) is None:
             return logger.error(f"No connection found for {self.active_connection}")
         if self.is_manual_only():
+            assert connection.is_manual, (
+                "Manual only connections should always be in manual mode"
+            )
             return logger.error(f"{connection} is set to manual only")
         connection.toggle_manual()
-        if self.director is not None:
-            self.director.update_control_feed(connection.host, connection.is_manual)
 
     def toggle_control_mode(self) -> ControlMode:
         """
