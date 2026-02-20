@@ -161,19 +161,21 @@ class ConnectionCollection(dict[str, Connection]):
     ] = []
     _term: int | None = None
 
-    def set_active(self, hostname: str | None) -> None:
+    def set_active(self, hostname: str | None) -> Connection | None:
         if hostname is None:
             self._active_host = None
             self._notify_listeners(
                 ConnectionCollectionEvent.ACTIVE_CHANGED, "None", None
             )
-            return
+            return None
         if hostname not in self or (conn := self.get(hostname)) is None:
-            return logger.error(f"Connection to {hostname} does not exist")
+            logger.error(f"Connection to {hostname} does not exist")
+            return None
         self._active_host = hostname
         self._notify_listeners(ConnectionCollectionEvent.ACTIVE_CHANGED, hostname, conn)
         if hostname is not None and self._term is None:
             self._term = add_termination_handler(self.clear)
+        return self.get_active()
 
     def get_active(self) -> Connection | None:
         if self._active_host is None:

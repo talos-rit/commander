@@ -110,19 +110,16 @@ class App:
     def stop_move(self, direction: Direction) -> None:
         """Stops continuous movement if in continuous mode and no keys are pressed."""
         if self.control_mode == ControlMode.CONTINUOUS:
-            logger.info(f"{self.control_mode} {self.current_continuous_directions}")
+            logger.debug(f"{self.control_mode} {self.current_continuous_directions}")
             if direction in self.current_continuous_directions:
                 self.current_continuous_directions.remove(direction)
             if len(self.current_continuous_directions) != 0:
                 return
             if (connection := self.get_active_connection()) is None:
                 return logger.error("No connection found")
-            publisher = connection.publisher
-            publisher.polar_pan_continuous_stop()
-            return
+            return connection.publisher.polar_pan_continuous_stop()
         if self.discrete_move_task.get(direction) is not None:
-            task = self.discrete_move_task.pop(direction)
-            task.cancel()
+            return self.discrete_move_task.pop(direction).cancel()
 
     def stop_all_movement(self) -> None:
         """Stops all continuous and discrete movements."""
@@ -140,29 +137,28 @@ class App:
         """Moves the robotic arm from its current location to its home position"""
         if (connection := self.get_active_connection()) is None:
             return logger.error("No connection found")
-        publisher = connection.publisher
-        publisher.home(1000)
+        return connection.publisher.home(1000)
 
     def get_connection_hosts(self) -> list[str]:
         """Gets a list of all connection hostnames"""
         return list(self.connections.keys())
 
-    def set_active_connection(self, hostname: str | None) -> None:
+    def set_active_connection(self, hostname: str | None) -> Connection | None:
         """Sets the active connection by hostname"""
         logger.debug(f"Setting active connection to {hostname}")
         conn = self.connections.get_active()
         if conn is not None and hostname == conn.host:
             logger.debug(f"{hostname} is already the active connection")
-            return
-        self.connections.set_active(hostname)
+            return conn
+        return self.connections.set_active(hostname)
 
-    def remove_connection(self, hostname: str) -> None:
+    def remove_connection(self, hostname: str) -> Connection | None:
         """
         Removes a connection by hostname.
         If the connection is active, sets the active connection to another available connection or None.
         """
-        if self.connections.pop(hostname) is not None:
-            return
+        if (conn := self.connections.pop(hostname)) is not None:
+            return conn
         logger.warning(f"Connection for hostname {hostname} not found.")
 
     def get_active_connection(self) -> Connection | None:
