@@ -21,7 +21,7 @@ def load_default_robot_config() -> ConnectionConfig:
     except ValidationError as e:
         logger.error(
             "Invalid default configuration in default_config.yaml, using hardcoded defaults"
-            + str(e),
+            + str(e)
         )
         raise e
 
