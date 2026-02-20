@@ -207,7 +207,7 @@ class App:
             return None
         return self.tracker.get_frame(hostname)
 
-    def get_active_config(self) -> dict | None:
+    def get_active_config(self) -> ConnectionConfig | None:
         """Gets the active connection's configuration"""
         if self._active_connection is None:
             return None
@@ -284,7 +284,7 @@ class App:
         logger.info("Starting stream to {}", output_url)
         if hostname is None:
             frame_getter = self.get_active_frame
-            cfg = self.get_active_config() or {}
+            cfg = self.get_active_config()
         else:
             if hostname not in self.connections:
                 raise ValueError(f"Connection to {hostname} does not exist")
@@ -293,10 +293,14 @@ class App:
                 logger.debug(f"Getting frame for {hostname}")
                 return self.get_frame(hostname)
 
-            cfg = self.config.get(hostname, {})
+            cfg = CONFIG.get(hostname)
+
+        if cfg is None:
+            logger.error("No active connection found for streaming")
+            return
 
         if fps is None:
-            fps = cfg.get("fps")
+            fps = cfg.fps
 
         if self._streamer is not None:
             self._streamer.stop()

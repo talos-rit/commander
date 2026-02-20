@@ -9,7 +9,6 @@ from loguru import logger
 from PIL import Image, ImageDraw, ImageTk
 
 import assets
-from src.config import load_default_config
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
 from src.tk_gui.connection_manager import TKConnectionManager
