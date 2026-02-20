@@ -1,6 +1,6 @@
+import select
 import socket
 import threading
-import time
 
 from loguru import logger
 
@@ -21,6 +21,7 @@ class OperatorConnection:
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.setblocking(False)  # Set socket to non-blocking mode
         if connect_on_init:
             # Start connection on a separate thread so it doesn't block
             self.connect_on_thread()
@@ -39,11 +40,33 @@ class OperatorConnection:
                 self.socket.connect((self.host, self.port))
                 logger.info(f"Connected to socket: {self.host}:{self.port}")
                 break
+            except BlockingIOError:
+                # Wait for 5 seconds to see if socket connected or has an error
+                _, writeable, exceptional = select.select(
+                    [], [self.socket], [self.socket], 5.0
+                )
+                if exceptional:
+                    logger.error(
+                        f"[Connection]: Connection failed, retrying in 5s({attempt + 1}/5)"
+                    )
+                elif writeable:
+                    # Check if the socket actually connected
+                    err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                    if err == 0:
+                        logger.info(f"Connected to socket: {self.host}:{self.port}")
+                        break
+                    else:
+                        logger.error(
+                            f"[Connection]: Connection failed with error {err}, retrying in 5s({attempt + 1}/5)"
+                        )
+                else:
+                    logger.error(
+                        f"[Connection]: Connection timeout, retrying in 5s({attempt + 1}/5)"
+                    )
             except OSError as e:
                 logger.error(
                     f"[Connection]: Connection failed, retrying in 5s({attempt + 1}/5) {e}"
                 )
-                time.sleep(5)
         else:
             return  # Failed to connect after retries
 
@@ -123,15 +146,18 @@ class OperatorConnection:
         while self.is_running:
             try:
                 message = connection.recv(2048)
+
+                if not message:
+                    logger.info(f"Connection closed by {self.host}")
+                    break  # Connection closed by the other side
+
+                self._on_message(connection, message)
+            except BlockingIOError:
+                continue
             except OSError as e:
                 if self.is_running:
                     logger.error(f"Socket receive from {self.host} failed: {e}")
                 break
-
-            if not message:
-                break  # Connection closed by the other side
-
-            self._on_message(connection, message)
 
         if connection is not self.socket:
             connection.close()  # Closes accepted client sockets only
