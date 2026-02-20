@@ -408,3 +408,6 @@ class TKInterface(tk.Tk):
             self._term = None
         terminate(0, 0)
         super().destroy()
+
+    def get_app(self) -> App:
+        return self.app

@@ -63,11 +63,15 @@ def _detect_person_worker(
     model: ObjectModel = model_class()
     try:
         while not stopper.is_set():
-            logger.debug("Waiting for new frame...")
             frame_ready_event.wait()
-            # Not clear immediately to make a copy here safely
-            bboxes = model.detect_person(frame=np.copy(frame))
+            # Not clear immediately to make a copy here safely\
+            raw_frame = np.copy(frame)
             frame_ready_event.clear()
+            bboxes = model.detect_person(frame=raw_frame)
+            if bbox_queue.full():
+                _ = (
+                    bbox_queue.get_nowait()
+                )  # Discard the oldest bbox if the queue is full
             try:
                 bbox_queue.put_nowait(bboxes)
             except Full:
@@ -202,7 +206,6 @@ class Tracker:
         )
 
     def poll_bboxes(self) -> None:
-        logger.debug("Polling bounding boxes from detection process")
         raw_bboxes: None | list[tuple[int, int, int, int]] = None
 
         try:
@@ -216,7 +219,7 @@ class Tracker:
             self._bbox_success_count -= 1
             return
         if raw_bboxes is None:
-            logger.info("No bounding boxes detected.")
+            logger.warning("No bounding boxes detected.")
             return
         self._bbox_success_count += 1
         if self._bbox_success_count > 10:
@@ -248,7 +251,6 @@ class Tracker:
 
         with self._bbox_lock:
             self._bboxes = bboxes_by_host
-            logger.info(f"Updated bounding boxes: {self._bboxes}")
 
     def get_total_frame_shape(self):
         """
@@ -290,9 +292,8 @@ class Tracker:
 
     def send_latest_frame(self) -> None:
         if self.frame_ready_event.is_set():
-            logger.debug("Frame ready event already set, skipping frame update")
+            logger.warning("Frame ready event already set, skipping frame update")
             return
-        logger.debug("Sending latest frame to detection process")
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
             self.new_frame = self.captures[host].get_frame()

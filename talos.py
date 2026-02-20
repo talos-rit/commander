@@ -5,8 +5,10 @@ import multiprocessing
 import multiprocessing.managers
 
 from src.logger import configure_logger
+from src.talos_app import App
+from src.talos_endpoint import TalosEndpoint
 from src.textual_tui.main_interface import TextualInterface
-from src.tk_gui.main_interface import TKInterface
+from src.tk_gui.main_interface import TKInterface, terminate
 
 
 def create_args():
@@ -20,6 +22,16 @@ def create_args():
     return parser.parse_args()
 
 
+def run_server(app: App):
+    endpoint = TalosEndpoint(app)
+    endpoint.run()
+
+
+def run_server(app: App):
+    endpoint = TalosEndpoint(app)
+    endpoint.run()
+
+
 def terminal_interface(args=None):
     configure_logger(True)
     smm = multiprocessing.managers.SharedMemoryManager()
@@ -31,6 +43,10 @@ def terminal_interface(args=None):
 def tk_interface(args=None):
     configure_logger()
     interface = TKInterface()
+    # TODO: TKinter is incapable of running this much resource intensive tasks
+    # in the same thread as the mainloop, so will be resolved later.
+    # app = interface.get_app()
+    # run_server(app)
     interface.mainloop()
 
 
