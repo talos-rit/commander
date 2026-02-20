@@ -31,12 +31,21 @@ class TKConnectionManager(tkinter.Toplevel):
             side="left", padx=5
         )
         self.render_list()
+        self.after_idle(self._set_modal_grab)
 
-        self.wait_visibility()
-        self.grab_set()
+    def _set_modal_grab(self):
+        if not self.winfo_exists():
+            return
+        try:
+            self.grab_set()
+        except tkinter.TclError:
+            logger.debug("Connection manager closed before modal grab could be set.")
 
     def on_close(self):
-        self.grab_release()
+        try:
+            self.grab_release()
+        except tkinter.TclError:
+            logger.debug("Connection manager (maybe????) already released grab on close.")
         self.destroy()
 
     def render_list(self):
