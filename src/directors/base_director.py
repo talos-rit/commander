@@ -6,7 +6,7 @@ from loguru import logger
 from src.connection.connection import ConnectionCollectionEvent
 from src.connection.publisher import Publisher
 from src.scheduler import IterativeTask, Scheduler
-from src.talos_app import ConnectionCollection
+from src.talos_app import Connection, ConnectionCollection
 from src.utils import add_termination_handler, remove_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
@@ -16,6 +16,7 @@ class BaseDirector(ABC):
     scheduler: Scheduler | None
     control_task: IterativeTask | None = None
     _term: int | None = None
+    connections: dict[str, Connection]
 
     def __init__(
         self,
@@ -55,15 +56,15 @@ class BaseDirector(ABC):
         bboxes = self.tracker.get_bboxes()
         for host, bbox in bboxes.items():
             if host in self.connections and bbox is not None and len(bbox) > 0:
-                if self.connections[host].is_manual:
+                if (
+                    self.connections[host].is_manual
+                    or (shape := self.connections[host].video_connection.shape) is None
+                ):
                     continue  # skip manual feeds
-                assert (
-                    frame_shape := self.connections[host].video_connection.shape
-                ) is not None
                 return self.process_frame(
                     host,
                     bbox,
-                    frame_shape,
+                    shape,
                     self.connections[host].publisher,
                 )
             else:

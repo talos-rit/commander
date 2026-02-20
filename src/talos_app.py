@@ -3,13 +3,15 @@ from multiprocessing.managers import SharedMemoryManager
 
 from loguru import logger
 
-from .config import load_config
+from .config import ROBOT_CONFIGS, ConnectionConfig
 from .connection.connection import Connection, ConnectionCollection, VideoConnection
 from .connection.publisher import Direction
 from .directors import BaseDirector
 from .scheduler import IterativeTask, Scheduler
+from .streaming import FfmpegStreamController, StreamConfig
 from .thread_scheduler import ThreadScheduler
-from .tracking import USABLE_MODELS, Tracker
+from .tracking import USABLE_MODELS
+from .tracking.tracker import Tracker
 
 
 class ControlMode(StrEnum):
@@ -27,9 +29,7 @@ DIRECTION_MAP = {
 
 class App:
     scheduler: Scheduler
-    config: dict
     connections: ConnectionCollection
-    active_connection: str | None
     tracker: Tracker
     director: BaseDirector | None = None
     control_mode: ControlMode = ControlMode.CONTINUOUS
@@ -38,6 +38,7 @@ class App:
     # State for continuous and discrete movements
     current_continuous_directions: set[Direction] = set()
     discrete_move_task: dict[Direction, IterativeTask] = dict()
+    _streamer: FfmpegStreamController | None = None
 
     def __init__(
         self,
@@ -45,16 +46,12 @@ class App:
         smm: SharedMemoryManager = SharedMemoryManager(),
     ) -> None:
         self.scheduler = scheduler
-        self.config = load_config()
         self.connections = ConnectionCollection()
         self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
 
     def open_connection(
         self,
         hostname: str,
-        port: int | None = None,
-        camera: int | None = None,
-        write_config=False,
     ) -> None:
         """
         Opens a connection to the given hostname.
@@ -63,13 +60,10 @@ class App:
         logger.info(f"Opening connection to {hostname}")
         if hostname in self.connections:
             return logger.warning(f"Connection to {hostname} already exists")
-        conf = self.config.get(hostname, {})
-        camera = conf["camera_index"] if camera is None else camera
-        video_connection = VideoConnection(src=camera)
-        conn = Connection(hostname, port or conf["socket_port"], video_connection)
+        conf = ROBOT_CONFIGS[hostname]
+        video_connection = VideoConnection(src=conf.camera_index)
+        conn = Connection(hostname, conf.socket_port, video_connection)
         self.connections[hostname] = conn
-        if write_config:
-            self.config = load_config()
 
     def start_move(self, direction: Direction) -> None:
         """
@@ -78,9 +72,7 @@ class App:
         In discrete mode, starts sending discrete movement commands at intervals.
         """
         if (connection := self.get_active_connection()) is None:
-            return logger.error(
-                f"No connection found for active hostname {connection=}"
-            )
+            return logger.error("No connection found")
         if not connection.is_manual:
             return logger.error(
                 f"Active connection {connection.host} is not in manual mode"
@@ -108,7 +100,7 @@ class App:
         if direction in self.current_continuous_directions:
             return
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {connection=}")
+            return logger.error("No connection found")
         self.current_continuous_directions.add(direction)
         publisher = connection.publisher
         publisher.polar_pan_continuous_direction_start(
@@ -124,7 +116,7 @@ class App:
             if len(self.current_continuous_directions) != 0:
                 return
             if (connection := self.get_active_connection()) is None:
-                return logger.error(f"No connection found for {connection=}")
+                return logger.error("No connection found")
             publisher = connection.publisher
             publisher.polar_pan_continuous_stop()
             return
@@ -135,7 +127,7 @@ class App:
     def stop_all_movement(self) -> None:
         """Stops all continuous and discrete movements."""
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {connection=}")
+            return logger.error("No connection found")
         if self.control_mode == ControlMode.CONTINUOUS:
             publisher = connection.publisher
             self.current_continuous_directions.clear()
@@ -147,7 +139,7 @@ class App:
     def move_home(self) -> None:
         """Moves the robotic arm from its current location to its home position"""
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {connection=}")
+            return logger.error("No connection found")
         publisher = connection.publisher
         publisher.home(1000)
 
@@ -174,6 +166,12 @@ class App:
         if (connection := self.connections.pop(hostname)) is not None:
             connection.close()
 
+    def get_active_hostname(self) -> str | None:
+        """Gets the active connection's hostname"""
+        if (connection := self.get_active_connection()) is None:
+            return None
+        return connection.host
+
     def get_active_connection(self) -> Connection | None:
         """Gets the active connection"""
         return self.connections.get_active()
@@ -184,11 +182,17 @@ class App:
             return None
         return self.tracker.get_frame(connection.host)
 
-    def get_active_config(self) -> dict | None:
+    def get_frame(self, hostname: str):
+        """Gets the specified connection's current video frame"""
+        if hostname not in self.connections:
+            return logger.error(f"Connection to {hostname} does not exist")
+        return self.tracker.get_frame(hostname)
+
+    def get_active_config(self) -> ConnectionConfig | None:
         """Gets the active connection's configuration"""
         if (connection := self.get_active_connection()) is None:
             return None
-        return self.config.get(connection.host, None)
+        return ROBOT_CONFIGS.get(connection.host, None)
 
     def get_control_mode(self) -> ControlMode:
         """Gets the active connection's control mode"""
@@ -221,16 +225,16 @@ class App:
         self.tracker.swap_model(model_class)
         logger.info(f"Initialized {option} director")
 
-    def is_manual_only(self) -> bool:
+    def is_manual_only(self) -> bool | None:
         """Gets the active connection's manual configuration"""
-        if (connection := self.get_active_connection()) is None:
-            return False
-        return connection.is_manual_only
+        if (connection := self.get_active_config()) is None:
+            return None
+        return connection.manual_only
 
     def toggle_director(self) -> None:
         """Toggles the active connection's manual/automatic control mode"""
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {connection=}")
+            return logger.error("No connection found")
         if self.is_manual_only():
             assert connection.is_manual, (
                 "Manual only connections should always be in manual mode"
@@ -245,8 +249,68 @@ class App:
         returns the new control mode
         """
         self.stop_all_movement()
-        if self.control_mode == ControlMode.CONTINUOUS:
-            self.control_mode = ControlMode.DISCRETE
-        else:
-            self.control_mode = ControlMode.CONTINUOUS
+        self.control_mode = (
+            ControlMode.DISCRETE
+            if self.control_mode == ControlMode.CONTINUOUS
+            else ControlMode.CONTINUOUS
+        )
         return self.control_mode
+
+    def start_stream(
+        self,
+        output_url: str,
+        hostname: str | None = None,
+        fps: int | None = None,
+        use_docker: bool = False,
+        docker_image: str | None = None,
+        docker_network: str | None = None,
+    ) -> None:
+        """Start streaming the active (or specified) connection via ffmpeg."""
+        logger.info("Starting stream to {}", output_url)
+        if hostname is None:
+            frame_getter = self.get_active_frame
+            cfg = self.get_active_config()
+        else:
+            if hostname not in self.connections:
+                raise ValueError(f"Connection to {hostname} does not exist")
+
+            def frame_getter():
+                logger.debug(f"Getting frame for {hostname}")
+                return self.get_frame(hostname)
+
+            cfg = ROBOT_CONFIGS.get(hostname)
+
+        if cfg is None:
+            logger.error("No active connection found for streaming")
+            return
+
+        if fps is None:
+            fps = cfg.fps
+
+        if self._streamer is not None:
+            self._streamer.stop()
+            self._streamer = None
+
+        stream_config = StreamConfig(
+            output_url=output_url,
+            fps=fps,
+            use_docker=use_docker,
+            docker_image=docker_image or StreamConfig.docker_image,
+            docker_network=docker_network,
+        )
+        self._streamer = FfmpegStreamController(frame_getter, stream_config)
+        try:
+            self._streamer.start()
+        except RuntimeError as exc:
+            logger.error("Failed to start stream: {}", exc)
+            self._streamer = None
+
+    def stop_stream(self) -> None:
+        """Stop an active ffmpeg stream if running."""
+        if self._streamer is None:
+            return
+        self._streamer.stop()
+        self._streamer = None
+
+    def is_streaming(self) -> bool:
+        return self._streamer is not None and self._streamer.is_running()

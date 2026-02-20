@@ -5,11 +5,12 @@ from enum import Enum
 from typing import Callable
 
 import av
+import av.video
 import cv2
 import numpy as np
 from loguru import logger
 
-from src.config import load_config
+from src.config import ROBOT_CONFIGS
 from src.connection.publisher import Publisher
 from src.utils import (
     add_termination_handler,
@@ -30,9 +31,19 @@ class PyAVCapture:
         self._term = add_termination_handler(self.release)
 
     def _get_frame_iter(self):
+        """
+        Generator that yields decoded video frames from the container.
+
+        Iterates through packets from the demultiplexed video stream and decodes
+        each packet into individual frames, yielding them one at a time.
+
+        Yields:
+            frame: A decoded video frame from the packet.
+        """
         for packet in self.container.demux(self.video_stream):
             for frame in packet.decode():
-                yield frame
+                if isinstance(frame, av.video.frame.VideoFrame):
+                    yield frame
 
     def read(self):
         try:
@@ -118,15 +129,12 @@ class Connection:
     host: str
     port: int
     video_connection: VideoConnection
-    publisher: Publisher = field(init=False)
     is_manual: bool = True
-    is_manual_only: bool = field(
-        default_factory=lambda: load_config().get("default_manual_only", False)
-    )
-    fps: int = field(default_factory=lambda: load_config().get("default_fps", 60))
+    publisher: Publisher = field(init=False)
 
     def __post_init__(self):
         self.publisher = Publisher(self.host, self.port)
+        self.is_manual_only = ROBOT_CONFIGS[self.host].manual_only
 
     def set_manual(self, manual: bool) -> None:
         self.is_manual = manual

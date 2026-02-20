@@ -4,7 +4,7 @@ from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import Button, Static
 
-from src.config import load_config
+from src.config import ROBOT_CONFIGS
 from src.talos_app import App
 
 
@@ -22,7 +22,7 @@ class ManageConnectionScreen(Screen):
     def __init__(self, app: App):
         super().__init__()
         self._app = app
-        self.set_reactive(ManageConnectionScreen.config_connections, load_config())
+        self.set_reactive(ManageConnectionScreen.config_connections, ROBOT_CONFIGS)
         self.set_reactive(
             ManageConnectionScreen.current_connections, self._app.get_connection_hosts()
         )
@@ -46,13 +46,7 @@ class ManageConnectionScreen(Screen):
         host = e.button.name
         if self._app is None or host is None:
             return
-        config = self.config_connections[host]
-        self._app.open_connection(
-            hostname=host,
-            port=config["socket_port"],
-            camera=config["camera_index"],
-            write_config=False,
-        )
+        self._app.open_connection(hostname=host)
         self.mutate_reactive(ManageConnectionScreen.current_connections)
 
     @on(Button.Pressed, "#current-connections-list Button")
@@ -67,7 +61,7 @@ class ManageConnectionScreen(Screen):
 
         for key, cfg in config_connections.items():
             yield Vertical(
-                Static(f"{cfg['socket_host']}:{cfg['socket_port']}"),
+                Static(f"{cfg.socket_host}:{cfg.socket_port}"),
                 Button(
                     "Open",
                     name=key,
