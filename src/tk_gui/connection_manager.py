@@ -33,8 +33,26 @@ class TKConnectionManager(tkinter.Toplevel):
         )
         self.render_list()
 
-        self.wait_visibility()
-        self.grab_set()
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        self.after(0, self._try_grab_modal, 0)
+
+    def _try_grab_modal(self, attempt: int):
+        try:
+            if not self.winfo_exists():
+                return
+            if self.winfo_viewable():
+                self.grab_set()
+                return
+        except tkinter.TclError:
+            pass
+
+        # Retry for ~1 second total
+        if attempt < 20:
+            self.after(50, self._try_grab_modal, attempt + 1)
+        else:
+            logger.warning("Could not set modal grab; continuing without grab.")
 
     def on_close(self):
         self.grab_release()
