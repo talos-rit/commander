@@ -37,31 +37,26 @@ class OperatorConnection:
                 return  # Exit since this connection is not needed anymore
             try:
                 self.socket.connect((self.host, self.port))
-                logger.info(f"Bound to socket: {self.host}:{self.port}")
+                logger.info(f"Connected to socket: {self.host}:{self.port}")
                 break
             except OSError as e:
                 logger.error(
-                    f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}"
+                    f"[Connection]: Connection failed, retrying in 5s({attempt + 1}/5) {e}"
                 )
                 time.sleep(5)
         else:
             return  # Failed to connect after retries
 
-        logger.info("Starting to listen!")
-        self.socket.listen()
-        while self.is_running:
-            try:
-                connection, address = self.socket.accept()
-                logger.info(f"Got connection from {address}")
-                self.listen(connection)
-            except OSError as e:
-                logger.error(f"OS Error: {e}")
-                break
+        self.listen()
 
     def close(self):
         """Cleanly close the socket port and stop listening to new connections."""
         logger.info("Closing socket")
         self.is_running = False
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         if self.thread is not None:
             self.thread.join()
         if self._term is not None:
@@ -123,18 +118,26 @@ class OperatorConnection:
         # response = self.socket.recv(2048)
         return 0
 
-    def listen(self, connection: socket.socket):
+    def listen(self, connection: socket.socket | None = None):
+        connection = connection if connection is not None else self.socket
         while self.is_running:
-            message = connection.recv(2048)
+            try:
+                message = connection.recv(2048)
+            except OSError as e:
+                if self.is_running:
+                    logger.error(f"Socket receive from {self.host} failed: {e}")
+                break
+
             if not message:
                 break  # Connection closed by the other side
 
-            self.on_message(connection, message)
+            self._on_message(connection, message)
 
-        connection.close()  # Closes this client's connection socket only
+        if connection is not self.socket:
+            connection.close()  # Closes accepted client sockets only
 
-    def on_message(self, connection: socket.socket, message: bytes):
-        logger.info(f"RECEIVED MESSAGE: {message.decode()}")
+    def _on_message(self, connection: socket.socket, message: bytes):
+        logger.info(f"RECEIVED MESSAGE: {message.decode(errors='replace')}")
         logger.info("subclass must implement on_message method")
 
 
