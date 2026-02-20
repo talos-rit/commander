@@ -78,10 +78,11 @@ class TKInterface(tk.Tk):
         self.app = App()
         self.title("Talos Manual Interface")
         icon_path, icon_type = assets.get_icon()
-        if icon_type == "icns":
-            set_mac_icon(icon_path)
-        else:
-            self.iconbitmap(icon_path)
+        if icon_path is not None:
+            if icon_type == "icns":
+                set_mac_icon(icon_path)
+            else:
+                self.iconbitmap(icon_path)
         self.no_signal_display = self.draw_no_signal_display()
 
         container = tk.Frame(self)
