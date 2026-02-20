@@ -33,6 +33,9 @@ class TKConnectionManager(tkinter.Toplevel):
         )
         self.render_list()
 
+        self.wait_visibility()
+        self.grab_set()
+
     def on_close(self):
         self.grab_release()
         self.destroy()
