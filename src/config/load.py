@@ -15,17 +15,19 @@ def load_default_robot_config() -> ConnectionConfig:
     config/default_config.local.yaml if it exists. Returns a validated
     ConnectionConfig object with default values.
     """
-    
+
     try:
         return ConnectionConfig(**read_default_robot_config())
     except ValidationError as e:
         logger.error(
             str(e),
-            "[ERROR] Invalid default configuration in default_config.yaml, using hardcoded defaults"
+            "[ERROR] Invalid default configuration in default_config.yaml, using hardcoded defaults",
         )
         raise e
 
+
 DEFAULT_ROBOT_CONFIG = load_default_robot_config()
+
 
 def load_robot_config() -> dict[str, ConnectionConfig]:
     """
@@ -44,14 +46,15 @@ def load_robot_config() -> dict[str, ConnectionConfig]:
         try:
             # Create validated config, using defaults for optional fields
             validated_config[hostname] = ConnectionConfig(
-                **{**DEFAULT_ROBOT_CONFIG.model_dump(),
-                **config_data,}
+                **{
+                    **DEFAULT_ROBOT_CONFIG.model_dump(),
+                    **config_data,
+                }
             )
         except ValidationError as e:
             logger.warning(
-                str(e),
-                f"[WARNING] Invalid configuration for '{hostname}' in config.local.yaml, skipping"
+                f"[WARNING] Invalid configuration for '{hostname}' in config.local.yaml, skipping\n"
+                + str(e)
             )
             continue
     return validated_config
-
