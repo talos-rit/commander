@@ -52,21 +52,16 @@ class Publisher:
     def __init__(
         self, socket_host: str, socket_port: int, start_connection: bool = True
     ):
-        self.connection = OperatorConnection(
+        self.operator_connection = OperatorConnection(
             host=socket_host, port=socket_port, connect_on_init=start_connection
         )
 
-    def start_socket_connection(self):
-        self.connection.connect_on_thread()
-        logger.info(
-            f"Started socket connection to {self.connection.host}:{self.connection.port}"
-        )
-
     def close(self):
-        self.connection.close()
+        logger.debug("Closing publisher connection")
+        self.operator_connection.close()
 
     def handshake(self):
-        self.connection.publish(command=Command.HANDSHAKE, payload=b"")
+        self.operator_connection.publish(command=Command.HANDSHAKE, payload=b"")
 
     def polar_pan_discrete(
         self,
@@ -89,7 +84,9 @@ class Publisher:
         # Put everything together
         payload = delta_azimuth + delta_altitude + delay + duration
 
-        self.connection.publish(command=Command.POLAR_PAN_DISCRETE, payload=payload)
+        self.operator_connection.publish(
+            command=Command.POLAR_PAN_DISCRETE, payload=payload
+        )
 
     def polar_pan_continuous_direction_start(self, dir_sum: int):
         """
@@ -128,7 +125,7 @@ class Publisher:
         # Put everything together
         payload = moving_azimuth + moving_altitude
 
-        self.connection.publish(
+        self.operator_connection.publish(
             command=Command.POLAR_PAN_CONTINUOUS_START, payload=payload
         )
 
@@ -136,7 +133,7 @@ class Publisher:
         """
         Stops a continuous polar pan rotation.
         """
-        self.connection.publish(command=Command.POLAR_PAN_CONTINUOUS_STOP)
+        self.operator_connection.publish(command=Command.POLAR_PAN_CONTINUOUS_STOP)
 
     def home(self, delay_ms: int):
         """
@@ -144,14 +141,14 @@ class Publisher:
         """
         delay = toBytes(delay_ms, CTypesInt.UINT32)
 
-        self.connection.publish(command=Command.HOME, payload=delay)
+        self.operator_connection.publish(command=Command.HOME, payload=delay)
 
     def set_speed(self, speed: int):
         """
         Speed 	UINT8 	What to set the speed of all axes to on the scorbot
         """
         speed_bytes = toBytes(speed, CTypesInt.UINT8)
-        self.connection.publish(command=Command.SET_SPEED, payload=speed_bytes)
+        self.operator_connection.publish(command=Command.SET_SPEED, payload=speed_bytes)
 
     def save_position(self, name: str, anchor: bool, parent: str):
         """
@@ -180,7 +177,7 @@ class Publisher:
         payload = (
             name_len_bytes + name_bytes + anchor_bytes + parent_len_bytes + parent_bytes
         )
-        self.connection.publish(command=Command.SAVE_POSITION, payload=payload)
+        self.operator_connection.publish(command=Command.SAVE_POSITION, payload=payload)
 
     def delete_position(self, name: str):
         """
@@ -193,7 +190,9 @@ class Publisher:
         name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
-        self.connection.publish(command=Command.DELETE_POSITION, payload=payload)
+        self.operator_connection.publish(
+            command=Command.DELETE_POSITION, payload=payload
+        )
 
     def go_to_position(self, name: str):
         """
@@ -205,7 +204,9 @@ class Publisher:
         name_bytes = name.encode(self.CHAR_ENCODING)
 
         payload = name_len_bytes + name_bytes
-        self.connection.publish(command=Command.GO_TO_POSITION, payload=payload)
+        self.operator_connection.publish(
+            command=Command.GO_TO_POSITION, payload=payload
+        )
 
     def set_polar_position(self, name: str, delta: int, azimuth: int, radius: int):
         """
@@ -227,7 +228,9 @@ class Publisher:
         payload = (
             name_len_bytes + name_bytes + delta_bytes + azimuth_bytes + radius_bytes
         )
-        self.connection.publish(command=Command.SET_POLAR_POSITION, payload=payload)
+        self.operator_connection.publish(
+            command=Command.SET_POLAR_POSITION, payload=payload
+        )
 
     def get_polar_position(self, name: str):
         """
@@ -240,7 +243,9 @@ class Publisher:
 
         payload = name_len_bytes + name_bytes
 
-        self.connection.publish(command=Command.GET_POLAR_POSITION, payload=payload)
+        self.operator_connection.publish(
+            command=Command.GET_POLAR_POSITION, payload=payload
+        )
 
     def set_cartesian_position(
         self, name: str, x_mm_tenths: int, y_mm_tenths: int, z_mm_tenths: int
@@ -268,7 +273,9 @@ class Publisher:
             + y_mm_tenths_bytes
             + z_mm_tenths_bytes
         )
-        self.connection.publish(command=Command.SET_CARTESIAN_POSITION, payload=payload)
+        self.operator_connection.publish(
+            command=Command.SET_CARTESIAN_POSITION, payload=payload
+        )
 
     def get_cartesian_position(self, name: str):
         """
@@ -281,7 +288,9 @@ class Publisher:
 
         payload = name_len_bytes + name_bytes
 
-        self.connection.publish(command=Command.GET_CARTESIAN_POSITION, payload=payload)
+        self.operator_connection.publish(
+            command=Command.GET_CARTESIAN_POSITION, payload=payload
+        )
 
     def get_speed(self):
         """
@@ -290,7 +299,7 @@ class Publisher:
         # Sends an empty payload
         payload = b""
 
-        self.connection.publish(command=Command.GET_SPEED, payload=payload)
+        self.operator_connection.publish(command=Command.GET_SPEED, payload=payload)
 
     def cartesian_move_discrete(self, delta_x, delta_y, delta_z, delay_ms, time):
         """
@@ -310,7 +319,7 @@ class Publisher:
             delta_x_bytes + delta_y_bytes + delta_z_bytes + delay_ms_bytes + time_bytes
         )
 
-        self.connection.publish(
+        self.operator_connection.publish(
             command=Command.CARTESIAN_MOVE_DISCRETE, payload=payload
         )
 
@@ -331,7 +340,7 @@ class Publisher:
 
         payload = moving_x_bytes + moving_y_bytes + moving_z_bytes
 
-        self.connection.publish(
+        self.operator_connection.publish(
             command=Command.CARTESIAN_MOVE_CONTINUOUS_START, payload=payload
         )
 
@@ -342,7 +351,7 @@ class Publisher:
         # Sends an empty payload
         payload = b""
 
-        self.connection.publish(
+        self.operator_connection.publish(
             command=Command.CARTESIAN_MOVE_CONTINUOUS_STOP, payload=payload
         )
 
@@ -363,6 +372,6 @@ class Publisher:
 
         payload = subcommand_value_bytes + reserved_bytes + operations_payload
 
-        self.connection.publish(
+        self.operator_connection.publish(
             command=Command.EXECUTE_HARDWARE_OPERATION, payload=payload
         )

@@ -60,7 +60,6 @@ class OperatorConnection:
 
     def close(self):
         """Cleanly close the socket port and stop listening to new connections."""
-        logger.info("Closing socket")
         self.is_running = False
         if self.thread is not None:
             self.thread.join()
@@ -68,7 +67,7 @@ class OperatorConnection:
             remove_termination_handler(self._term)
             self._term = None
         self.socket.close()
-        logger.info("Socket closed cleanly")
+        logger.info(f"Socket closed cleanly {self.host}:{self.port}")
 
     def publish(self, command: int, payload: bytes | None = None):
         """

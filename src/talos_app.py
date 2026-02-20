@@ -4,7 +4,7 @@ from multiprocessing.managers import SharedMemoryManager
 from loguru import logger
 
 from .config import load_config
-from .connection.connection import Connection, ConnectionCollection
+from .connection.connection import Connection, ConnectionCollection, VideoConnection
 from .connection.publisher import Direction
 from .directors import BaseDirector
 from .scheduler import IterativeTask, Scheduler
@@ -47,8 +47,7 @@ class App:
         self.scheduler = scheduler
         self.config = load_config()
         self.connections = ConnectionCollection()
-        self.active_connection: None | str = None
-        self.tracker = Tracker(scheduler=scheduler, smm=smm)
+        self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
 
     def open_connection(
         self,
@@ -66,14 +65,11 @@ class App:
             return logger.warning(f"Connection to {hostname} already exists")
         conf = self.config.get(hostname, {})
         camera = conf["camera_index"] if camera is None else camera
-        vid_conn = self.tracker.add_capture(hostname, camera)
-        conn = Connection(hostname, port or conf["socket_port"], vid_conn)
+        video_connection = VideoConnection(src=camera)
+        conn = Connection(hostname, port or conf["socket_port"], video_connection)
         self.connections[hostname] = conn
-        self.set_active_connection(hostname)
         if write_config:
             self.config = load_config()
-        if self.director is not None and vid_conn.shape is not None:
-            self.director.add_control_feed(conn)
 
     def start_move(self, direction: Direction) -> None:
         """
@@ -82,10 +78,12 @@ class App:
         In discrete mode, starts sending discrete movement commands at intervals.
         """
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {self.active_connection}")
+            return logger.error(
+                f"No connection found for active hostname {connection=}"
+            )
         if not connection.is_manual:
             return logger.error(
-                f"Active connection {self.active_connection} is not in manual mode"
+                f"Active connection {connection.host} is not in manual mode"
             )
         if self.control_mode == ControlMode.CONTINUOUS:
             return self.continuous_move(direction)
@@ -98,7 +96,7 @@ class App:
     def discrete_move(self, direction: Direction) -> None:
         """Sends a single discrete movement command in the given direction."""
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {self.active_connection}")
+            return logger.error(f"No connection found for {connection=}")
         logger.info(f"Polar pan discrete {direction.name.lower()}")
         connection.publisher.polar_pan_discrete(*DIRECTION_MAP[direction], 1000, 3000)
 
@@ -110,7 +108,7 @@ class App:
         if direction in self.current_continuous_directions:
             return
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {self.active_connection}")
+            return logger.error(f"No connection found for {connection=}")
         self.current_continuous_directions.add(direction)
         publisher = connection.publisher
         publisher.polar_pan_continuous_direction_start(
@@ -126,7 +124,7 @@ class App:
             if len(self.current_continuous_directions) != 0:
                 return
             if (connection := self.get_active_connection()) is None:
-                return logger.error(f"No connection found for {self.active_connection}")
+                return logger.error(f"No connection found for {connection=}")
             publisher = connection.publisher
             publisher.polar_pan_continuous_stop()
             return
@@ -137,7 +135,7 @@ class App:
     def stop_all_movement(self) -> None:
         """Stops all continuous and discrete movements."""
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {self.active_connection}")
+            return logger.error(f"No connection found for {connection=}")
         if self.control_mode == ControlMode.CONTINUOUS:
             publisher = connection.publisher
             self.current_continuous_directions.clear()
@@ -148,25 +146,23 @@ class App:
 
     def move_home(self) -> None:
         """Moves the robotic arm from its current location to its home position"""
-        if (connectionData := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {self.active_connection}")
-        publisher = connectionData.publisher
+        if (connection := self.get_active_connection()) is None:
+            return logger.error(f"No connection found for {connection=}")
+        publisher = connection.publisher
         publisher.home(1000)
 
-    def get_connections(self) -> dict[str, Connection]:
-        """Gets all connections"""
-        return self.connections
+    def get_connection_hosts(self) -> list[str]:
+        """Gets a list of all connection hostnames"""
+        return list(self.connections.keys())
 
     def set_active_connection(self, hostname: str | None) -> None:
         """Sets the active connection by hostname"""
-        if hostname is None:
-            self.tracker.set_active_connection(None)
-            self.active_connection = None
+        logger.debug(f"Setting active connection to {hostname}")
+        conn = self.connections.get_active()
+        if conn is not None and hostname == conn.host:
+            logger.debug(f"{hostname} is already the active connection")
             return
-        if hostname not in self.connections:
-            return logger.error(f"Connection to {hostname} does not exist")
-        self.tracker.set_active_connection(hostname)
-        self.active_connection = hostname
+        self.connections.set_active(hostname)
 
     def remove_connection(self, hostname: str) -> None:
         """
@@ -175,31 +171,24 @@ class App:
         """
         if hostname not in self.connections:
             return logger.error(f"Connection to {hostname} does not exist")
-        self.tracker.remove_capture(hostname)
-        self.connections.pop(hostname).close()
-        if self.director is not None:
-            self.director.remove_control_feed(hostname)
-        if hostname == self.active_connection:
-            hosts = list(self.connections.keys())
-            self.set_active_connection(hosts[0] if len(hosts) > 0 else None)
+        if (connection := self.connections.pop(hostname)) is not None:
+            connection.close()
 
     def get_active_connection(self) -> Connection | None:
         """Gets the active connection"""
-        if self.active_connection is None:
-            return None
-        return self.connections[self.active_connection]
+        return self.connections.get_active()
 
     def get_active_frame(self):
         """Gets the active connection's current video frame"""
-        if self.active_connection is None:
+        if (connection := self.get_active_connection()) is None:
             return None
-        return self.tracker.get_frame(self.active_connection)
+        return self.tracker.get_frame(connection.host)
 
     def get_active_config(self) -> dict | None:
         """Gets the active connection's configuration"""
-        if self.active_connection is None:
+        if (connection := self.get_active_connection()) is None:
             return None
-        return self.config.get(self.active_connection, None)
+        return self.config.get(connection.host, None)
 
     def get_control_mode(self) -> ControlMode:
         """Gets the active connection's control mode"""
@@ -216,9 +205,10 @@ class App:
         """
         option = option if option != "None" else None
         if self.director is not None:
-            logger.info("Stopping previous model")
+            logger.info("Stopping director")
             self.director.stop_auto_control()
             self.director = None
+            logger.info("Director stopped")
         if option is None:
             return self.tracker.swap_model(None)
         if option not in USABLE_MODELS:
@@ -240,7 +230,7 @@ class App:
     def toggle_director(self) -> None:
         """Toggles the active connection's manual/automatic control mode"""
         if (connection := self.get_active_connection()) is None:
-            return logger.error(f"No connection found for {self.active_connection}")
+            return logger.error(f"No connection found for {connection=}")
         if self.is_manual_only():
             assert connection.is_manual, (
                 "Manual only connections should always be in manual mode"

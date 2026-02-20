@@ -7,7 +7,7 @@ from src.config import add_config, load_config
 
 
 class TKConnectionManager(tkinter.Toplevel):
-    def __init__(self, parent, connections):
+    def __init__(self, parent, connections: list[str]):
         super().__init__(parent)
         self.title("Connection Manager")
         self.geometry("350x300")
@@ -65,12 +65,10 @@ class TKConnectionManager(tkinter.Toplevel):
         ).pack(anchor="w", padx=5, pady=(5, 0))
         ttk.Separator(self.list_frame, orient="horizontal").pack(fill="x", pady=5)
 
-        for _, (hostname, connData) in enumerate(self.connections.items()):
+        for hostname in self.connections:
             row = ttk.Frame(self.list_frame)
             row.pack(fill="x", pady=2, padx=5)
-            ttk.Label(row, text=f"{hostname} : {connData.port}").pack(
-                side="left", expand=True, fill="x"
-            )
+            ttk.Label(row, text=f"{hostname}").pack(side="left", expand=True, fill="x")
             ttk.Button(
                 row, text="X", command=lambda h=hostname: self.remove_connection(h)
             ).pack(side="right")
@@ -78,16 +76,19 @@ class TKConnectionManager(tkinter.Toplevel):
     def remove_connection(self, hostname):
         if hostname in self.connections:
             self.parent.close_connection(hostname)
+            self.connections = [h for h in self.connections if h != hostname]
             self.render_list()
 
     def add_connection(self, host, port, camera, write_config):
         if write_config:
             add_config(host, port, camera)
         self.parent.open_connection(host, port, camera, write_config)
+        self.connections.append(host)
         self.render_list()
 
     def add_from_config(self, hostname):
         self.parent.open_connection(hostname)
+        self.connections.append(hostname)
         self.render_list()
 
     def show_host_port_input(self, parent=None):

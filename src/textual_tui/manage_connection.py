@@ -5,7 +5,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Static
 
 from src.config import load_config
-from src.talos_app import App, Connection
+from src.talos_app import App
 
 
 class ManageConnectionScreen(Screen):
@@ -15,15 +15,16 @@ class ManageConnectionScreen(Screen):
     BINDINGS = [
         ("escape", "dismiss", "Close this screen"),
     ]
-    current_connections: reactive[dict[str, Connection]] = reactive(dict())
+    current_connections: reactive[list[str]] = reactive(list())
     config_connections = reactive(dict())
+    _app: App
 
     def __init__(self, app: App):
         super().__init__()
         self._app = app
         self.set_reactive(ManageConnectionScreen.config_connections, load_config())
         self.set_reactive(
-            ManageConnectionScreen.current_connections, self._app.get_connections()
+            ManageConnectionScreen.current_connections, self._app.get_connection_hosts()
         )
 
     def compose(self):
@@ -74,12 +75,12 @@ class ManageConnectionScreen(Screen):
             )
 
     async def action_dismiss_screen(self):
-        return await self.dismiss(self._app.get_connections())
+        return await self.dismiss(self._app.get_connection_hosts())
 
-    def current_connections_list(self, current_connections: dict[str, Connection]):
-        for key, conn in current_connections.items():
+    def current_connections_list(self, current_connections: list[str]):
+        for key in current_connections:
             yield Vertical(
-                Static(f"{conn.host}:{conn.port}"),
+                Static(f"{key}"),
                 Button("Close", name=key),
             )
 

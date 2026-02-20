@@ -1,7 +1,7 @@
 import threading
 from abc import ABC, abstractmethod
 from enum import Enum
-from multiprocessing import Event, Process, Queue, shared_memory
+from multiprocessing import Event, Process, Queue, shared_memory, synchronize
 from multiprocessing.managers import SharedMemoryManager
 from queue import Empty, Full
 
@@ -10,8 +10,12 @@ import numpy as np
 from loguru import logger
 
 from src.config import load_default_config
-from src.connection.connection import VideoConnection
+from src.connection.connection import (
+    Connection,
+    ConnectionCollectionEvent,
+)
 from src.scheduler import IterativeTask, Scheduler
+from src.talos_app import ConnectionCollection
 from src.utils import (
     add_termination_handler,
     calculate_acceptable_box,
@@ -49,7 +53,7 @@ def _detect_person_worker(
     model_class,
     bbox_queue: Queue,
     stopper,
-    frame_ready_event,
+    frame_ready_event: synchronize.Event,
     frame_mem: shared_memory.SharedMemory,
     frame_shape,
     frame_dtype,
@@ -64,7 +68,9 @@ def _detect_person_worker(
     try:
         while not stopper.is_set():
             logger.debug("Waiting for new frame...")
-            frame_ready_event.wait()
+            if not frame_ready_event.wait(0.1):
+                logger.debug("No new frame received, continuing to wait...")
+                continue
             # Not clear immediately to make a copy here safely
             bboxes = model.detect_person(frame=np.copy(frame))
             frame_ready_event.clear()
@@ -87,7 +93,8 @@ class Tracker:
     frame_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
     bbox_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
     model = None
-    captures: dict[str, VideoConnection] = dict()
+    # captures: dict[str, VideoConnection] = dict()
+    connections: ConnectionCollection
     frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
     active_connection: str | None = None
     _scheduler: Scheduler
@@ -104,6 +111,7 @@ class Tracker:
 
     def __init__(
         self,
+        connections: ConnectionCollection,
         scheduler: Scheduler = ThreadScheduler(),
         smm: SharedMemoryManager = SharedMemoryManager(),
         model=None,
@@ -115,6 +123,8 @@ class Tracker:
             model (_type_, optional): Object detection model. Defaults to None.
         """
         self._scheduler = scheduler
+        self.connections = connections
+        self.connections.add_listener(self.on_connections_update)
         self.model = model
         self._smm = smm
         self.max_fps = self.default_config.get("max_fps", POLL_BBOX_CYCLE_INTERVAL_MS)
@@ -123,7 +133,26 @@ class Tracker:
         self._smm.start()
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
-    def add_capture(self, host: str, camera: str | int) -> VideoConnection:
+    def on_connections_update(
+        self,
+        event: ConnectionCollectionEvent,
+        hostname: str | None,
+        connection: Connection | None,
+    ):
+        if event == ConnectionCollectionEvent.ADDED:
+            logger.info(f"Connection added: {hostname}")
+            self.add_capture(hostname) if hostname is not None else None
+        elif (
+            event == ConnectionCollectionEvent.REMOVED
+            and hostname is not None
+            and connection is not None
+        ):
+            logger.info(f"Connection removed: {hostname}")
+            self.remove_capture(hostname)
+        else:
+            pass
+
+    def add_capture(self, host: str):
         """Adds a new video capture for a given host.
         If the detection process is running this will restart it.
         Parameters:
@@ -138,33 +167,26 @@ class Tracker:
             self.stop_detection_process()
         elif self.model is not None:
             restart = True
-        conn = VideoConnection(src=camera)
-        self.captures[host] = conn
         self.frame_order.append((host, 0))
         if restart:
             self.start_detection_process()
-        return conn
 
     def remove_capture(self, host: str | None = None) -> None:
         """Releases video capture for a given host if not all video capture is closed."""
         if host is None:
-            for cap in self.captures.values():
-                cap.close()
-            self.captures = dict()
-            self.frame_order = list()
             self.stop_detection_process()
+            self.frame_order = list()
             return
-        if host in self.captures:
-            self.captures[host].close()
-            del self.captures[host]
         self.frame_order = [fo for fo in self.frame_order if fo[0] != host]
-        if not self.captures:
+        if not self.connections:
             self.stop_detection_process()
 
     def start_detection_process(self) -> None:
         if self._detection_process is not None:
             return  # Already running
-        assert self._smm is not None
+        if self._smm is None:
+            logger.warning("Shared memory is not initialized")
+            return
         logger.info("Starting detection process...")
         total_shape = self.get_total_frame_shape()
         total_nbytes = self.get_nbytes_from_total_shape(total_shape)
@@ -202,7 +224,6 @@ class Tracker:
         )
 
     def poll_bboxes(self) -> None:
-        logger.debug("Polling bounding boxes from detection process")
         raw_bboxes: None | list[tuple[int, int, int, int]] = None
 
         try:
@@ -211,7 +232,6 @@ class Tracker:
             return
         except Empty:
             if self._bbox_success_count < 1:
-                logger.debug(f"Reducing poll rate. Counts: {self._bbox_success_count}")
                 self.decrease_bbox_frame_rate()
             self._bbox_success_count -= 1
             return
@@ -220,7 +240,6 @@ class Tracker:
             return
         self._bbox_success_count += 1
         if self._bbox_success_count > 10:
-            logger.debug(f"Increasing poll rate. Counts: {self._bbox_success_count}")
             self.increase_bbox_frame_rate()
 
         bboxes_by_host: dict = {host: [] for host, _ in self.frame_order}
@@ -257,8 +276,8 @@ class Tracker:
         total_width = 0
         max_height = 0
         self.frame_order = list()
-        for host, vid in self.captures.items():
-            if (shape := vid.shape) is None:
+        for host, conn in self.connections.items():
+            if (shape := conn.video_connection.shape) is None:
                 continue
             max_height = max(max_height, shape[0])
             self.frame_order.append((host, total_width))
@@ -292,16 +311,18 @@ class Tracker:
         if self.frame_ready_event.is_set():
             logger.debug("Frame ready event already set, skipping frame update")
             return
-        logger.debug("Sending latest frame to detection process")
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
-            self.new_frame = self.captures[host].get_frame()
+            self.new_frame = self.connections[host].video_connection.get_frame()
             if self.new_frame is not None and not self.frame_ready_event.is_set():
                 np.copyto(self._frame_buf, self.new_frame)
                 self.frame_ready_event.set()
             return
 
-        frames = [self.captures[host].get_frame() for host, _ in self.frame_order]
+        frames = [
+            self.connections[host].video_connection.get_frame()
+            for host, _ in self.frame_order
+        ]
         frames = [f for f in frames if f is not None]
         if len(frames) == 0:
             logger.warning("No frames available to update frame buffer.")
@@ -327,6 +348,7 @@ class Tracker:
         """Returns true if process properly closed"""
         if self._detection_process is None:
             return True
+        logger.debug("Stopping detection process...")
         assert self._smm is not None
         if self._send_frame_task is not None:
             self._send_frame_task.cancel()
@@ -336,25 +358,24 @@ class Tracker:
             self._poll_bbox_task = None
         with self._bbox_lock:
             self._bboxes = dict()
-        if self._detection_process is not None:
+        if self._detection_process.is_alive():
             try:
                 self.frame_ready_event.clear()
                 self.model_stopper.set()
-                self._detection_process.join()
                 self._bbox_queue.close()
+                self._detection_process.join()
                 self._bbox_queue.join_thread()
-                self.model_stopper.clear()
             except Exception as e:
                 logger.error(f"Exception occured: {e}")
                 return False
             self._detection_process = None
-            logger.info("Detection process stopped.")
+        logger.debug("Detection process stopped.")
         return True
 
     def get_frame_shape(self, host):  # -> tuple[Any, ...] | None:
         """returns: (height, weight)"""
-        if (conn := self.captures.get(host, None)) is not None:
-            return conn.shape
+        if (conn := self.connections.get(host, None)) is not None:
+            return conn.video_connection.shape
 
     def get_bboxes(self):
         with self._bbox_lock:
@@ -435,8 +456,9 @@ class Tracker:
         """
         if (
             host is None
-            and (host := self.active_connection) is None
-            or (cap := self.captures.get(host, None)) is None
+            or (conn := self.connections.get(host)) is None
+            and (conn := self.connections.get_active()) is None
+            or (cap := conn.video_connection) is None
         ):
             return
         active_frame = cap.get_frame()
@@ -452,7 +474,6 @@ class Tracker:
         if self._term_handler_id is not None:
             remove_termination_handler(self._term_handler_id)
             self._term_handler_id = None
-        self.remove_capture()
         for _ in range(6):
             if self.stop_detection_process():
                 self._smm.shutdown() if self._smm is not None else None
@@ -466,7 +487,7 @@ class Tracker:
             logger.error("Failed to stop detection model")
             return
         self.model = new_model
-        if self.captures is not None and self.model is not None:
+        if self.connections is not None and self.model is not None:
             # do not start detection process if there are no captures, or if model is None
             self.start_detection_process()
 

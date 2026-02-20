@@ -41,12 +41,15 @@ class ThreadIterativeTask(IterativeTask):
 
     def cancel(self, wait: bool = True):
         """Cancel the recurring task."""
+        timer_to_join = None
         with self._lock:
             self.is_running = False
             if self._timer is not None:
                 self._timer.cancel()
-                self._timer.join() if wait else None
+                timer_to_join = self._timer
                 self._timer = None
+        if wait and timer_to_join is not None:
+            timer_to_join.join()
 
     def set_interval(self, ms: int):
         """Change the interval and reschedule."""

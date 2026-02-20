@@ -3,7 +3,7 @@ from typing import Any
 
 from loguru import logger
 
-from src.connection.connection import Connection
+from src.connection.connection import ConnectionCollectionEvent
 from src.connection.publisher import Publisher
 from src.scheduler import IterativeTask, Scheduler
 from src.talos_app import ConnectionCollection
@@ -25,23 +25,20 @@ class BaseDirector(ABC):
     ):
         self.tracker = tracker
         self.scheduler = scheduler
-        self.connections: dict[str, Connection] = connections
+        self.connections = connections
+        self.connections.add_listener(self.on_connection_update)
         if len(self.connections) > 0 and self.scheduler is not None:
             self.start_auto_control()
 
-    def add_control_feed(
-        self, conn: Connection, start_auto_ctrl: bool = True
-    ) -> Connection:
-        self.connections[conn.host] = conn
-        if self.scheduler is not None and self.control_task is None and start_auto_ctrl:
-            self.start_auto_control()
-        return conn
-
-    def remove_control_feed(self, host: str) -> None:
-        if host in self.connections:
-            del self.connections[host]
-        if not self.connections:
-            self.stop_auto_control()
+    def on_connection_update(self, event: ConnectionCollectionEvent, *_: Any):
+        if event == ConnectionCollectionEvent.ADDED:
+            if self.scheduler is not None and self.control_task is None:
+                self.start_auto_control()
+        elif event == ConnectionCollectionEvent.REMOVED:
+            if not self.connections:
+                self.stop_auto_control()
+        else:
+            pass
 
     # Processes the bounding box and sends commands
     @abstractmethod

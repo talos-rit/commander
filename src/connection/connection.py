@@ -85,7 +85,6 @@ class VideoConnection:
         else:
             self.cap = cv2.VideoCapture(source)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
-        self._term = add_termination_handler(self.close)
         frame = None
         for _ in range(6):
             ret, frame, *rest = self.cap.read()
@@ -101,9 +100,9 @@ class VideoConnection:
     def get_frame(self) -> np.ndarray | None:
         if self.cap is not None:
             with self._read_lock:
-                r, frame, *rest = self.cap.read()
-                if len(rest) > 0:
-                    logger.debug(f"{rest=}")
+                r, frame, *rest = (
+                    self.cap.read()
+                )  # rest sometimes have timestamp info from PyAVCapture
             if not r:
                 return None
             return frame
@@ -111,9 +110,7 @@ class VideoConnection:
     def close(self):
         if self.cap is not None:
             self.cap.release()
-        if self._term is not None:
-            remove_termination_handler(self._term)
-            self._term = None
+            logger.debug(f"Released video connection to {self.src}")
 
 
 @dataclass
@@ -139,22 +136,35 @@ class Connection:
         return self.is_manual
 
     def close(self) -> None:
-        self.publisher.close()
+        self.video_connection.close()
 
 
 class ConnectionCollectionEvent(Enum):
     ADDED = "added"
     REMOVED = "removed"
+    ACTIVE_CHANGED = "active_changed"
 
 
 class ConnectionCollection(dict[str, Connection]):
     _active_host: str | None = None
-    _listeners: list[Callable[[ConnectionCollectionEvent, str, Connection], None]] = []
+    _listeners: list[
+        Callable[[ConnectionCollectionEvent, str, Connection | None], None]
+    ] = []
+    _term: int | None = None
 
     def set_active(self, hostname: str | None) -> None:
-        if hostname is not None and hostname not in self:
+        if hostname is None:
+            self._active_host = None
+            self._notify_listeners(
+                ConnectionCollectionEvent.ACTIVE_CHANGED, "None", None
+            )
+            return
+        if hostname not in self or (conn := self.get(hostname)) is None:
             return logger.error(f"Connection to {hostname} does not exist")
         self._active_host = hostname
+        self._notify_listeners(ConnectionCollectionEvent.ACTIVE_CHANGED, hostname, conn)
+        if hostname is not None and self._term is None:
+            self._term = add_termination_handler(self.clear)
 
     def get_active(self) -> Connection | None:
         if self._active_host is None:
@@ -162,27 +172,30 @@ class ConnectionCollection(dict[str, Connection]):
         return self.get(self._active_host, None)
 
     def add_listener(
-        self, listener: Callable[[ConnectionCollectionEvent, str, Connection], None]
+        self,
+        listener: Callable[[ConnectionCollectionEvent, str, Connection | None], None],
     ) -> None:
         self._listeners.append(listener)
 
     def remove_listener(
-        self, listener: Callable[[ConnectionCollectionEvent, str, Connection], None]
+        self,
+        listener: Callable[[ConnectionCollectionEvent, str, Connection | None], None],
     ) -> None:
         self._listeners.remove(listener)
 
     def _notify_listeners(
-        self, event: ConnectionCollectionEvent, hostname: str, connection: Connection
+        self,
+        event: ConnectionCollectionEvent,
+        hostname: str,
+        connection: Connection | None,
     ) -> None:
         for listener in self._listeners:
             listener(event, hostname, connection)
 
     def __setitem__(self, hostname: str, connection: Connection) -> None:
         super().__setitem__(hostname, connection)
-        if isinstance(connection, Connection):
-            self._notify_listeners(
-                ConnectionCollectionEvent.ADDED, hostname, connection
-            )
+        self._notify_listeners(ConnectionCollectionEvent.ADDED, hostname, connection)
+        self.set_active(hostname)
 
     def __delitem__(self, key: str) -> None:
         if key in self:
@@ -191,7 +204,21 @@ class ConnectionCollection(dict[str, Connection]):
         return super().__delitem__(key)
 
     def pop(self, key: str, default=None) -> Connection | None:
+        """Pops the connection and notifies the listeners of removal. If connection is active, sets active connection to another available connection or None."""
         if key in self:
             connection = self[key]
             self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+            if key == self._active_host:
+                new_host = next((h for h in self if h != key), None)
+                self.set_active(new_host)
         return super().pop(key, default)
+
+    def clear(self) -> None:
+        self.set_active(None)
+        while self:
+            key, connection = self.popitem()
+            self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+            connection.close()
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None

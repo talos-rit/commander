@@ -205,9 +205,7 @@ class TextualInterface(App):
             ManageConnectionScreen(self._talos_app), wait_for_dismiss=True
         )
 
-        connections = [
-            (conn, conn) for conn in self._talos_app.get_connections().keys()
-        ]
+        connections = [(conn, conn) for conn in self._talos_app.get_connection_hosts()]
         self.connection_options = connections
         self.query_one("#connection-select", Select).value = (
             self._talos_app.active_connection or Select.BLANK

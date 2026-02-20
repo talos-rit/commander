@@ -229,11 +229,11 @@ class TKInterface(tk.Tk):
         )
 
         self.selectedConnection = tk.StringVar(value="None")
-        self.selectedConnection.trace_add(
-            "write",
-            lambda *_: self.set_active_connection(self.selectedConnection.get()),
-        )
-        self.connectionMenuList = list(self.app.get_connections().keys()) or ["None"]
+        # self.selectedConnection.trace_add(
+        #     "write",
+        #     lambda *_: self.set_active_connection(self.selectedConnection.get()),
+        # )
+        self.connectionMenuList = self.app.get_connection_hosts() or ["None"]
         self.connectionMenu = ctk.CTkOptionMenu(
             connection_frame,
             variable=self.selectedConnection,
@@ -287,34 +287,38 @@ class TKInterface(tk.Tk):
 
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
-        TKConnectionManager(self, self.app.get_connections())
+        TKConnectionManager(self, self.app.get_connection_hosts())
 
     def set_active_connection(self, option) -> None:
         self.app.set_active_connection(option if option != "None" else None)
         self.update_ui()
 
     def update_ui(self) -> None:
-        if len(self.app.get_connections()) == 0:
+        if len(self.app.get_connection_hosts()) == 0:
             self.set_manual_control_btn_state("disabled")
             self.automatic_button.deselect()
             self.automatic_button.configure(state="disabled")
-            logger.debug("AUTOMATIC BUTTON DISABLED")
+            logger.debug("No connections")
             self.cancel_display_loop()
             return self.update_connection_menu()
         if (connection := self.app.get_active_connection()) is None:
+            self.selectedConnection.set("None")
             return
+        self.selectedConnection.set(connection.host)
         if self.app.get_director() is None or self.app.is_manual_only():
             self.automatic_button.configure(state="disabled")
-            logger.debug("AUTOMATIC BUTTON DISABLED")
+            logger.debug("director is None or connection is manual only")
         else:
             self.automatic_button.configure(state="normal")
-            logger.debug("AUTOMATIC BUTTON ENABLED")
+            logger.debug("automatic button enabled")
         if connection.is_manual:
             self.set_manual_control_btn_state("normal")
             self.automatic_button.deselect()
+            logger.debug("manual connection active")
         else:
             self.set_manual_control_btn_state("disabled")
             self.automatic_button.select()
+            logger.debug("manual connection not active")
         self.continuous_mode.set(self.app.get_control_mode())
         self.update_connection_menu()
         if not self.display_loop_task:
@@ -322,8 +326,8 @@ class TKInterface(tk.Tk):
 
     def update_connection_menu(self):
         """Refresh dropdown menu to show the latest connections"""
-        options = self.app.get_connections().keys()
-        self.connectionMenu.configure(values=options)
+        self.connectionMenuList = self.app.get_connection_hosts()
+        self.connectionMenu.configure(values=self.connectionMenuList)
         current_connection = self.app.get_active_connection()
         host = "None" if current_connection is None else current_connection.host
         self.selectedConnection.set(host)
