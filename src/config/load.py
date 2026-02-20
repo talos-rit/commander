@@ -53,7 +53,7 @@ def load_robot_config() -> dict[str, ConnectionConfig]:
             )
         except ValidationError as e:
             logger.warning(
-                f"[WARNING] Invalid configuration for '{hostname}' in config.local.yaml, skipping\n"
+                f"Invalid configuration for '{hostname}' in config.local.yaml, skipping\n"
                 + str(e)
             )
             continue
