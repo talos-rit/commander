@@ -17,6 +17,7 @@ from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface, terminate
 
 from src.pyside_gui.main_interface import PySide6Interface
+
 if sys.platform == "win32":
     os.environ["PATH"] += os.pathsep + r".venv\Lib\site-packages\PySide6"
 
@@ -70,6 +71,20 @@ def tk_interface(args=None):
     interface.mainloop()
 
 
+def pyside_interface(args=None):
+    configure_logger()
+    app = QApplication(sys.argv)
+
+    # Set application font
+    font = QFont("Cascadia Code", 10)
+    app.setFont(font)
+
+    window = PySide6Interface()
+    window.show()
+
+    sys.exit(app.exec())
+
+
 def main() -> None:
     args = create_args()
     # This is a required call for pyinstaller
@@ -77,15 +92,11 @@ def main() -> None:
     multiprocessing.freeze_support()
 
     if args.terminal:
-        configure_logger(True)
-        smm = multiprocessing.managers.SharedMemoryManager()
-        interface = TextualInterface()
-        interface.smm = smm
-        interface.run()
+        terminal_interface(args)
+    elif args.tkinter:
+        tk_interface(args)
     else:
-        configure_logger()
-        interface = TKInterface()
-        interface.mainloop()
+        pyside_interface(args)
 
 
 if __name__ == "__main__":
