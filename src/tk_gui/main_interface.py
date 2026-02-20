@@ -9,28 +9,17 @@ from loguru import logger
 from PIL import Image, ImageDraw, ImageTk
 
 import assets
-from src.config import load_default_config
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
 from src.tk_gui.connection_manager import TKConnectionManager
-from src.tk_gui.styles import (
-    BORDER_STYLE,
-    BTN_STYLE,
-    CONTROL_BTN_GRID_FIT_STYLE,
-    CONTROL_BTN_STYLE,
-    IS_SYSTEM_DARK,
-    OPTIONS_MENU_STYLE,
-    THEME_FRAME_BG_COLOR,
-)
+from src.tk_gui.styles import (BORDER_STYLE, BTN_STYLE,
+                               CONTROL_BTN_GRID_FIT_STYLE, CONTROL_BTN_STYLE,
+                               IS_SYSTEM_DARK, OPTIONS_MENU_STYLE,
+                               THEME_FRAME_BG_COLOR)
 from src.tk_gui.tkscheduler import TKIterativeTask, TKScheduler
 from src.tracking import MODEL_OPTIONS
-from src.utils import (
-    add_termination_handler,
-    remove_termination_handler,
-    start_termination_guard,
-    terminate,
-)
-
+from src.utils import (add_termination_handler, remove_termination_handler,
+                       start_termination_guard, terminate)
 
 def set_mac_icon(icon_path: str) -> None:
     try:
@@ -76,7 +65,6 @@ class TKInterface(tk.Tk):
     scheduler: TKScheduler
     display_loop_task: TKIterativeTask | None = None  # display loop task handle
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
-    default_config: dict = load_default_config()
     _term: int | None = None
 
     def __init__(self) -> None:
@@ -275,9 +263,7 @@ class TKInterface(tk.Tk):
             port (int): the port number of the socket connection(default picked from config)
             camera (int): the index of the camera to use for this connection(default picked from config)
         """
-        self.app.open_connection(
-            hostname, port=port, camera=camera, write_config=write_config
-        )
+        self.app.open_connection(hostname)
         self.update_ui()
 
     def close_connection(self, hostname: str) -> None:
@@ -287,7 +273,7 @@ class TKInterface(tk.Tk):
 
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
-        TKConnectionManager(self, self.app.get_connections())
+        TKConnectionManager(self, self.app, self.update_ui)
 
     def set_active_connection(self, option) -> None:
         self.app.set_active_connection(option if option != "None" else None)
@@ -346,21 +332,19 @@ class TKInterface(tk.Tk):
 
     def convert_frame_to_tkimage(self, frame) -> ImageTk.PhotoImage | None:
         """Convert frame to tkinter image"""
-        if frame is None:
+        if frame is None or (config_data := self.app.get_active_config()) is None:
             return None
-        config_data = self.app.get_active_config() or self.default_config
-        desired_height: int | None = config_data.get("frame_height", None)
-        desired_width: int | None = config_data.get("frame_width", None)
+        desired_height = config_data.frame_height
+        desired_width = config_data.frame_width
         frame_rgb = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(frame_rgb)
 
         dim = (desired_width, desired_height)
         if desired_height is None:
             # Set desired dimensions (adjust these values as needed)
-            new_width = desired_width or 500
             aspect_ratio = float(frame.shape[1]) / float(frame.shape[0])
-            new_height = int(new_width / aspect_ratio)
-            dim = (new_width, new_height)
+            new_height = int(desired_width / aspect_ratio)
+            dim = (desired_width, new_height)
         assert dim[0] is not None and dim[1] is not None
         pil_image = pil_image.resize(dim, Image.Resampling.LANCZOS)  # pyright: ignore[reportArgumentType]
         return ImageTk.PhotoImage(image=pil_image)

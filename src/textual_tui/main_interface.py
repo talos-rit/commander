@@ -216,9 +216,9 @@ class TextualInterface(App):
             (conn, conn) for conn in self._talos_app.get_connections().keys()
         ]
         self.connection_options = connections
-        self.query_one(
-            "#connection-select", Select
-        ).value = self._talos_app.get_active_hostname()
+        self.query_one("#connection-select", Select).value = (
+            self._talos_app._active_connection or Select.BLANK
+        )
 
     @on(Select.Changed, "#connection-select")
     def handle_active_connection(self, active_connection: Select.Changed):
