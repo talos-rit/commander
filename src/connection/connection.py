@@ -210,6 +210,10 @@ class ConnectionCollection(dict[str, Connection]):
         if key in self:
             connection = self[key]
             self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+            connection.close()
+            if key == self._active_host:
+                new_host = next((h for h in self if h != key), None)
+                self.set_active(new_host)
         return super().__delitem__(key)
 
     def pop(self, key: str, default=None) -> Connection | None:
@@ -217,6 +221,7 @@ class ConnectionCollection(dict[str, Connection]):
         if key in self:
             connection = self[key]
             self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+            connection.close()
             if key == self._active_host:
                 new_host = next((h for h in self if h != key), None)
                 self.set_active(new_host)
@@ -228,6 +233,7 @@ class ConnectionCollection(dict[str, Connection]):
             key, connection = self.popitem()
             self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
             connection.close()
+            self.set_active(None)
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None

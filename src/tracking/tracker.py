@@ -463,7 +463,7 @@ class Tracker:
             and (conn := self.connections.get_active()) is None
             or (cap := conn.video_connection) is None
         ):
-            return
+            return logger.warning(f"No valid connection found for host: {host}")
         active_frame = cap.get_frame()
         bboxes_dict = self.get_bboxes()
         if (bboxes := bboxes_dict.get(host, None)) is not None:

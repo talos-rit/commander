@@ -326,8 +326,8 @@ class TKInterface(tk.Tk):
         """Refresh dropdown menu to show the latest connections"""
         self.connectionMenuList = self.app.get_connection_hosts()
         self.connectionMenu.configure(values=self.connectionMenuList)
-        current_connection = self.app.get_active_connection()
-        host = "None" if current_connection is None else current_connection.host
+        current_connection = self.app.get_active_hostname()
+        host = "None" if current_connection is None else current_connection
         self.selectedConnection.set(host)
 
     def start_display_loop(self) -> None:

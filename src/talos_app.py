@@ -161,20 +161,19 @@ class App:
         Removes a connection by hostname.
         If the connection is active, sets the active connection to another available connection or None.
         """
-        if hostname not in self.connections:
-            return logger.error(f"Connection to {hostname} does not exist")
-        if (connection := self.connections.pop(hostname)) is not None:
-            connection.close()
+        if self.connections.pop(hostname) is not None:
+            return
+        logger.warning(f"Connection for hostname {hostname} not found.")
+
+    def get_active_connection(self) -> Connection | None:
+        """Gets the active connection"""
+        return self.connections.get_active()
 
     def get_active_hostname(self) -> str | None:
         """Gets the active connection's hostname"""
         if (connection := self.get_active_connection()) is None:
             return None
         return connection.host
-
-    def get_active_connection(self) -> Connection | None:
-        """Gets the active connection"""
-        return self.connections.get_active()
 
     def get_active_frame(self):
         """Gets the active connection's current video frame"""
@@ -184,8 +183,6 @@ class App:
 
     def get_frame(self, hostname: str):
         """Gets the specified connection's current video frame"""
-        if hostname not in self.connections:
-            return logger.error(f"Connection to {hostname} does not exist")
         return self.tracker.get_frame(hostname)
 
     def get_active_config(self) -> ConnectionConfig | None:
@@ -233,14 +230,9 @@ class App:
 
     def toggle_director(self) -> None:
         """Toggles the active connection's manual/automatic control mode"""
-        if (connection := self.get_active_connection()) is None:
-            return logger.error("No connection found")
-        if self.is_manual_only():
-            assert connection.is_manual, (
-                "Manual only connections should always be in manual mode"
-            )
-            return logger.error(f"{connection} is set to manual only")
-        connection.toggle_manual()
+        if self.director is None:
+            return logger.error("No active director")
+        self.director.toggle_control_mode()
 
     def toggle_control_mode(self) -> ControlMode:
         """

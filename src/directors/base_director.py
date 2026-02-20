@@ -6,7 +6,7 @@ from loguru import logger
 from src.connection.connection import ConnectionCollectionEvent
 from src.connection.publisher import Publisher
 from src.scheduler import IterativeTask, Scheduler
-from src.talos_app import Connection, ConnectionCollection
+from src.talos_app import ConnectionCollection
 from src.utils import add_termination_handler, remove_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
@@ -16,7 +16,7 @@ class BaseDirector(ABC):
     scheduler: Scheduler | None
     control_task: IterativeTask | None = None
     _term: int | None = None
-    connections: dict[str, Connection]
+    connections: ConnectionCollection
 
     def __init__(
         self,
@@ -88,3 +88,23 @@ class BaseDirector(ABC):
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None
+
+    def toggle_control_mode(self, hostname: str | None = None) -> bool | None:
+        """Toggles the control mode of the connection. If hostname is None, toggles the active connection.
+        Returns the new control mode (True for manual, False for auto) or None if no connection is found."""
+        if hostname is None:
+            conn = self.connections.get_active()
+            if conn is None:
+                logger.warning("No active connection found.")
+                return None
+        else:
+            conn = self.connections[hostname]
+            if conn is None:
+                logger.warning(f"Connection for hostname {hostname} not found.")
+                return None
+        if conn.is_manual_only:
+            logger.warning(f"Connection for hostname {hostname} is manual only.")
+            conn.is_manual = True
+            return False
+        conn.is_manual = not conn.is_manual
+        return conn.is_manual
