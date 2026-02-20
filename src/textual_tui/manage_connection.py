@@ -4,7 +4,7 @@ from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import Button, Static
 
-from src.config import CONFIG
+from src.config import ROBOT_CONFIGS
 from src.talos_app import App, Connection
 
 
@@ -21,7 +21,7 @@ class ManageConnectionScreen(Screen):
     def __init__(self, app: App):
         super().__init__()
         self._app = app
-        self.set_reactive(ManageConnectionScreen.config_connections, CONFIG)
+        self.set_reactive(ManageConnectionScreen.config_connections, ROBOT_CONFIGS)
         self.set_reactive(
             ManageConnectionScreen.current_connections, self._app.get_connections()
         )

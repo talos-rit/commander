@@ -2,7 +2,7 @@
 from src.config.load import DEFAULT_ROBOT_CONFIG, load_robot_config
 from src.config.schema import ConnectionConfig
 
-CONFIG = load_robot_config()
+ROBOT_CONFIGS = load_robot_config()
 
 
 def __getattr__(name):
@@ -13,4 +13,4 @@ def __getattr__(name):
         return editor
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-__all__ = ["CONFIG", "ConnectionConfig", "DEFAULT_ROBOT_CONFIG"]
+__all__ = ["ROBOT_CONFIGS", "ConnectionConfig", "DEFAULT_ROBOT_CONFIG"]

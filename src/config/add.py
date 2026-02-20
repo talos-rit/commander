@@ -3,18 +3,18 @@ from typing import Optional
 import yaml
 from pydantic import ValidationError
 
-from src.config import CONFIG
+from src.config import ROBOT_CONFIGS
 from src.config.path import ROBOT_CONFIGS_PATH
 from src.config.schema import ConnectionConfig
 
 
 def add_config(connection_config: ConnectionConfig):
     """
-    Add a new ConnectionConfig to the global CONFIG dictionary.
+    Add a new ConnectionConfig to the global ROBOT_CONFIGS dictionary.
     Args:
         connection_config: A validated ConnectionConfig object to add.
     """
-    CONFIG[connection_config.socket_host] = connection_config
+    ROBOT_CONFIGS[connection_config.socket_host] = connection_config
     with open(ROBOT_CONFIGS_PATH, "a") as f:
         f.write("\n")
         yaml.dump(
@@ -54,7 +54,7 @@ def validate_connection_config(
     if not socket_host or not isinstance(socket_host, str):
         errors.append("Host must be a non-empty string")
     
-    if socket_host in CONFIG:
+    if socket_host in ROBOT_CONFIGS:
         errors.append(f"Robot configuration for host '{socket_host}' already exists")
 
     if errors or valid_socket_port is None:

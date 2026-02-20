@@ -4,7 +4,7 @@ from typing import Callable
 
 from loguru import logger
 
-from src.config import CONFIG, ConnectionConfig, editor
+from src.config import ROBOT_CONFIGS, ConnectionConfig, editor
 from src.talos_app import App
 
 
@@ -43,7 +43,7 @@ class TKConnectionManager(tkinter.Toplevel):
         ttk.Label(
             self.list_frame, text="Available Configs:", font=("Segoe UI", 10, "bold")
         ).pack(anchor="w", padx=5, pady=(5, 0))
-        for cfg in CONFIG.values():
+        for cfg in ROBOT_CONFIGS.values():
             frame = ttk.Frame(self.list_frame)
             frame.pack(fill="x", padx=10, pady=2)
 

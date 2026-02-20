@@ -3,7 +3,7 @@ from multiprocessing.managers import SharedMemoryManager
 
 from loguru import logger
 
-from .config import CONFIG, ConnectionConfig
+from .config import ROBOT_CONFIGS, ConnectionConfig
 from .connection.connection import Connection
 from .connection.publisher import Direction
 from .directors import BaseDirector
@@ -55,7 +55,7 @@ class App:
         logger.info(f"Opening connection to {hostname}")
         if hostname in self.connections:
             return logger.warning(f"Connection to {hostname} already exists")
-        conf = CONFIG[hostname]
+        conf = ROBOT_CONFIGS[hostname]
         vid_conn = self.tracker.add_capture(hostname, conf.camera_index)
         conn = Connection(hostname, conf.socket_port, vid_conn)
         self.connections[hostname] = conn
@@ -211,7 +211,7 @@ class App:
         """Gets the active connection's configuration"""
         if self._active_connection is None:
             return None
-        return CONFIG.get(self._active_connection, None)
+        return ROBOT_CONFIGS.get(self._active_connection, None)
 
     def get_control_mode(self) -> ControlMode:
         """Gets the active connection's control mode"""
@@ -293,7 +293,7 @@ class App:
                 logger.debug(f"Getting frame for {hostname}")
                 return self.get_frame(hostname)
 
-            cfg = CONFIG.get(hostname)
+            cfg = ROBOT_CONFIGS.get(hostname)
 
         if cfg is None:
             logger.error("No active connection found for streaming")
