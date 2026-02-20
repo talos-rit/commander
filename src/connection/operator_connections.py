@@ -70,6 +70,12 @@ class OperatorConnection:
         self.socket.close()
         logger.info("Socket closed cleanly")
 
+    def xor_checksum(self, data: bytes) -> int:
+        result = 0
+        for byte in data:
+            result ^= byte
+        return result
+
     def publish(self, command: int, payload: bytes | None = None):
         """
         Command ID      UINT32	Unique ID for individual commands
@@ -78,7 +84,7 @@ class OperatorConnection:
         Command Value	UINT16	Command for device to carry out
         Length	        UINT16	Length of Payload
         Payload	        UINT8[]	Command Info
-        CRC	            UINT16	Checksum
+        CRC	            UINT8	Checksum
         """
         # Get a unique, incrementing command id. Increment by 2, so that the response
         # from the operator always returns odd command ids and the publisher always sends
@@ -87,9 +93,6 @@ class OperatorConnection:
         command_id = self.command_count
         self.command_count += 2
         payload_length = 0 if payload is None else len(payload)
-
-        # TODO: Implement checksum. May get removed
-        crc = toBytes(0, CTypesInt.UINT16)
 
         command_id = toBytes(command_id, CTypesInt.UINT32)
         reserved = toBytes(0, CTypesInt.UINT16)
@@ -104,6 +107,10 @@ class OperatorConnection:
 
         if payload is not None:
             message += payload
+
+        crc_value = self.xor_checksum(message)
+        crc = toBytes(crc_value, CTypesInt.UINT8)
+
         message += crc
 
         try:
