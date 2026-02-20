@@ -141,17 +141,16 @@ class OperatorConnection:
         # response = self.socket.recv(2048)
         return 0
 
-    def listen(self, connection: socket.socket | None = None):
-        connection = connection if connection is not None else self.socket
+    def listen(self):
         while self.is_running:
             try:
-                message = connection.recv(2048)
+                message = self.socket.recv(2048)
 
                 if not message:
                     logger.info(f"Connection closed by {self.host}")
                     break  # Connection closed by the other side
 
-                self._on_message(connection, message)
+                self._on_message(message)
             except BlockingIOError:
                 continue
             except OSError as e:
@@ -159,10 +158,7 @@ class OperatorConnection:
                     logger.error(f"Socket receive from {self.host} failed: {e}")
                 break
 
-        if connection is not self.socket:
-            connection.close()  # Closes accepted client sockets only
-
-    def _on_message(self, connection: socket.socket, message: bytes):
+    def _on_message(self, message: bytes):
         logger.info(f"RECEIVED MESSAGE: {message.decode(errors='replace')}")
         logger.info("subclass must implement on_message method")
 
@@ -175,9 +171,9 @@ class CommandConnection(OperatorConnection):
         port: Port to bind the socket to usually 8000 for dev
     """
 
-    def on_message(self, connection: socket.socket, message: bytes):
+    def on_message(self, message: bytes):
         command_value_bytes = message[6:8]
         command_value = toInt(command_value_bytes)
         return_command_value = command_value + 0x8000
         return_command_value_bytes = toBytes(return_command_value, CTypesInt.UINT16)
-        connection.send(return_command_value_bytes)
+        self.socket.send(return_command_value_bytes)
