@@ -5,7 +5,6 @@ import time
 from loguru import logger
 
 from src.icd_config import CTypesInt, toBytes, toInt
-from src.utils import add_termination_handler, remove_termination_handler
 
 
 class OperatorConnection:
@@ -28,7 +27,6 @@ class OperatorConnection:
     def connect_on_thread(self):
         self.thread = threading.Thread(target=self.connect, daemon=True)
         self.thread.start()
-        self._term = add_termination_handler(self.close)
 
     def connect(self):
         self.is_running = True
@@ -37,7 +35,7 @@ class OperatorConnection:
                 return  # Exit since this connection is not needed anymore
             try:
                 self.socket.connect((self.host, self.port))
-                logger.info(f"Bound to socket: {self.host}:{self.port}")
+                logger.debug(f"Connected to socket: {self.host}:{self.port}")
                 break
             except OSError as e:
                 logger.error(
@@ -47,27 +45,13 @@ class OperatorConnection:
         else:
             return  # Failed to connect after retries
 
-        logger.info("Starting to listen!")
-        self.socket.listen()
-        while self.is_running:
-            try:
-                connection, address = self.socket.accept()
-                logger.info(f"Got connection from {address}")
-                self.listen(connection)
-            except OSError as e:
-                logger.error(f"OS Error: {e}")
-                break
-
     def close(self):
         """Cleanly close the socket port and stop listening to new connections."""
         self.is_running = False
         if self.thread is not None:
             self.thread.join()
-        if self._term is not None:
-            remove_termination_handler(self._term)
-            self._term = None
         self.socket.close()
-        logger.info(f"Socket closed cleanly {self.host}:{self.port}")
+        logger.debug(f"Socket closed cleanly {self.host}:{self.port}")
 
     def publish(self, command: int, payload: bytes | None = None):
         """
@@ -144,3 +128,31 @@ class CommandConnection(OperatorConnection):
         return_command_value = command_value + 0x8000
         return_command_value_bytes = toBytes(return_command_value, CTypesInt.UINT16)
         connection.send(return_command_value_bytes)
+
+    def connect(self):
+        self.is_running = True
+        for attempt in range(5):
+            if not self.is_running:
+                return  # Exit since this connection is not needed anymore
+            try:
+                self.socket.bind((self.host, self.port))
+                logger.debug(f"Bound to socket: {self.host}:{self.port}")
+                break
+            except OSError as e:
+                logger.error(
+                    f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}"
+                )
+                time.sleep(5)
+        else:
+            return  # Failed to bind after retries
+
+        logger.debug("Starting to listen!")
+        self.socket.listen()
+        while self.is_running:
+            try:
+                connection, address = self.socket.accept()
+                logger.debug(f"Got connection from {address}")
+                self.listen(connection)
+            except OSError as e:
+                logger.error(f"OS Error: {e}")
+                break

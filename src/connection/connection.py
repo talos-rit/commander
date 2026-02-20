@@ -137,6 +137,7 @@ class Connection:
 
     def close(self) -> None:
         self.video_connection.close()
+        self.publisher.close()
 
 
 class ConnectionCollectionEvent(Enum):
