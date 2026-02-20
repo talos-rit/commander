@@ -2,7 +2,7 @@
 import os
 from typing import Any
 import yaml
-from src.config.path import CONNECTIONS_PATH, DEFAULT_PATH, LOCAL_DEFAULT_PATH
+from src.config.path import ROBOT_CONFIGS_PATH, DEFAULT_PATH, LOCAL_DEFAULT_PATH
 
 
 def read_default_robot_config()->dict[str, Any]:
@@ -23,8 +23,8 @@ def read_robot_config_file() -> dict[str, dict]:
     Load the robot configuration from config/config.local.yaml if it exists,
     otherwise from config/config.yaml. Returns a dictionary of raw config data.
     """
-    if os.path.exists(CONNECTIONS_PATH):
-        with open(CONNECTIONS_PATH, "r") as f:
+    if os.path.exists(ROBOT_CONFIGS_PATH):
+        with open(ROBOT_CONFIGS_PATH, "r") as f:
             return yaml.safe_load(f) or {}
     else:
         return {}
