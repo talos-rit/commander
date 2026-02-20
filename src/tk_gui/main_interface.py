@@ -8,6 +8,7 @@ import sv_ttk
 from loguru import logger
 from PIL import Image, ImageDraw, ImageTk
 
+from src.config import load_default_config
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
 from src.tk_gui.connection_manager import TKConnectionManager
@@ -19,6 +20,17 @@ from src.tk_gui.tkscheduler import TKIterativeTask, TKScheduler
 from src.tracking import MODEL_OPTIONS
 from src.utils import (add_termination_handler, remove_termination_handler,
                        start_termination_guard, terminate)
+
+
+def set_mac_icon(icon_path: str) -> None:
+    try:
+        from Cocoa import NSApplication, NSImage  # type: ignore
+    except ImportError:
+        logger.warning("Unable to import pyobjc modules")
+    else:
+        ns_application = NSApplication.sharedApplication()
+        logo_ns_image = NSImage.alloc().initByReferencingFile_(icon_path)
+        ns_application.setApplicationIconImage_(logo_ns_image)
 
 
 class ButtonText(StrEnum):
@@ -66,6 +78,11 @@ class TKInterface(tk.Tk):
         self.scheduler = TKScheduler(self)
         self.app = App()
         self.title("Talos Manual Interface")
+        icon_path, icon_type = assets.get_icon()
+        if icon_type == "icns":
+            set_mac_icon(icon_path)
+        else:
+            self.iconbitmap(icon_path)
         self.no_signal_display = self.draw_no_signal_display()
 
         container = tk.Frame(self)
@@ -376,3 +393,6 @@ class TKInterface(tk.Tk):
             self._term = None
         terminate(0, 0)
         super().destroy()
+
+    def get_app(self) -> App:
+        return self.app
