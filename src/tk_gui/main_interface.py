@@ -8,6 +8,7 @@ import sv_ttk
 from loguru import logger
 from PIL import Image, ImageDraw, ImageTk
 
+import assets
 from src.config import load_default_config
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
@@ -20,6 +21,17 @@ from src.tk_gui.tkscheduler import TKIterativeTask, TKScheduler
 from src.tracking import MODEL_OPTIONS
 from src.utils import (add_termination_handler, remove_termination_handler,
                        start_termination_guard, terminate)
+
+
+def set_mac_icon(icon_path: str) -> None:
+    try:
+        from Cocoa import NSApplication, NSImage  # type: ignore
+    except ImportError:
+        logger.warning("Unable to import pyobjc modules")
+    else:
+        ns_application = NSApplication.sharedApplication()
+        logo_ns_image = NSImage.alloc().initByReferencingFile_(icon_path)
+        ns_application.setApplicationIconImage_(logo_ns_image)
 
 
 def set_mac_icon(icon_path: str) -> None:
