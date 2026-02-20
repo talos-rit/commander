@@ -18,7 +18,6 @@ class TKConnectionManager(tkinter.Toplevel):
         self.connections = app.get_connections()
         self.update_gui_callback = update_gui_callback
         self.transient(parent)
-        self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.list_frame = ttk.Frame(self)
@@ -33,26 +32,8 @@ class TKConnectionManager(tkinter.Toplevel):
         )
         self.render_list()
 
-        self.deiconify()
-        self.lift()
-        self.focus_force()
-        self.after(0, self._try_grab_modal, 0)
-
-    def _try_grab_modal(self, attempt: int):
-        try:
-            if not self.winfo_exists():
-                return
-            if self.winfo_viewable():
-                self.grab_set()
-                return
-        except tkinter.TclError:
-            pass
-
-        # Retry for ~1 second total
-        if attempt < 20:
-            self.after(50, self._try_grab_modal, attempt + 1)
-        else:
-            logger.warning("Could not set modal grab; continuing without grab.")
+        self.wait_visibility()
+        self.grab_set()
 
     def on_close(self):
         self.grab_release()
