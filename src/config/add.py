@@ -4,7 +4,7 @@ import yaml
 from pydantic import ValidationError
 
 from src.config import CONFIG
-from src.config.path import CONFIG_PATH
+from src.config.path import CONNECTIONS_PATH
 from src.config.schema import ConnectionConfig
 
 
@@ -15,7 +15,7 @@ def add_config(connection_config: ConnectionConfig):
         connection_config: A validated ConnectionConfig object to add.
     """
     CONFIG[connection_config.socket_host] = connection_config
-    with open(CONFIG_PATH, "a") as f:
+    with open(CONNECTIONS_PATH, "a") as f:
         f.write("\n")
         yaml.dump(
             {connection_config.socket_host: connection_config.model_dump()},
