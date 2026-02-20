@@ -9,7 +9,8 @@ import cv2
 import numpy as np
 from loguru import logger
 
-from src.config import load_default_config
+# TODO: Stop get rid of this import once AppSettings is implemented for non-connection specific settings/defaults
+from src.config import DEFAULT_ROBOT_CONFIG
 from src.connection.connection import VideoConnection
 from src.scheduler import IterativeTask, Scheduler
 from src.utils import (
@@ -63,12 +64,15 @@ def _detect_person_worker(
     model: ObjectModel = model_class()
     try:
         while not stopper.is_set():
-            logger.debug("Waiting for new frame...")
-            if not frame_ready_event.is_set():
-                continue
-            # Not clear immediately to make a copy here safely
-            bboxes = model.detect_person(frame=np.copy(frame))
+            frame_ready_event.wait()
+            # Not clear immediately to make a copy here safely\
+            raw_frame = np.copy(frame)
             frame_ready_event.clear()
+            bboxes = model.detect_person(frame=raw_frame)
+            if bbox_queue.full():
+                _ = (
+                    bbox_queue.get_nowait()
+                )  # Discard the oldest bbox if the queue is full
             try:
                 bbox_queue.put_nowait(bboxes)
             except Full:
@@ -83,7 +87,6 @@ def _detect_person_worker(
 # Class for handling video feed and object detection model usage
 class Tracker:
     speaker_bbox: tuple[int, int, int, int] | None = None
-    default_config: dict = load_default_config()
     max_fps = POLL_BBOX_CYCLE_INTERVAL_MS  # this will be set dynamically based on configuration see max_fps
     frame_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
     bbox_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
@@ -118,8 +121,8 @@ class Tracker:
         self._scheduler = scheduler
         self.model = model
         self._smm = smm
-        self.max_fps = self.default_config.get("max_fps", POLL_BBOX_CYCLE_INTERVAL_MS)
-        self.frame_delay = 1000 / self.default_config.get("fps", self.max_fps)
+        self.max_fps = DEFAULT_ROBOT_CONFIG.max_fps
+        self.frame_delay = 1000 / DEFAULT_ROBOT_CONFIG.fps
         self.bbox_delay = 1000 / self.max_fps
         self._smm.start()
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
@@ -203,7 +206,6 @@ class Tracker:
         )
 
     def poll_bboxes(self) -> None:
-        logger.debug("Polling bounding boxes from detection process")
         raw_bboxes: None | list[tuple[int, int, int, int]] = None
 
         try:
@@ -217,7 +219,7 @@ class Tracker:
             self._bbox_success_count -= 1
             return
         if raw_bboxes is None:
-            logger.info("No bounding boxes detected.")
+            logger.warning("No bounding boxes detected.")
             return
         self._bbox_success_count += 1
         if self._bbox_success_count > 10:
@@ -249,7 +251,6 @@ class Tracker:
 
         with self._bbox_lock:
             self._bboxes = bboxes_by_host
-            logger.info(f"Updated bounding boxes: {self._bboxes}")
 
     def get_total_frame_shape(self):
         """
@@ -291,9 +292,8 @@ class Tracker:
 
     def send_latest_frame(self) -> None:
         if self.frame_ready_event.is_set():
-            logger.debug("Frame ready event already set, skipping frame update")
+            logger.warning("Frame ready event already set, skipping frame update")
             return
-        logger.debug("Sending latest frame to detection process")
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
             self.new_frame = self.captures[host].get_frame()

@@ -2,14 +2,14 @@ import time
 
 from loguru import logger
 
-from src.config import load_config
+from src.config import ROBOT_CONFIGS
 from src.connection.publisher import Publisher
 from src.directors.base_director import BaseDirector
 from src.utils import calculate_acceptable_box, calculate_center_bbox
 
 
 class ContinuousDirector(BaseDirector):
-    config = load_config()
+    config = ROBOT_CONFIGS
     last_command_stop = False  # bool to ensure only one polar_pan_continuous_stop command is sent at a time
     last_command_time = 0  # Track the time of the last command
     # Time when the person first moved outside the box
@@ -25,7 +25,7 @@ class ContinuousDirector(BaseDirector):
         Then it sends a polar pan stop.
         """
         # Load config values
-        confirmation_delay = self.config[hostname]["confirmation_delay"]
+        confirmation_delay = ROBOT_CONFIGS[hostname].confirmation_delay
         frame_height = frame_shape[0]
         frame_width = frame_shape[1]
 

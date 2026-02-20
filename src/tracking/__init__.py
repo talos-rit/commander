@@ -6,7 +6,7 @@ from src.directors import BaseDirector, ContinuousDirector
 
 from .haar_cascade.basic_model import BasicModel
 from .keep_away.keep_away_director import KeepAwayDirector
-from .tracker import ObjectModel, Tracker
+from .tracker import ObjectModel
 
 
 class ModelOption(StrEnum):
@@ -63,4 +63,3 @@ except ImportError as e:
 
 MODEL_OPTIONS = list(USABLE_MODELS.keys())
 
-__all__ = ["USABLE_MODELS", "ModelOption", "MODEL_OPTIONS", "Tracker"]

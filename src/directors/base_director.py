@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any
 
 from src.connection.connection import Connection
@@ -10,18 +9,11 @@ from src.utils import add_termination_handler, remove_termination_handler
 DIRECTOR_CONTROL_RATE = 10  # control per sec
 
 
-@dataclass
-class ControlFeed:
-    host: str
-    manual: bool
-    frame_shape: tuple
-    publisher: Publisher
-
-
 class BaseDirector(ABC):
     scheduler: Scheduler | None
     control_task: IterativeTask | None = None
     _term: int | None = None
+    connections: dict[str, Connection]
 
     def __init__(
         self,
@@ -31,44 +23,21 @@ class BaseDirector(ABC):
     ):
         self.tracker = tracker
         self.scheduler = scheduler
-        self.control_feeds: dict[str, ControlFeed] = dict()
-        for conn in connections.values():
-            shape = conn.video_connection.shape
-            if shape is not None:
-                self.control_feeds[conn.host] = ControlFeed(
-                    host=conn.host,
-                    manual=conn.is_manual,
-                    frame_shape=shape,
-                    publisher=conn.publisher,
-                )
-            else:
-                print(
-                    f"Warning: Connection {conn.host} has no frame shape set. "
-                    "Make sure the video capture is properly initialized."
-                )
-        if self.control_feeds:
-            self.start_auto_control()
+        self.connections = connections
+        self.start_auto_control()
 
-    def add_control_feed(
-        self, host: str, manual: bool, frame_shape: tuple, publisher: Publisher
-    ) -> ControlFeed:
-        cf = ControlFeed(
-            host=host, manual=manual, frame_shape=frame_shape, publisher=publisher
-        )
-        self.control_feeds[host] = cf
+    def add_connection(
+        self, connection: Connection
+    ):
+        self.connections[connection.host] = connection
         if self.scheduler is not None and self.control_task is None:
             self.start_auto_control()
-        return cf
 
     def remove_control_feed(self, host: str) -> None:
-        if host in self.control_feeds:
-            del self.control_feeds[host]
-        if not self.control_feeds:
+        if host in self.connections:
+            del self.connections[host]
+        if not self.connections:
             self.stop_auto_control()
-
-    def update_control_feed(self, host: str, manual: bool) -> None:
-        if host in self.control_feeds:
-            self.control_feeds[host].manual = manual
 
     # Processes the bounding box and sends commands
     @abstractmethod
@@ -84,14 +53,14 @@ class BaseDirector(ABC):
     def track_obj(self) -> Any | None:
         bboxes = self.tracker.get_bboxes()
         for host, bbox in bboxes.items():
-            if host in self.control_feeds and bbox is not None and len(bbox) > 0:
-                if self.control_feeds[host].manual:
+            if host in self.connections and bbox is not None and len(bbox) > 0:
+                if self.connections[host].is_manual or (shape:=self.connections[host].video_connection.shape) is None:
                     continue  # skip manual feeds
                 return self.process_frame(
                     host,
                     bbox,
-                    self.control_feeds[host].frame_shape,
-                    self.control_feeds[host].publisher,
+                    shape,
+                    self.connections[host].publisher,
                 )
             else:
                 print(
