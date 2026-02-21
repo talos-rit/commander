@@ -58,7 +58,7 @@ class QTConnectionManager(QDialog):
     def render_list(self):
         # Clear existing widgets
         for i in reversed(range(self.list_layout.count())):
-            widget = self.list_layout.itemAt(i).widget()
+            widget = self.list_layout.itemAt(i).widget() # type: ignore
             if widget:
                 widget.deleteLater()
 
@@ -87,6 +87,13 @@ class QTConnectionManager(QDialog):
                 lambda _, hostname=cfg.socket_host: self.add_from_config(hostname)
             )
             config_item_layout.addWidget(connect_btn)
+            
+            # Edit button
+            edit_btn = QPushButton("Edit")
+            edit_btn.clicked.connect(
+                lambda _, hostname=cfg.socket_host: self.show_host_port_input(hostname)
+            )
+            config_item_layout.addWidget(edit_btn)
 
             self.list_layout.addWidget(config_item)
 
@@ -116,7 +123,7 @@ class QTConnectionManager(QDialog):
         # Add spacer at the end
         self.list_layout.addStretch()
 
-    def remove_connection(self, hostname):
+    def remove_connection(self, hostname: str):
         if hostname in self.connections:
             # Emit signal or call parent method
             self.app.remove_connection(hostname)
@@ -127,11 +134,11 @@ class QTConnectionManager(QDialog):
         self.update_connections.emit(conn.socket_host)
         self.accept()
 
-    def add_from_config(self, hostname):
+    def add_from_config(self, hostname: str):
         self.app.open_connection(hostname)
         self.accept()
 
-    def show_host_port_input(self):
+    def show_host_port_input(self, robot_id=None):
         """Open a dialog to request host and port"""
         dialog = QDialog(self)
         dialog.setWindowTitle("Enter Host and Port")
@@ -156,6 +163,12 @@ class QTConnectionManager(QDialog):
         layout.addWidget(camera_label)
         camera_input = QLineEdit()
         layout.addWidget(camera_input)
+        
+        # Pre-fill inputs if editing an existing connection
+        if robot_id and robot_id in ROBOT_CONFIGS:
+            host_input.setText(ROBOT_CONFIGS[robot_id].socket_host)
+            port_input.setText(str(ROBOT_CONFIGS[robot_id].socket_port))
+            camera_input.setText(str(ROBOT_CONFIGS[robot_id].camera_index))
 
         # Buttons
         button_layout = QHBoxLayout()
@@ -168,6 +181,7 @@ class QTConnectionManager(QDialog):
                 host_input.text(),
                 port_input.text(),
                 camera_input.text(),
+                editing=(robot_id is not None),
             )
         )
         cancel_btn.clicked.connect(dialog.reject)
@@ -178,7 +192,7 @@ class QTConnectionManager(QDialog):
 
         dialog.exec()
 
-    def validate_and_submit(self, dialog, host, port_str, camera_str):
+    def validate_and_submit(self, dialog, host: str, port_str: str, camera_str: str, editing=False):
         host = host.strip()
         port_str = port_str.strip()
         camera_str = camera_str.strip()
@@ -196,7 +210,10 @@ class QTConnectionManager(QDialog):
             logger.warning(f"Invalid connection config: {error_msg}")
             return
 
-        editor.add_config(conf)
-
-        self.add_connection(conf)
+        if editing:
+            # editor.update_config(conf)
+            pass
+        else:
+            editor.add_config(conf)
+            self.add_connection(conf)
         dialog.accept()
