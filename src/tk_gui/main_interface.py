@@ -227,10 +227,6 @@ class TKInterface(tk.Tk):
         )
 
         self.selectedConnection = tk.StringVar(value="None")
-        # self.selectedConnection.trace_add(
-        #     "write",
-        #     lambda *_: self.set_active_connection(self.selectedConnection.get()),
-        # )
         self.connectionMenuList = self.app.get_connection_hosts() or ["None"]
         self.connectionMenu = ctk.CTkOptionMenu(
             connection_frame,
