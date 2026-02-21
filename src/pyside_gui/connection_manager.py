@@ -80,7 +80,9 @@ class QTConnectionManager(QDialog):
             url_label.setToolTip(url_text)
             config_item_layout.addWidget(url_label)
 
-            connect_btn = QPushButton("Connect")
+            connect_btn_txt = "Connect" if cfg.socket_host not in self.connections else "Connected"
+            connect_btn = QPushButton(connect_btn_txt)
+            connect_btn.setEnabled(cfg.socket_host not in self.connections)
             connect_btn.clicked.connect(
                 lambda _, hostname=cfg.socket_host: self.add_from_config(hostname)
             )
