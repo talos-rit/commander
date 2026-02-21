@@ -35,6 +35,7 @@ build-backend = "setuptools.build_meta"
 commander = "talos:main"
 commander-terminal = "talos:terminal_interface"
 commander-tk = "talos:tk_interface"
+commander-pyside = "talos:pyside_interface"
 
 [dependency-groups]
 dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0"]
