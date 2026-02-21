@@ -8,26 +8,25 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QWidget,
     QLineEdit,
-    QCheckBox,
     QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal
 
 from loguru import logger
 
-from src.config import add_config, load_config
+from src.config import ROBOT_CONFIGS, ConnectionConfig, editor
+from src.talos_app import App
 
 
 class QTConnectionManager(QDialog):
     """PySide6 version of connection manager"""
 
-    connection_requested = Signal(
-        str, int, object, bool
-    )  # host, port, camera, write_config
+    update_connections = Signal(str)  # host
 
-    def __init__(self, parent, connections):
+    def __init__(self, parent, app: App):
         super().__init__(parent)
-        self.connections = connections
+        self.app = app
+        self.connections = self.app.get_connections()
         self.setParent(parent)
         # self.parent = parent
         self.setWindowTitle("Connection Manager")
@@ -63,22 +62,16 @@ class QTConnectionManager(QDialog):
             if widget:
                 widget.deleteLater()
 
-        config = load_config()
-
         # Available configs section
         configs_label = QLabel("Available Configs:")
         configs_label.setStyleSheet("font-weight: bold;")
         self.list_layout.addWidget(configs_label)
 
-        for _, cfg in config.items():
-            if "socket_host" not in cfg or "socket_port" not in cfg:
-                logger.warning("config missing socket_host or socket_port, skipping")
-                continue
-
+        for _, cfg in ROBOT_CONFIGS.items():
             config_item = QFrame()
             config_item_layout = QHBoxLayout(config_item)
 
-            url_text = f"{cfg['socket_host']}:{cfg['socket_port']}"
+            url_text = f"{cfg.socket_host}:{cfg.socket_port}"
             url_label = QLabel(url_text)
             url_label.setMaximumWidth(350)
             url_label.setTextInteractionFlags(
@@ -89,7 +82,7 @@ class QTConnectionManager(QDialog):
 
             connect_btn = QPushButton("Connect")
             connect_btn.clicked.connect(
-                lambda _, hostname=cfg["socket_host"]: self.add_from_config(hostname)
+                lambda _, hostname=cfg.socket_host: self.add_from_config(hostname)
             )
             config_item_layout.addWidget(connect_btn)
 
@@ -124,23 +117,16 @@ class QTConnectionManager(QDialog):
     def remove_connection(self, hostname):
         if hostname in self.connections:
             # Emit signal or call parent method
-            if hasattr(self.parent(), "close_connection"):
-                self.parent().close_connection(hostname)
+            self.app.remove_connection(hostname)
             self.render_list()
 
-    def add_connection(self, host, port, camera, write_config):
-        # add connection to config if needed
-        # Do this here since config is reloaded in App class
-        if write_config:
-            add_config(host, port, camera)
-        # Emit signal to parent
-        self.connection_requested.emit(host, port, camera, write_config)
+    def add_connection(self, conn: ConnectionConfig):
+        self.app.open_connection(conn.socket_host)
+        self.update_connections.emit(conn.socket_host)
         self.accept()
 
     def add_from_config(self, hostname):
-        # Emit signal to parent
-        if hasattr(self.parent(), "open_connection"):
-            self.parent().open_connection(hostname)
+        self.app.open_connection(hostname)
         self.accept()
 
     def show_host_port_input(self):
@@ -169,11 +155,6 @@ class QTConnectionManager(QDialog):
         camera_input = QLineEdit()
         layout.addWidget(camera_input)
 
-        # Save to config checkbox
-        save_checkbox = QCheckBox("Save to config")
-        save_checkbox.setChecked(True)
-        layout.addWidget(save_checkbox)
-
         # Buttons
         button_layout = QHBoxLayout()
         submit_btn = QPushButton("Submit")
@@ -185,7 +166,6 @@ class QTConnectionManager(QDialog):
                 host_input.text(),
                 port_input.text(),
                 camera_input.text(),
-                save_checkbox.isChecked(),
             )
         )
         cancel_btn.clicked.connect(dialog.reject)
@@ -196,7 +176,7 @@ class QTConnectionManager(QDialog):
 
         dialog.exec()
 
-    def validate_and_submit(self, dialog, host, port_str, camera_str, write_config):
+    def validate_and_submit(self, dialog, host, port_str, camera_str):
         host = host.strip()
         port_str = port_str.strip()
         camera_str = camera_str.strip()
@@ -207,17 +187,14 @@ class QTConnectionManager(QDialog):
             )
             return
 
-        try:
-            port = int(port_str)
-            if port < 1 or port > 65535:
-                raise ValueError
-        except ValueError:
-            QMessageBox.warning(
-                self, "Input Error", "Port must be an integer between 1 and 65535."
-            )
+        valid, conf, error_msg = editor.validate_connection_config(
+            host, port_str, camera_str
+        )
+        if not valid or conf is None:
+            logger.warning(f"Invalid connection config: {error_msg}")
             return
 
-        camera = int(camera_str) if camera_str.isdigit() else camera_str
+        editor.add_config(conf)
 
-        self.add_connection(host, port, camera, write_config)
+        self.add_connection(conf)
         dialog.accept()

@@ -13,13 +13,12 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QDialog,
 )
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, Signal, QThread, QSignalBlocker
 from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QKeyEvent
 import cv2
 import numpy as np
 
 from src.pyside_gui.qtwidgets import Toggle
-from src.config import load_default_config
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
 from src.pyside_gui.connection_manager import QTConnectionManager
@@ -105,7 +104,6 @@ class PySide6Interface(QMainWindow):
 
         self.scheduler = QTScheduler()
         self.app = App(self.scheduler)
-        self.default_config = load_default_config()
 
         # Video thread
         self.video_thread = VideoThread(self.app)
@@ -280,8 +278,7 @@ class PySide6Interface(QMainWindow):
         main_layout.addWidget(connection_frame, 3, 2)
 
         # Connect signals
-        self.connection_changed.connect(self.open_connection)
-        self.update_connection_list()
+        # self.connection_changed.connect(self.open_connection)
         self.update_ui()
 
     def keyPressEvent(self, event: QKeyEvent):
@@ -317,12 +314,11 @@ class PySide6Interface(QMainWindow):
 
     def update_video_frame(self, frame):
         """Update the video display with new frame"""
-        if frame is None:
-            return
+        if frame is None or (config_data := self.app.get_active_config()) is None:
+            return None
 
-        config_data = self.app.get_active_config() or self.default_config
-        desired_height = config_data.get("frame_height")
-        desired_width = config_data.get("frame_width")
+        desired_height = config_data.frame_height
+        desired_width = config_data.frame_width
 
         # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -351,12 +347,9 @@ class PySide6Interface(QMainWindow):
         pixmap = QPixmap.fromImage(qimage)
         self.video_label.setPixmap(pixmap)
 
-    def open_connection(self, hostname, port=None, camera=None, write_config=False):
+    def open_connection(self, hostname):
         logger.info(f"open_connection called for {hostname}")
         """Open a new connection"""
-        self.app.open_connection(
-            hostname, port=port, camera=camera, write_config=write_config
-        )
         self.update_ui()
         self.update_connection_list()
 
@@ -369,12 +362,11 @@ class PySide6Interface(QMainWindow):
 
     def manage_connections(self):
         """Open connection manager dialog"""
-        dialog = QTConnectionManager(self, self.app.get_connections())
-        dialog.connection_requested.connect(self.open_connection)
+        dialog = QTConnectionManager(self, self.app)
+        dialog.update_connections.connect(self.update_ui)
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.update_ui()
-            self.update_connection_list()
 
     def set_active_connection(self, option):
         """Set the active connection"""
@@ -386,20 +378,19 @@ class PySide6Interface(QMainWindow):
         """Update the connection combo box list"""
         connections = self.app.get_connections()
 
-        self.connection_combo.clear()
-        options = list(connections.keys()) or ["None"]
-        self.connection_combo.addItems(options)
+        with QSignalBlocker(self.connection_combo):
+            self.connection_combo.clear()
+            options = list(connections.keys()) or ["None"]
+            self.connection_combo.addItems(options)
 
-        # Set current selection
-        current_connection = self.app.get_active_connection()
-        current_host = "None" if current_connection is None else current_connection.host
-        self.connection_combo.setCurrentText(current_host)
+            current_host = self.app.get_active_hostname() or "None"
+            if self.connection_combo.currentText() != current_host:
+                self.connection_combo.setCurrentText(current_host)
 
     def update_ui(self):
         """Update UI state based on current connections"""
-        connections = self.app.get_connections()
 
-        if len(connections) == 0:
+        if len(self.app.get_connections()) == 0:
             self.set_manual_control_btn_state(False)
             self.automatic_slider.setChecked(False)
             self.automatic_slider.setEnabled(False)
@@ -407,8 +398,7 @@ class PySide6Interface(QMainWindow):
             self.draw_no_signal_display()
             return
 
-        connection = self.app.get_active_connection()
-        if connection is None:
+        if (connection := self.app.get_active_connection()) is None:
             return
 
         # Update automatic button state
@@ -430,6 +420,8 @@ class PySide6Interface(QMainWindow):
             self.app.get_control_mode() == ControlMode.CONTINUOUS
         )
 
+        self.update_connection_list()
+
         # Start video thread if not running
         if not self.video_thread.isRunning():
             self.video_thread.running = True
@@ -445,6 +437,7 @@ class PySide6Interface(QMainWindow):
         # mode = ControlMode.CONTINUOUS if checked else ControlMode.DISCRETE
         # self.app.set_control_mode(mode)
         self.app.toggle_control_mode()
+        self.update_ui()
 
     def change_model(self, model_name):
         """Change the detection model"""
