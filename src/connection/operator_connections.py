@@ -135,31 +135,3 @@ class CommandConnection(OperatorConnection):
         return_command_value = command_value + 0x8000
         return_command_value_bytes = toBytes(return_command_value, CTypesInt.UINT16)
         connection.send(return_command_value_bytes)
-
-    def connect(self):
-        self.is_running = True
-        for attempt in range(5):
-            if not self.is_running:
-                return  # Exit since this connection is not needed anymore
-            try:
-                self.socket.bind((self.host, self.port))
-                logger.debug(f"Bound to socket: {self.host}:{self.port}")
-                break
-            except OSError as e:
-                logger.error(
-                    f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}"
-                )
-                time.sleep(5)
-        else:
-            return  # Failed to bind after retries
-
-        logger.debug("Starting to listen!")
-        self.socket.listen()
-        while self.is_running:
-            try:
-                connection, address = self.socket.accept()
-                logger.debug(f"Got connection from {address}")
-                self.listen(connection)
-            except OSError as e:
-                logger.error(f"OS Error: {e}")
-                break
