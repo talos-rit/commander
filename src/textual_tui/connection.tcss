@@ -11,3 +11,36 @@ ManageConnectionScreen>* {
 .prev-connections-list, .current-connections-list {
   border: solid green;
 }
+
+.section-header {
+  margin-bottom: 1;
+}
+
+.header {
+  content-align: center middle;
+  border: solid white;
+  height: 3;
+}
+
+#previous-connections-list {
+  border-title-color: white;
+}
+
+#form-container {
+  border: solid green;
+  height: auto;
+  background: gray 30%;
+}
+
+#section-header {
+  padding-left: 1;
+}
+
+#operator-url-input, #camera-source-input {
+  margin: 0;
+  width: 100%;
+}
+
+#add-connection-btn {
+  margin-left: 1;
+}

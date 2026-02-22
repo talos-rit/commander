@@ -3,10 +3,11 @@ from multiprocessing.managers import SharedMemoryManager
 from loguru import logger
 from textual import on, work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.timer import Timer
-from textual.widgets import Button, Footer, Header, Select, Static, Switch
+from textual.widgets import Button, Footer, Header, Label, Select, Static, Switch
 
 from src.talos_app import App as TalosApp
 from src.talos_app import ControlMode, Direction
@@ -26,21 +27,30 @@ MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)
 class TextualInterface(App):
     CSS_PATH = "app.tcss"
     BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("space", "home", "Home"),
-        ("up", "mv_up", "Up"),
-        ("down", "mv_down", "Down"),
-        ("left", "mv_left", "Left"),
-        ("right", "mv_right", "Right"),
+        Binding(key="q", action="quit", description="Quit"),
+        Binding(key="space", action="home", description="Home"),
+        Binding(key="up", action="mv_up", description="Up"),
+        Binding(key="down", action="mv_down", description="Down"),
+        Binding(key="left", action="mv_left", description="Left"),
+        Binding(key="right", action="mv_right", description="Right"),
+        Binding(key="e", action="mode_switch", description="Toggle Auto Mode"),
+        Binding(key="m", action="manage_connection", description="Manage Connections"),
+        Binding(
+            key="c",
+            action="toggle_control_mode",
+            description="Toggle Continuous Control",
+        ),
     ]
     _talos_app: TalosApp
     debounce_timers: dict[str, Timer] = dict()
     smm: SharedMemoryManager = SharedMemoryManager()
-    connection_options = reactive([("None", None)])
+    connection_options = reactive(list())
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal():
+            log = PrintViewer(id="log-viewer", classes="column", disabled=True)
+            focus_log = log.focus  # reactive button needs a component to focus on blur to not let another button accidentally trigger.
             with Vertical(classes="column"):
                 with Horizontal():
                     with Vertical(classes="widget"):
@@ -48,22 +58,30 @@ class TextualInterface(App):
                         yield Switch(value=False, id="auto-mode-switch")
                         yield Static("Continuous Control:", classes="label-text")
                         yield Switch(value=False, id="continuous-control-switch")
-                    yield ReactiveButton("UP", id="up", classes="widget")
-                    yield Static(id="placeholder", classes="widget")
+                    yield ReactiveButton(
+                        "UP", id="up", classes="widget", on_blur=focus_log
+                    )
+                    yield Label(id="placeholder", classes="widget")
                 with Horizontal():
-                    yield ReactiveButton("LEFT", id="left", classes="widget")
+                    yield ReactiveButton(
+                        "LEFT", id="left", classes="widget", on_blur=focus_log
+                    )
                     yield Button(
                         "HOME",
                         id="home",
                         classes="widget",
                         action="app.home()",
                     )
-                    yield ReactiveButton("RIGHT", id="right", classes="widget")
+                    yield ReactiveButton(
+                        "RIGHT", id="right", classes="widget", on_blur=focus_log
+                    )
                 with Horizontal():
                     with Vertical(classes="widget"):
-                        yield Static("Model:", classes="label-text")
+                        yield Static("Tracking Model", classes="label-text")
                         yield Select(MODEL_OPTIONS_TEXTUAL, id="model-select")
-                    yield ReactiveButton("DOWN", id="down", classes="widget")
+                    yield ReactiveButton(
+                        "DOWN", id="down", classes="widget", on_blur=focus_log
+                    )
                     with Vertical(classes="widget connection-widget"):
                         yield Button(
                             "Manage Connection",
@@ -75,7 +93,7 @@ class TextualInterface(App):
                             self.connection_options,
                             id="connection-select",
                         )
-            yield PrintViewer(classes="column")
+            yield log
         yield Footer()
 
     def watch_connection_options(self, old_options, new_options):
@@ -135,13 +153,21 @@ class TextualInterface(App):
 
     @on(Select.Changed, "#model-select")
     def model_changed(self, event: Select.Changed) -> None:
-        if event.value is Select.BLANK:
+        if event.value is Select.NULL:
             return self._talos_app.change_model(None)
         self._talos_app.change_model(str(event.value))
+
+    def action_mode_switch(self):
+        switch = self.query_one("#auto-mode-switch", Switch)
+        switch.value = not switch.value
 
     @on(Switch.Changed, "#auto-mode-switch")
     def auto_mode_changed(self, _: Switch.Changed) -> None:
         self._talos_app.toggle_director()
+
+    def action_toggle_control_mode(self):
+        switch = self.query_one("#continuous-control-switch", Switch)
+        switch.value = not switch.value
 
     @on(Switch.Changed, "#continuous-control-switch")
     def continuous_control_changed(self, _: Switch.Changed) -> None:
@@ -213,7 +239,9 @@ class TextualInterface(App):
         connections = [(conn, conn) for conn in self._talos_app.get_connection_hosts()]
         self.connection_options = connections
         host = self._talos_app.get_active_hostname()
-        self.query_one("#connection-select", Select).value = host or Select.BLANK
+        if host is None:
+            return self.query_one("#connection-select", Select).clear()
+        self.query_one("#connection-select", Select).value = host
 
     @on(Select.Changed, "#connection-select")
     def handle_active_connection(self, active_connection: Select.Changed):
