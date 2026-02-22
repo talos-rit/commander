@@ -67,8 +67,11 @@ class Streamer:
         if hostname in self.connections:
             conn = self.connections[hostname]
             frame = conn.video_connection.get_frame()
-            if frame is not None and self.draw_bboxes:
-                bboxes = conn.get_bboxes()
+            if (
+                frame is not None
+                and self.draw_bboxes
+                and (bboxes := conn.get_bboxes()) is not None
+            ):
                 frame = draw_visuals(bboxes, frame)
             return frame
         else:

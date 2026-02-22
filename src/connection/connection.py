@@ -19,6 +19,8 @@ from src.utils import (
 
 
 class PyAVCapture:
+    _term: int | None = None
+
     def __init__(self, source, **options):
         self.container = av.open(source, options=options)
         self.video_stream = next(

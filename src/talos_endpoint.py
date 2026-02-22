@@ -70,18 +70,15 @@ def _ensure_stream_started(talos_app: TalosApp) -> None:
         return
 
     # Check App's active connection first, then fallback to tracker's active connection
-    active_host = talos_app.get_active_hostname()
-    logger.debug(f"Active hostname from App: {active_host}")
-    logger.debug(f"Tracker active connection: {talos_app.connections.get_active()}")
-    logger.debug(f"Connections dict: {list(talos_app.connections.keys())}")
-
-    if active_host is None:
+    active_conn = talos_app.connections.get_active()
+    if active_conn is None:
         logger.warning("Cannot start stream: No active camera connection")
         return
 
-    logger.info(f"Calling start_stream for {active_host}")
+    logger.info(f"Calling start_stream for {active_conn.host}")
     talos_app.start_stream(
         output_url=MEDIAMTX_RTSP_URL,
+        hostname=active_conn.host,
         fps=int(MEDIAMTX_FPS) if MEDIAMTX_FPS else None,
         use_docker=MEDIAMTX_USE_DOCKER,
         docker_network=MEDIAMTX_DOCKER_NETWORK if MEDIAMTX_USE_DOCKER else None,
