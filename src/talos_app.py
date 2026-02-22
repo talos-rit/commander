@@ -9,6 +9,7 @@ from .connection.publisher import Direction
 from .directors import BaseDirector
 from .scheduler import IterativeTask, Scheduler
 from .streaming import FfmpegStreamController, StreamConfig
+from .streaming.streamer import Streamer
 from .thread_scheduler import ThreadScheduler
 from .tracking import USABLE_MODELS
 from .tracking.tracker import Tracker
@@ -31,6 +32,7 @@ class App:
     scheduler: Scheduler
     connections: ConnectionCollection
     tracker: Tracker
+    streamer: Streamer
     director: BaseDirector | None = None
     control_mode: ControlMode = ControlMode.CONTINUOUS
     move_delay_ms: int = 300  # time inbetween each directional command being sent while directional button is depressed
@@ -48,6 +50,7 @@ class App:
         self.scheduler = scheduler
         self.connections = ConnectionCollection()
         self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
+        self.streamer = Streamer(self.connections, draw_bboxes=True)
 
     def open_connection(
         self,
@@ -173,13 +176,7 @@ class App:
 
     def get_active_frame(self):
         """Gets the active connection's current video frame"""
-        if (connection := self.get_active_connection()) is None:
-            return None
-        return self.tracker.get_frame(connection.host)
-
-    def get_frame(self, hostname: str):
-        """Gets the specified connection's current video frame"""
-        return self.tracker.get_frame(hostname)
+        return self.streamer.get_active_frame()
 
     def get_active_config(self) -> ConnectionConfig | None:
         """Gets the active connection's configuration"""
@@ -256,7 +253,7 @@ class App:
         """Start streaming the active (or specified) connection via ffmpeg."""
         logger.info("Starting stream to {}", output_url)
         if hostname is None:
-            frame_getter = self.get_active_frame
+            frame_getter = self.streamer.get_active_frame
             cfg = self.get_active_config()
         else:
             if hostname not in self.connections:
@@ -264,7 +261,7 @@ class App:
 
             def frame_getter():
                 logger.debug(f"Getting frame for {hostname}")
-                return self.get_frame(hostname)
+                return self.streamer.get_frame(hostname)
 
             cfg = ROBOT_CONFIGS.get(hostname)
 

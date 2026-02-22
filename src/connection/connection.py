@@ -131,6 +131,8 @@ class Connection:
     video_connection: VideoConnection
     is_manual: bool = True
     publisher: Publisher = field(init=False)
+    _bboxes: list[tuple[int, int, int, int]] | None = field(init=False, default=None)
+    _bboxes_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
 
     def __post_init__(self):
         self.publisher = Publisher(self.host, self.port)
@@ -146,6 +148,14 @@ class Connection:
     def close(self) -> None:
         self.video_connection.close()
         self.publisher.close()
+
+    def get_bboxes(self) -> list[tuple[int, int, int, int]] | None:
+        with self._bboxes_lock:
+            return self._bboxes
+
+    def set_bboxes(self, bboxes: list[tuple[int, int, int, int]] | None) -> None:
+        with self._bboxes_lock:
+            self._bboxes = bboxes
 
 
 class ConnectionCollectionEvent(Enum):
@@ -239,3 +249,7 @@ class ConnectionCollection(dict[str, Connection]):
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None
+
+    def clear_bboxes(self) -> None:
+        for connection in self.values():
+            connection.set_bboxes(None)

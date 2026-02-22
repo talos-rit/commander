@@ -32,14 +32,14 @@ class BaseDirector(ABC):
             self.start_auto_control()
 
     def on_connection_update(self, event: ConnectionCollectionEvent, *_: Any):
-        if event == ConnectionCollectionEvent.ADDED:
-            if self.scheduler is not None and self.control_task is None:
-                self.start_auto_control()
-        elif event == ConnectionCollectionEvent.REMOVED:
-            if not self.connections:
-                self.stop_auto_control()
-        else:
-            pass
+        if (
+            event == ConnectionCollectionEvent.ADDED
+            and self.scheduler is not None
+            and self.control_task is None
+        ):
+            self.start_auto_control()
+        elif event == ConnectionCollectionEvent.REMOVED and not self.connections:
+            self.stop_auto_control()
 
     # Processes the bounding box and sends commands
     @abstractmethod
@@ -53,23 +53,16 @@ class BaseDirector(ABC):
         raise NotImplementedError("Subclasses must implement this method.")
 
     def track_obj(self) -> Any | None:
-        bboxes = self.tracker.get_bboxes()
-        for host, bbox in bboxes.items():
+        for host, conn in self.connections.items():
+            bbox = conn.get_bboxes()
             if host in self.connections and bbox is not None and len(bbox) > 0:
-                if (
-                    self.connections[host].is_manual
-                    or (shape := self.connections[host].video_connection.shape) is None
-                ):
+                if conn.is_manual or (shape := conn.video_connection.shape) is None:
                     continue  # skip manual feeds
                 return self.process_frame(
                     host,
                     bbox,
                     shape,
-                    self.connections[host].publisher,
-                )
-            else:
-                logger.warning(
-                    f"Boundary box not found for host {host}. Make sure the object recognition is running."
+                    conn.publisher,
                 )
 
     def start_auto_control(self) -> None:

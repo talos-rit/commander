@@ -118,6 +118,7 @@ class Detector(DetectorInterface):
         logger.info("Firing up model...")
 
     def stop(self):
+        self.connections.clear_bboxes()
         if self._detection_process is None or not self._detection_process.is_alive():
             self._detection_process = None
             self._term = None
@@ -233,12 +234,13 @@ class Detector(DetectorInterface):
         if self.waiting_startup:
             self.waiting_startup = False
             logger.info("Model loaded, starting to poll bounding boxes.")
-        bboxes_by_host: BBoxMapping = {host: [] for host, _ in self.frame_order}
 
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
+            self.connections[host].set_bboxes(raw_bboxes)
             return {host: raw_bboxes}
 
+        bboxes_by_host: BBoxMapping = {host: [] for host, _ in self.frame_order}
         for x1, y1, x2, y2 in raw_bboxes:
             cx = (x1 + x2) // 2
 
@@ -254,6 +256,8 @@ class Detector(DetectorInterface):
                         (max(0, x1 - dx), y1, max(0, x2 - dx), y2)
                     )
 
+        for host, bboxes in bboxes_by_host.items():
+            self.connections[host].set_bboxes(bboxes)
         return bboxes_by_host
 
     def is_running(self):
@@ -324,15 +328,16 @@ class Detector(DetectorInterface):
                 if not frame_ready_event.wait(0.1):
                     logger.debug("No new frame received, continuing to wait...")
                     continue
-                # Not clear immediately to make a copy here safely\
+                # Not clear immediately to make a copy here safely
                 raw_frame = np.copy(frame)
                 frame_ready_event.clear()
                 bboxes = model.detect_person(frame=raw_frame)
                 if bbox_queue.full():
                     logger.warning("bbox_queue is full, deleting oldest output")
-                    _ = (
+                    try:
                         bbox_queue.get_nowait()
-                    )  # Discard the oldest bbox if the queue is full
+                    except Empty:
+                        pass  # This sometimes happens just ignore it since we just wanted to make space in the queue
                 try:
                     bbox_queue.put_nowait(bboxes)
                 except Full:
