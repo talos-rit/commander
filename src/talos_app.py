@@ -210,9 +210,9 @@ class App:
             return logger.error(
                 f"Model option was not found skipping initialization({option=})"
             )
-        model_class, _ = USABLE_MODELS[option]
+        model_class = USABLE_MODELS[option]
         self.tracker.swap_model(model_class)
-        logger.info(f"Initialized {option} director")
+        logger.info(f"Initialized {option} model")
 
     def is_manual_only(self) -> bool | None:
         """Gets the active connection's manual configuration"""

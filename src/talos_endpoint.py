@@ -10,6 +10,8 @@ from loguru import logger
 
 from src.talos_app import App as TalosApp
 
+from .connection.connection import ConnectionCollection
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,31 +49,36 @@ MEDIAMTX_FPS = os.getenv("MEDIAMTX_FPS")
 @dataclass(frozen=True)
 class Context:
     talos_app: TalosApp
+    connections: ConnectionCollection
 
 
 async def ctx():
     if _talos_app_instance is None:
         logger.error("Talos app instance is not initialized")
         raise RuntimeError("Talos app instance is not initialized")
-    return Context(talos_app=_talos_app_instance)
+    return Context(
+        talos_app=_talos_app_instance, connections=_talos_app_instance.connections
+    )
 
 
 def _ensure_stream_started(talos_app: TalosApp) -> None:
-    logger.debug(f"_ensure_stream_started called: is_streaming={talos_app.is_streaming()}")
+    logger.debug(
+        f"_ensure_stream_started called: is_streaming={talos_app.is_streaming()}"
+    )
     if talos_app.is_streaming():
         logger.debug("Stream already running, skipping start")
         return
-    
+
     # Check App's active connection first, then fallback to tracker's active connection
     active_host = talos_app.get_active_hostname()
     logger.debug(f"Active hostname from App: {active_host}")
-    logger.debug(f"Tracker active connection: {talos_app.tracker.active_connection}")
+    logger.debug(f"Tracker active connection: {talos_app.connections.get_active()}")
     logger.debug(f"Connections dict: {list(talos_app.connections.keys())}")
-    
+
     if active_host is None:
         logger.warning("Cannot start stream: No active camera connection")
         return
-    
+
     logger.info(f"Calling start_stream for {active_host}")
     talos_app.start_stream(
         output_url=MEDIAMTX_RTSP_URL,
@@ -85,35 +92,31 @@ def _ensure_stream_started(talos_app: TalosApp) -> None:
 @app.get("/")
 async def root(context: Context = Depends(ctx)):
     active_host = context.talos_app.get_active_hostname()
-    logger.debug(f"Root endpoint called: App active_hostname={active_host}, tracker active={context.talos_app.tracker.active_connection}")
-    
-    # Fallback to tracker's active connection if App's is None
-    if active_host is None and context.talos_app.tracker.active_connection:
-        active_host = context.talos_app.tracker.active_connection
-        logger.info(f"Syncing active connection from tracker: {active_host}")
-        context.talos_app.active_connection = active_host
-        logger.debug(f"After sync: App active_hostname={context.talos_app.get_active_hostname()}")
-    
-    logger.debug(f"Root endpoint: active_hostname={active_host}, connections={list(context.talos_app.connections.keys())}")
-    
+
+    logger.debug(
+        f"Root endpoint: active_hostname={active_host}, connections={list(context.talos_app.connections.keys())}"
+    )
+
     if active_host is None:
         logger.warning("No active connection found, returning 503")
         raise HTTPException(
             status_code=503,
             detail="No active camera connection. Please open a connection first through the GUI/TUI.",
         )
-    
+
     logger.debug("Calling _ensure_stream_started")
     _ensure_stream_started(context.talos_app)
-    
-    logger.debug(f"After _ensure_stream_started: is_streaming={context.talos_app.is_streaming()}")
+
+    logger.debug(
+        f"After _ensure_stream_started: is_streaming={context.talos_app.is_streaming()}"
+    )
     if not context.talos_app.is_streaming():
         logger.error("Stream failed to start, returning 503")
         raise HTTPException(
             status_code=503,
             detail="Failed to start stream. Check logs for details.",
         )
-    
+
     hls_url = f"{MEDIAMTX_BASE_URL.rstrip('/')}/{MEDIAMTX_STREAM_PATH}/"
     logger.info(f"Redirecting to HLS viewer: {hls_url}")
     return RedirectResponse(hls_url)
@@ -133,7 +136,9 @@ async def status(context: Context = Depends(ctx)):
         "active_hostname": context.talos_app.get_active_hostname(),
         "connections": list(context.talos_app.connections.keys()),
         "is_streaming": context.talos_app.is_streaming(),
-        "tracker_active_connection": context.talos_app.tracker.active_connection,
+        "tracker_active_connection": conn.host
+        if (conn := context.connections.get_active()) is not None
+        else None,
     }
 
 

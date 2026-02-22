@@ -95,9 +95,7 @@ class TextualInterface(App):
         scheduler = TextualScheduler(self)
         self._talos_app = TalosApp(scheduler, smm=self.smm)
         self.run_server()
-
         start_termination_guard()
-
         continuous_switch = self.query_one("#continuous-control-switch", Switch)
         continuous_switch.value = (
             self._talos_app.get_control_mode() == ControlMode.CONTINUOUS
@@ -232,9 +230,6 @@ class TextualInterface(App):
     def stop_mv_direction(self, direction: Direction):
         logger.info(f"Stop move {direction}")
         self._talos_app.stop_move(direction)
-
-    def get_app(self) -> TalosApp:
-        return self._talos_app
 
 
 if __name__ == "__main__":
