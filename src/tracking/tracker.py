@@ -12,7 +12,7 @@ from loguru import logger
 from src.config import DEFAULT_ROBOT_CONFIG
 from src.scheduler import IterativeTask, Scheduler
 from src.talos_app import ConnectionCollection
-from src.tracking.detector import Detector, ObjectModel
+from src.tracking.detector import DetectionWaitingForModel, Detector, ObjectModel
 from src.utils import (
     add_termination_handler,
     calculate_acceptable_box,
@@ -83,10 +83,10 @@ class Tracker:
         if self._detector.is_running():
             return  # Already running
         logger.info("Starting detection process...")
-        self._term_handler_id = add_termination_handler(self.stop)
         self.waiting_for_model = True
         logger.info("Waiting for model to load...")
         self._detector.start()
+        self._term_handler_id = add_termination_handler(self.stop)
         logger.info(
             f"Detection process started. bbox delay:{self.bbox_delay}ms, frame delay:{self.frame_delay}ms"
         )
@@ -100,23 +100,17 @@ class Tracker:
     def poll_bboxes(self) -> None:
         try:
             bbox_map = self._detector.get_bboxes()
+        except DetectionWaitingForModel:
+            return
         except ValueError as e:
             logger.warning(f"Error getting bounding boxes: {e}")
             self.stop()
             return
         except Empty:
-            if self.waiting_for_model:
-                return
             if self._bbox_success_count < 1:
                 self.decrease_bbox_frame_rate()
             self._bbox_success_count -= 1
             return
-        if bbox_map is None:
-            logger.warning("No bounding boxes detected.")
-            return
-        if self.waiting_for_model:
-            logger.info("Model loaded, starting to poll bounding boxes.")
-            self.waiting_for_model = False
         self._bbox_success_count += 1
         if self._bbox_success_count > 10:
             self.increase_bbox_frame_rate()
@@ -124,7 +118,7 @@ class Tracker:
             self._bboxes = bbox_map
 
     def send_latest_frame(self) -> None:
-        self._detector.send_input(self.waiting_for_model)
+        self._detector.send_input()
 
     def is_pipeline_running(self) -> bool:
         return self._send_frame_task is not None and self._poll_bbox_task is not None
@@ -258,7 +252,10 @@ class Tracker:
         current_interval = self.bbox_delay
         new_interval = max(current_interval * 0.9, 1000.0 / self.max_fps)
         self.reschedule_bbox_task(new_interval)
-        logger.debug(f"Increased bbox polling rate to {new_interval:.2f} ms.")
+        if new_interval <= 1000.0 / self.max_fps:
+            logger.warning(
+                f"Bbox polling rate is at maximum (max_fps={self.max_fps}). Consider upgrading your model or increasing max_fps in config."
+            )
 
     def decrease_bbox_frame_rate(self) -> None:
         """Decrease bbox polling rate by 10%, up to a maximum of 1 FPS."""
@@ -266,7 +263,10 @@ class Tracker:
             return
         new_interval = min(self.bbox_delay * 1.1, 1000.0)  # Maximum 1 FPS
         self.reschedule_bbox_task(new_interval)
-        logger.debug(f"Decreased bbox polling rate to {new_interval:.2f} ms.")
+        if new_interval >= 900.0:
+            logger.warning(
+                "Resource seems to be struggling. Consider using a smaller model."
+            )
 
     def reschedule_bbox_task(self, new_delay: float) -> None:
         """Reschedule the bbox polling task with the current bbox_delay."""

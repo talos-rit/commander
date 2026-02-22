@@ -17,6 +17,10 @@ from ..utils import add_termination_handler, remove_termination_handler
 type BBoxMapping = dict[str, list[tuple[int, int, int, int]]]
 
 
+class DetectionWaitingForModel(Exception):
+    pass
+
+
 class ObjectModel(ABC):
     """
     This is a model class where it can handle turning image frame into bounding box
@@ -81,6 +85,7 @@ class Detector(DetectorInterface):
         if self.model is None:
             logger.error("Model was not found please pass a model into Tracker to run.")
             return
+        self.waiting_startup = True
         self._bbox_queue = Queue(maxsize=2)
         self._model_stopper = Event()
         self._frame_ready_event = Event()
@@ -144,6 +149,7 @@ class Detector(DetectorInterface):
         if self._detection_process is None or not self._detection_process.is_alive():
             logger.warning("Detection process is not running")
             return False
+        self.waiting_startup = True
         self.stop()
         self.start()
         return True
@@ -159,9 +165,9 @@ class Detector(DetectorInterface):
         ):
             self.reset_frame_order()
 
-    def send_input(self, quiet=False):
+    def send_input(self):
         if self._frame_ready_event.is_set():
-            if not quiet:
+            if not self.waiting_startup:
                 logger.warning(
                     "Previous frame is still being processed, skipping sending new frame to detector."
                 )
@@ -207,12 +213,25 @@ class Detector(DetectorInterface):
         Throws Empty if no bounding boxes are detected.
         Throws ValueError if the bbox queue is closed.
         """
-        raw_bboxes: None | list[tuple[int, int, int, int]] = self._bbox_queue.get(
-            block=False
-        )
+        try:
+            raw_bboxes: None | list[tuple[int, int, int, int]] = self._bbox_queue.get(
+                block=False
+            )
+        except (ValueError, Empty) as e:
+            if self.waiting_startup:
+                raise DetectionWaitingForModel(
+                    "Detection process is still starting up, please wait and try again."
+                )
+            raise e
         if raw_bboxes is None:
+            if self.waiting_startup:
+                raise DetectionWaitingForModel(
+                    "Detection process is still starting up, please wait and try again."
+                )
             raise Empty("No bounding boxes detected.")
-
+        if self.waiting_startup:
+            self.waiting_startup = False
+            logger.info("Model loaded, starting to poll bounding boxes.")
         bboxes_by_host: BBoxMapping = {host: [] for host, _ in self.frame_order}
 
         if 1 == len(self.frame_order):
