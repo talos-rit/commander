@@ -1,11 +1,9 @@
 import threading
 from enum import Enum
-from multiprocessing import Process, Queue
 from multiprocessing.managers import SharedMemoryManager
 from queue import Empty
 
 import cv2
-import numpy as np
 from loguru import logger
 
 # TODO: Stop get rid of this import once AppSettings is implemented for non-connection specific settings/defaults
@@ -39,21 +37,13 @@ class Tracker:
     max_fps = POLL_BBOX_CYCLE_INTERVAL_MS  # this will be set dynamically based on configuration see max_fps
     frame_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
     bbox_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
-    model = None
-    # captures: dict[str, VideoConnection] = dict()
     connections: ConnectionCollection
-    frame_order: list[tuple[str, int]] = list()  # (host, frame x location)[]
-    active_connection: str | None = None
     _scheduler: Scheduler
     _bboxes: dict[str, list] = dict()
     _bbox_lock: threading.Lock = threading.Lock()
-    _frame_buf: np.ndarray
-    _bbox_queue: Queue
-    _detection_process: Process | None = None
     _term_handler_id: int | None = None
     _send_frame_task: IterativeTask | None = None
     _poll_bbox_task: IterativeTask | None = None
-    _smm: SharedMemoryManager | None = None
     _bbox_success_count: int = 0
     _detector: Detector
 
@@ -72,7 +62,6 @@ class Tracker:
         """
         self._scheduler = scheduler
         self.connections = connections
-        self.model = model
         self.max_fps = DEFAULT_ROBOT_CONFIG.max_fps
         self.frame_delay = 1000 / DEFAULT_ROBOT_CONFIG.fps
         self.bbox_delay = 1000 / self.max_fps
