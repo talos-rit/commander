@@ -26,12 +26,6 @@ def run_server(app: App):
     endpoint = TalosEndpoint(app)
     endpoint.run()
 
-
-def run_server(app: App):
-    endpoint = TalosEndpoint(app)
-    endpoint.run()
-
-
 def terminal_interface(args=None):
     configure_logger(True)
     smm = multiprocessing.managers.SharedMemoryManager()
