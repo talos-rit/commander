@@ -115,6 +115,7 @@ class Detector(DetectorInterface):
         )
         self._term = add_termination_handler(self.kill)
         self._detection_process.start()
+        logger.info("Firing up model...")
 
     def stop(self):
         if self._detection_process is None or not self._detection_process.is_alive():

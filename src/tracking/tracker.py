@@ -83,8 +83,6 @@ class Tracker:
         if self._detector.is_running():
             return  # Already running
         logger.info("Starting detection process...")
-        self.waiting_for_model = True
-        logger.info("Waiting for model to load...")
         self._detector.start()
         self._term_handler_id = add_termination_handler(self.stop)
         logger.info(
