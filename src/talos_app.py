@@ -202,19 +202,15 @@ class App:
         """
         option = option if option != "None" else None
         if self.director is not None:
-            logger.info("Stopping director")
             self.director.stop_auto_control()
-            # self.director = None
             logger.info("Director stopped")
         if option is None:
             return self.tracker.swap_model(None)
         if option not in USABLE_MODELS:
             return logger.error(
-                f"Model option was not found skipping initialization... (found {option})"
+                f"Model option was not found skipping initialization({option=})"
             )
-        logger.info(f"Entering {option}")
         model_class, _ = USABLE_MODELS[option]
-        # self.director = director_class(self.tracker, self.connections, self.scheduler)
         self.tracker.swap_model(model_class)
         logger.info(f"Initialized {option} director")
 
@@ -256,29 +252,23 @@ class App:
         """Start streaming the active (or specified) connection via ffmpeg."""
         logger.info("Starting stream to {}", output_url)
         if hostname is None:
-            frame_getter = self.streamer.get_active_frame
+            frame_getter = self.streamer.get_active_frame  # pyright: ignore[reportAssignmentType]
             cfg = self.get_active_config()
         else:
             if hostname not in self.connections:
                 raise ValueError(f"Connection to {hostname} does not exist")
 
-            def frame_getter():
-                logger.debug(f"Getting frame for {hostname}")
-                return self.streamer.get_frame(hostname)
+            def frame_getter(host=hostname):
+                return self.streamer.get_frame(host)
 
             cfg = ROBOT_CONFIGS.get(hostname)
-
         if cfg is None:
-            logger.error("No active connection found for streaming")
-            return
-
+            return logger.error("No active connection found for streaming")
         if fps is None:
             fps = cfg.fps
-
         if self._streamer is not None:
             self._streamer.stop()
             self._streamer = None
-
         stream_config = StreamConfig(
             output_url=output_url,
             fps=fps,
