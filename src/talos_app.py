@@ -6,7 +6,7 @@ from loguru import logger
 from .config import ROBOT_CONFIGS, ConnectionConfig
 from .connection.connection import Connection, ConnectionCollection, VideoConnection
 from .connection.publisher import Direction
-from .directors import BaseDirector
+from .directors import BaseDirector, ContinuousDirector
 from .scheduler import IterativeTask, Scheduler
 from .streaming import FfmpegStreamController, StreamConfig
 from .streaming.streamer import Streamer
@@ -51,6 +51,9 @@ class App:
         self.connections = ConnectionCollection()
         self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
         self.streamer = Streamer(self.connections, draw_bboxes=True)
+        self.director = ContinuousDirector(
+            self.tracker, self.connections, self.scheduler
+        )
 
     def open_connection(
         self,
@@ -201,7 +204,7 @@ class App:
         if self.director is not None:
             logger.info("Stopping director")
             self.director.stop_auto_control()
-            self.director = None
+            # self.director = None
             logger.info("Director stopped")
         if option is None:
             return self.tracker.swap_model(None)
@@ -210,8 +213,8 @@ class App:
                 f"Model option was not found skipping initialization... (found {option})"
             )
         logger.info(f"Entering {option}")
-        model_class, director_class = USABLE_MODELS[option]
-        self.director = director_class(self.tracker, self.connections, self.scheduler)
+        model_class, _ = USABLE_MODELS[option]
+        # self.director = director_class(self.tracker, self.connections, self.scheduler)
         self.tracker.swap_model(model_class)
         logger.info(f"Initialized {option} director")
 

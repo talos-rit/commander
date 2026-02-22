@@ -79,8 +79,11 @@ class Streamer:
         active_conn = self.connections.get_active()
         if active_conn is not None:
             frame = active_conn.video_connection.get_frame()
-            if frame is not None and self.draw_bboxes:
-                bboxes = active_conn.get_bboxes()
+            if (
+                frame is not None
+                and self.draw_bboxes
+                and (bboxes := active_conn.get_bboxes()) is not None
+            ):
                 frame = draw_visuals(bboxes, frame)
             return frame
         else:

@@ -85,16 +85,14 @@ class BaseDirector(ABC):
     def toggle_control_mode(self, hostname: str | None = None) -> bool | None:
         """Toggles the control mode of the connection. If hostname is None, toggles the active connection.
         Returns the new control mode (True for manual, False for auto) or None if no connection is found."""
-        if hostname is None:
-            conn = self.connections.get_active()
-            if conn is None:
-                logger.warning("No active connection found.")
-                return None
-        else:
-            conn = self.connections[hostname]
-            if conn is None:
-                logger.warning(f"Connection for hostname {hostname} not found.")
-                return None
+        conn = (
+            self.connections.get_active()
+            if hostname is None
+            else self.connections.get(hostname)
+        )
+        if conn is None:
+            logger.warning("No active connection found.")
+            return None
         if conn.is_manual_only:
             logger.warning(f"Connection for hostname {hostname} is manual only.")
             conn.is_manual = True
