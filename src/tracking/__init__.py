@@ -4,8 +4,8 @@ from loguru import logger
 
 from src.directors import BaseDirector, ContinuousDirector
 
+from .detector import ObjectModel
 from .haar_cascade.basic_model import BasicModel
-from .tracker import ObjectModel
 
 
 class ModelOption(StrEnum):
