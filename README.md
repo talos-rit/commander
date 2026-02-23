@@ -109,14 +109,7 @@ The `config/example_default_config.yaml` file contains default parameters for th
 When you create a new connection in the commander application, it will automatically create a new config file, `config/robot_configs.local.yaml`. This file will contain the parameters for each connection you create. You can also edit this file directly to change the parameters for each connection.
 
 
-## Running with Operator
-1. Edit `config/network_config.yaml` to set the host and port for the operator to connect to. (The Pi is unctalos.student.rit.edu:61616)
-2. Turn on the robot arm and connect it to the pi via USB.
-3. SSH into the Pi and run the operator script
-4. Run the commander and it should connect to the operator. Try a home command to test the connection.
-
-
-### Troubleshooting
+## Troubleshooting
 If you are having trouble connecting to the arm, try running the following command on the Pi:
 ```bash
 ls /dev/tty*
