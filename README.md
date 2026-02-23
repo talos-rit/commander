@@ -93,11 +93,21 @@ Run the TUI interface:
 ```bash
 uv run commander-terminal
 ```
+or
+```bash
+uv run commander -t
+```
 
 Run the Tk GUI interface:
 ```bash
 uv run commander-tk
 ```
+
+## Configurations
+The `config/example_default_config.yaml` file contains default parameters for the application that will be used to fill in the new connections configs. You can override these parameters using `config/default_config.local.yaml` which will be prioritized over the example default config. 
+
+When you create a new connection in the commander application, it will automatically create a new config file, `config/robot_configs.local.yaml`. This file will contain the parameters for each connection you create. You can also edit this file directly to change the parameters for each connection.
+
 
 ## Running with Operator
 1. Edit `config/network_config.yaml` to set the host and port for the operator to connect to. (The Pi is unctalos.student.rit.edu:61616)
