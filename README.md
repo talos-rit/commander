@@ -11,8 +11,8 @@ uv sync
 ```
 or alternatively
 ```bash
-mkdir -p venv/py3.12
-python3.12 -m venv venv/py3.12
+mkdir -p .venv/py3.12
+python3.12 -m venv .venv/py3.12
 pip install -r requirements.txt
 ```
 
