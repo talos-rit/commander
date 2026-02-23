@@ -15,8 +15,12 @@ def join_paths(*paths: str) -> str:
 
 def get_icon(
     override_is_mac: bool | None = None, override_is_dark_mode: bool | None = None
-) -> tuple[str, Literal["icns", "ico"]]:
+) -> tuple[str, Literal["icns", "ico"]] | tuple[None, None]:
     """Returns the file path to the correct icon based on the OS and dark mode."""
+    sys_platform = platform.system()
+    if sys_platform == "Linux":
+        # Do this since linux doesn't support icons like windows and mac
+        return None, None 
     is_dark_mode = (
         override_is_dark_mode or darkdetect.isDark()
         if darkdetect.isDark() is not None
@@ -27,7 +31,7 @@ def get_icon(
         if darkdetect.isLight() is not None
         else False
     )
-    is_mac = override_is_mac or platform.system() == "Darwin"
+    is_mac = override_is_mac or sys_platform == "Darwin"
     if is_mac and is_dark_mode and not is_light_mode:
         # I'm using an old .icns file because the new macos 26 version has a weird compatibility problem
         # where the icon does not get padding.
