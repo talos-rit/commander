@@ -18,7 +18,6 @@ class TKConnectionManager(tkinter.Toplevel):
         self.connections = app.get_connections()
         self.update_gui_callback = update_gui_callback
         self.transient(parent)
-        self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.list_frame = ttk.Frame(self)
@@ -32,9 +31,23 @@ class TKConnectionManager(tkinter.Toplevel):
             side="left", padx=5
         )
         self.render_list()
+        self.update_idletasks()  # Ensure the window is rendered before setting grab
+        self.after_idle(self._set_modal_grab)
+
+    def _set_modal_grab(self):
+        if not self.winfo_exists():
+            return
+        try:
+            self.wait_visibility()
+            self.grab_set()
+        except tkinter.TclError:
+            logger.debug("Connection manager closed before modal grab could be set.")
 
     def on_close(self):
-        self.grab_release()
+        try:
+            self.grab_release()
+        except tkinter.TclError:
+            logger.debug("Connection manager (maybe????) already released grab on close.")
         self.destroy()
 
     def render_list(self):
