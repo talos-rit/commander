@@ -49,11 +49,11 @@ You can also opt in to install several other object detection models.
 
     Using uv:
     ```bash
-    uv run pyinstaller --onefile --add-data "config.yaml:." --add-data "tracking/haar_cascade/haarcascade_frontalface_default.xml:tracking/haar_cascade" --add-data "tracking/media_pipe/efficientdet_lite0.tflite:tracking/media_pipe" --add-data "tracking/media_pipe/pose_landmarker_lite.task:tracking/media_pipe" talos.py
+    uv run pyinstaller_runner.py
     ```
     Otherwise:
     ```bash
-    pyinstaller --onefile --add-data "config.yaml:." --add-data "tracking/haar_cascade/haarcascade_frontalface_default.xml:tracking/haar_cascade" --add-data "tracking/media_pipe/efficientdet_lite0.tflite:tracking/media_pipe" --add-data "tracking/media_pipe/pose_landmarker_lite.task:tracking/media_pipe" talos.py
+    python pyinstaller_runner.py
     ```
 
 
