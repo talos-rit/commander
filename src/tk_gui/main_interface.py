@@ -191,13 +191,14 @@ class TKInterface(tk.Tk):
             bg=THEME_FRAME_BG_COLOR,
         ).grid(row=0, column=0, pady=5, padx=5, sticky="ew")
 
-        ctk.CTkOptionMenu(
+        self.model_menu = ctk.CTkOptionMenu(
             self.model_frame,
             variable=tk.StringVar(value="None"),
             values=["None"] + MODEL_OPTIONS,
             command=self.change_model,
             **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
-        ).grid(row=2, column=0, pady=5, padx=5, sticky="ew")
+        )
+        self.model_menu.grid(row=2, column=0, pady=5, padx=5, sticky="ew")
 
         connection_frame = ctk.CTkFrame(
             container,
@@ -272,9 +273,22 @@ class TKInterface(tk.Tk):
         self.app.remove_connection(hostname)
         self.update_ui()
 
+    def _set_modal_lock(self, locked: bool) -> None:
+        self._modal_open = locked
+        state = "disabled" if locked else "normal"
+        self.manageConnectionsButton.configure(state=state)
+        self.connectionMenu.configure(state=state)
+        self.model_menu.configure(state=state)
+        self.cont_toggle_button.configure(state=state)
+        self.automatic_button.configure(state=state)
+        self.set_manual_control_btn_state("disabled" if locked else "normal")
+
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
-        TKConnectionManager(self, self.app, self.update_ui)
+        self._set_modal_lock(True)
+        dialog = TKConnectionManager(self, self.app, self.update_ui)
+        self.wait_window(dialog)
+        self._set_modal_lock(False)
 
     def set_active_connection(self, option) -> None:
         self.app.set_active_connection(option if option != "None" else None)
