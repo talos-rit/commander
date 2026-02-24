@@ -65,6 +65,9 @@ class BaseDirector(ABC):
                     conn.publisher,
                 )
 
+    def is_active(self) -> bool:
+        return self.control_task is not None
+
     def start_auto_control(self) -> None:
         if self.scheduler is not None:
             self.control_task = self.scheduler.set_interval(

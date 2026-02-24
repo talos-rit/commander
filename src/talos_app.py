@@ -240,6 +240,12 @@ class App:
         )
         return self.control_mode
 
+    def is_director_active(self) -> bool:
+        """Returns whether the director is currently active and controlling the robot"""
+        if self.director is None:
+            return False
+        return self.director.is_active()
+
     def start_stream(
         self,
         output_url: str,

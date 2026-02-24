@@ -77,11 +77,16 @@ class ManageConnectionScreen(Screen):
     async def action_dismiss_screen(self):
         return await self.dismiss(self._app.get_connection_hosts())
 
-    @on(Button.Pressed, ".current-connections-list Button")
-    def handle_close_connection(self, event: Button.Pressed):
+    @on(Button.Pressed, "#add-connection-btn")
+    def handle_add_connection(self, event: Button.Pressed):
         operator_url = self.query_one("#operator-url-input", Input)
         camera_src = self.query_one("#camera-source-input", Input)
-        hostname, port = operator_url.value.strip().split(":")
+        try:
+            hostname, port = operator_url.value.strip().split(":")
+            port = int(port)
+        except Exception:
+            self.notify("Invalid operator URL. Please use the format hostname:port")
+            return
         camera = camera_src.value.strip()
         valid, conf, error_msg = editor.validate_connection_config(
             hostname, port, camera
@@ -95,3 +100,16 @@ class ManageConnectionScreen(Screen):
         editor.add_config(conf)
         self._app.open_connection(conf.socket_host)
         self.current_connections.append(conf.socket_host)
+        self.notify(f"Added new connection: {conf.socket_host}:{conf.socket_port}")
+        self.clear_input_fields()
+        self.add_option_to_selection_list(
+            (f"{conf.socket_host}:{conf.socket_port}", conf.socket_host, True)
+        )
+
+    def clear_input_fields(self):
+        self.query_one("#operator-url-input", Input).value = ""
+        self.query_one("#camera-source-input", Input).value = ""
+
+    def add_option_to_selection_list(self, new_option: tuple[str, str, bool]):
+        selections = self.query_one("#previous-connections-list", SelectionList)
+        selections.add_option(new_option)

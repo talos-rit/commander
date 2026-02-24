@@ -45,6 +45,8 @@ class TextualInterface(App):
     debounce_timers: dict[str, Timer] = dict()
     smm: SharedMemoryManager = SharedMemoryManager()
     connection_options = reactive(list())
+    auto_mode_state = reactive(False)
+    continuous_control_state = reactive(False)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -54,10 +56,13 @@ class TextualInterface(App):
             with Vertical(classes="column"):
                 with Horizontal():
                     with Vertical(classes="widget"):
-                        yield Static("Control Mode:", classes="label-text")
-                        yield Switch(value=False, id="auto-mode-switch")
+                        yield Static("Automatic Mode:", classes="label-text")
+                        yield Switch(value=self.auto_mode_state, id="auto-mode-switch")
                         yield Static("Continuous Control:", classes="label-text")
-                        yield Switch(value=False, id="continuous-control-switch")
+                        yield Switch(
+                            value=self.continuous_control_state,
+                            id="continuous-control-switch",
+                        )
                     yield ReactiveButton(
                         "UP", id="up", classes="widget", on_blur=focus_log
                     )
@@ -114,10 +119,15 @@ class TextualInterface(App):
         self._talos_app = TalosApp(scheduler, smm=self.smm)
         self.run_server()
         start_termination_guard()
-        continuous_switch = self.query_one("#continuous-control-switch", Switch)
-        continuous_switch.value = (
+        self.auto_mode_state = (
             self._talos_app.get_control_mode() == ControlMode.CONTINUOUS
         )
+        logger.info(
+            "Interface Mounted auto_mode_state: {}".format(self.auto_mode_state)
+        )
+        self.query_one(
+            "#continuous-control-switch", Switch
+        ).value = self.auto_mode_state
 
     @on(ReactiveButton.Active, "#up")
     def action_up(self):
@@ -245,10 +255,16 @@ class TextualInterface(App):
 
     @on(Select.Changed, "#connection-select")
     def handle_active_connection(self, active_connection: Select.Changed):
-        logger.info(f"Active connection changed to: {active_connection.value}")
         if not hasattr(self, "_talos_app"):
             return
-        new_connection = str(active_connection.value)
+        if self._talos_app.get_active_hostname() == active_connection.value:
+            return
+        logger.info(f"Active connection changed to: {active_connection.value}")
+        new_connection = (
+            None
+            if active_connection.value == Select.NULL
+            else str(active_connection.value)
+        )
         self._talos_app.set_active_connection(new_connection)
 
     def start_mv_direction(self, direction: Direction):
