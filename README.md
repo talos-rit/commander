@@ -1,4 +1,5 @@
 # camera_arm
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/talos-rit/commander)
 
 Allows robot arms to be repurposed as camera arms.
 
@@ -11,8 +12,8 @@ uv sync
 ```
 or alternatively
 ```bash
-mkdir -p venv/py3.12
-python3.12 -m venv venv/py3.12
+mkdir -p .venv/py3.12
+python3.12 -m venv .venv/py3.12
 pip install -r requirements.txt
 ```
 
@@ -49,11 +50,11 @@ You can also opt in to install several other object detection models.
 
     Using uv:
     ```bash
-    uv run pyinstaller --onefile --add-data "config.yaml:." --add-data "tracking/haar_cascade/haarcascade_frontalface_default.xml:tracking/haar_cascade" --add-data "tracking/media_pipe/efficientdet_lite0.tflite:tracking/media_pipe" --add-data "tracking/media_pipe/pose_landmarker_lite.task:tracking/media_pipe" talos.py
+    uv run pyinstaller_runner.py
     ```
     Otherwise:
     ```bash
-    pyinstaller --onefile --add-data "config.yaml:." --add-data "tracking/haar_cascade/haarcascade_frontalface_default.xml:tracking/haar_cascade" --add-data "tracking/media_pipe/efficientdet_lite0.tflite:tracking/media_pipe" --add-data "tracking/media_pipe/pose_landmarker_lite.task:tracking/media_pipe" talos.py
+    python pyinstaller_runner.py
     ```
 
 
@@ -93,20 +94,23 @@ Run the TUI interface:
 ```bash
 uv run commander-terminal
 ```
+or
+```bash
+uv run commander -t
+```
 
 Run the Tk GUI interface:
 ```bash
 uv run commander-tk
 ```
 
-## Running with Operator
-1. Edit `config/network_config.yaml` to set the host and port for the operator to connect to. (The Pi is unctalos.student.rit.edu:61616)
-2. Turn on the robot arm and connect it to the pi via USB.
-3. SSH into the Pi and run the operator script
-4. Run the commander and it should connect to the operator. Try a home command to test the connection.
+## Configurations
+The `config/example_default_config.yaml` file contains default parameters for the application that will be used to fill in the new connections configs. You can override these parameters using `config/default_config.local.yaml` which will be prioritized over the example default config. 
+
+When you create a new connection in the commander application, it will automatically create a new config file, `config/robot_configs.local.yaml`. This file will contain the parameters for each connection you create. You can also edit this file directly to change the parameters for each connection.
 
 
-### Troubleshooting
+## Troubleshooting
 If you are having trouble connecting to the arm, try running the following command on the Pi:
 ```bash
 ls /dev/tty*
