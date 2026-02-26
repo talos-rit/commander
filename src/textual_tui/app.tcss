@@ -17,3 +17,7 @@
     width: 100%;
     margin: 0 1;
 }
+
+.metric-label-numeric {
+    margin: 0 1;
+}

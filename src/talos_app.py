@@ -302,3 +302,9 @@ class App:
 
     def is_streaming(self) -> bool:
         return self._streamer is not None and self._streamer.is_running()
+
+    def get_tracker_input_fps(self) -> float:
+        return self.tracker.get_input_fps()
+
+    def get_tracker_output_fps(self) -> float:
+        return self.tracker.get_output_fps()
