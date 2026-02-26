@@ -127,7 +127,7 @@ class TKInterface(tk.Tk):
             text=ButtonText.CONTINUOUS_MODE_LABEL,
             font=("Cascadia Code", 16, "bold"),
             variable=self.continuous_mode,
-            command=self.app.toggle_control_mode,
+            command=self.app.set_control_mode,
             onvalue=ControlMode.CONTINUOUS,
             offvalue=ControlMode.DISCRETE,
         )

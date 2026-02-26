@@ -220,24 +220,28 @@ class App:
             return None
         return connection.manual_only
 
-    def toggle_director(self) -> None:
-        """Toggles the active connection's manual/automatic control mode"""
+    def get_manual_control(self) -> bool | None:
+        """Gets the active connection's manual/automatic control mode"""
         if self.director is None:
             return logger.error("No active director")
-        self.director.toggle_control_mode()
+        return self.director.get_manual_control()
 
-    def toggle_control_mode(self) -> ControlMode:
+    def set_manual_control(self, manual: bool) -> None:
+        """Sets the active connection's manual/automatic control mode"""
+        if self.director is None:
+            return logger.error("No active director")
+        self.director.set_manual_control(manual=manual)
+
+    def set_control_mode(self, ctrl_mode: ControlMode) -> ControlMode:
         """
-        Toggles between continuous and discrete control.
+        Sets the control mode to the given value.
         Any ongoing movements are stopped.
         returns the new control mode
         """
+        if self.control_mode == ctrl_mode:
+            return self.control_mode
         self.stop_all_movement()
-        self.control_mode = (
-            ControlMode.DISCRETE
-            if self.control_mode == ControlMode.CONTINUOUS
-            else ControlMode.CONTINUOUS
-        )
+        self.control_mode = ctrl_mode
         return self.control_mode
 
     def is_director_active(self) -> bool:

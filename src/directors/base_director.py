@@ -85,8 +85,10 @@ class BaseDirector(ABC):
             remove_termination_handler(self._term)
             self._term = None
 
-    def toggle_control_mode(self, hostname: str | None = None) -> bool | None:
-        """Toggles the control mode of the connection. If hostname is None, toggles the active connection.
+    def set_manual_control(
+        self, hostname: str | None = None, manual: bool = True
+    ) -> bool | None:
+        """Sets the control mode of the connection. If hostname is None, sets the active connection.
         Returns the new control mode (True for manual, False for auto) or None if no connection is found."""
         conn = (
             self.connections.get_active()
@@ -100,5 +102,18 @@ class BaseDirector(ABC):
             logger.warning(f"Connection for hostname {hostname} is manual only.")
             conn.is_manual = True
             return False
-        conn.is_manual = not conn.is_manual
+        conn.is_manual = manual
+        return conn.is_manual
+
+    def get_manual_control(self, hostname: str | None = None) -> bool | None:
+        """Gets the control mode of the connection. If hostname is None, gets the active connection.
+        Returns the control mode (True for manual, False for auto) or None if no connection is found."""
+        conn = (
+            self.connections.get_active()
+            if hostname is None
+            else self.connections.get(hostname)
+        )
+        if conn is None:
+            logger.warning("No active connection found.")
+            return None
         return conn.is_manual

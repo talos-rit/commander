@@ -51,8 +51,13 @@ class TextualInterface(App):
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal():
-            log = PrintViewer(id="log-viewer", classes="column", disabled=True)
-            focus_log = log.focus  # reactive button needs a component to focus on blur to not let another button accidentally trigger.
+            home_btn = Button(
+                "HOME",
+                id="home",
+                classes="widget",
+                action="app.home()",
+            )
+            focus_home = home_btn.focus  # reactive button needs a component to focus on blur to not let another button accidentally trigger.
             with Vertical(classes="column"):
                 with Horizontal():
                     with Vertical(classes="widget"):
@@ -64,28 +69,23 @@ class TextualInterface(App):
                             id="continuous-control-switch",
                         )
                     yield ReactiveButton(
-                        "UP", id="up", classes="widget", on_blur=focus_log
+                        "UP", id="up", classes="widget", on_blur=focus_home
                     )
                     yield Label(id="placeholder", classes="widget")
                 with Horizontal():
                     yield ReactiveButton(
-                        "LEFT", id="left", classes="widget", on_blur=focus_log
+                        "LEFT", id="left", classes="widget", on_blur=focus_home
                     )
-                    yield Button(
-                        "HOME",
-                        id="home",
-                        classes="widget",
-                        action="app.home()",
-                    )
+                    yield home_btn
                     yield ReactiveButton(
-                        "RIGHT", id="right", classes="widget", on_blur=focus_log
+                        "RIGHT", id="right", classes="widget", on_blur=focus_home
                     )
                 with Horizontal():
                     with Vertical(classes="widget"):
                         yield Static("Tracking Model", classes="label-text")
                         yield Select(MODEL_OPTIONS_TEXTUAL, id="model-select")
                     yield ReactiveButton(
-                        "DOWN", id="down", classes="widget", on_blur=focus_log
+                        "DOWN", id="down", classes="widget", on_blur=focus_home
                     )
                     with Vertical(classes="widget connection-widget"):
                         yield Button(
@@ -98,7 +98,7 @@ class TextualInterface(App):
                             self.connection_options,
                             id="connection-select",
                         )
-            yield log
+            yield PrintViewer(id="log-viewer", classes="column", disabled=True)
         yield Footer()
 
     def watch_connection_options(self, old_options, new_options):
@@ -119,15 +119,14 @@ class TextualInterface(App):
         self._talos_app = TalosApp(scheduler, smm=self.smm)
         self.run_server()
         start_termination_guard()
-        self.auto_mode_state = (
+        self.continuous_control_state = (
             self._talos_app.get_control_mode() == ControlMode.CONTINUOUS
         )
-        logger.info(
-            "Interface Mounted auto_mode_state: {}".format(self.auto_mode_state)
-        )
+        self.auto_mode_state = not self._talos_app.get_manual_control()
         self.query_one(
             "#continuous-control-switch", Switch
-        ).value = self.auto_mode_state
+        ).value = self.continuous_control_state
+        self.query_one("#auto-mode-switch", Switch).value = self.auto_mode_state
 
     @on(ReactiveButton.Active, "#up")
     def action_up(self):
@@ -172,16 +171,24 @@ class TextualInterface(App):
         switch.value = not switch.value
 
     @on(Switch.Changed, "#auto-mode-switch")
-    def auto_mode_changed(self, _: Switch.Changed) -> None:
-        self._talos_app.toggle_director()
+    def auto_mode_changed(self, e: Switch.Changed) -> None:
+        ctrl = e.value
+        # unfortunately the naming is a bit confusing here since the switch is for auto mode
+        # but the function is for manual control, so we need to invert the value.
+        self._talos_app.set_manual_control(manual=not ctrl)
 
     def action_toggle_control_mode(self):
+        logger.debug("action_toggle_control_mode called")
         switch = self.query_one("#continuous-control-switch", Switch)
         switch.value = not switch.value
 
     @on(Switch.Changed, "#continuous-control-switch")
-    def continuous_control_changed(self, _: Switch.Changed) -> None:
-        self._talos_app.toggle_control_mode()
+    def continuous_control_changed(self, e: Switch.Changed) -> None:
+        logger.debug("continuous_control_changed called")
+        val = e.value
+        self._talos_app.set_control_mode(
+            ControlMode.CONTINUOUS if val else ControlMode.DISCRETE
+        )
 
     def debounce_input(self, name, func, wait_ms: int = 100):
         def called():
