@@ -386,7 +386,7 @@ class TKInterface(tk.Tk):
         """Toggles command mode between manual mode and automatic mode.
         Disables all other controls when in automatic mode.
         """
-        self.app.toggle_director()
+        self.app.set_manual_control(not self.app.get_manual_control())
         self.update_ui()
 
     def change_model(self, model_name: str) -> None:
