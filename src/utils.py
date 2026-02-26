@@ -32,6 +32,7 @@ def calculate_acceptable_box(
     - frame_height
     """
     from src.config import DEFAULT_ROBOT_CONFIG
+
     acceptable_box_percent = (
         acceptable_box_percent or DEFAULT_ROBOT_CONFIG.acceptable_box_percent
     )
@@ -99,6 +100,8 @@ def start_termination_guard():
 
 def add_termination_handler(call):
     global TERMINATION_HANDLERS, ID_GEN
+    if TERMINATION_HANDLERS is None:
+        start_termination_guard()
     handler = TerminationHandler(call)
     handler.id = next(ID_GEN)
     TERMINATION_HANDLERS.append(handler)

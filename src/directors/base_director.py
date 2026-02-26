@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from src.connection.connection import Connection
+from loguru import logger
+
+from src.connection.connection import ConnectionCollectionEvent
 from src.connection.publisher import Publisher
 from src.scheduler import IterativeTask, Scheduler
+from src.talos_app import ConnectionCollection
 from src.utils import add_termination_handler, remove_termination_handler
 
 DIRECTOR_CONTROL_RATE = 10  # control per sec
@@ -13,30 +16,29 @@ class BaseDirector(ABC):
     scheduler: Scheduler | None
     control_task: IterativeTask | None = None
     _term: int | None = None
-    connections: dict[str, Connection]
+    connections: ConnectionCollection
 
     def __init__(
         self,
         tracker,
-        connections: dict[str, Connection],
+        connections: ConnectionCollection,
         scheduler: Scheduler | None = None,
     ):
         self.tracker = tracker
         self.scheduler = scheduler
         self.connections = connections
-        self.start_auto_control()
-
-    def add_connection(
-        self, connection: Connection
-    ):
-        self.connections[connection.host] = connection
-        if self.scheduler is not None and self.control_task is None:
+        self.connections.add_listener(self.on_connection_update)
+        if len(self.connections) > 0 and self.scheduler is not None:
             self.start_auto_control()
 
-    def remove_control_feed(self, host: str) -> None:
-        if host in self.connections:
-            del self.connections[host]
-        if not self.connections:
+    def on_connection_update(self, event: ConnectionCollectionEvent, *_: Any):
+        if (
+            event == ConnectionCollectionEvent.ADDED
+            and self.scheduler is not None
+            and self.control_task is None
+        ):
+            self.start_auto_control()
+        elif event == ConnectionCollectionEvent.REMOVED and not self.connections:
             self.stop_auto_control()
 
     # Processes the bounding box and sends commands
@@ -51,21 +53,20 @@ class BaseDirector(ABC):
         raise NotImplementedError("Subclasses must implement this method.")
 
     def track_obj(self) -> Any | None:
-        bboxes = self.tracker.get_bboxes()
-        for host, bbox in bboxes.items():
+        for host, conn in self.connections.items():
+            bbox = conn.get_bboxes()
             if host in self.connections and bbox is not None and len(bbox) > 0:
-                if self.connections[host].is_manual or (shape:=self.connections[host].video_connection.shape) is None:
+                if conn.is_manual or (shape := conn.video_connection.shape) is None:
                     continue  # skip manual feeds
                 return self.process_frame(
                     host,
                     bbox,
                     shape,
-                    self.connections[host].publisher,
+                    conn.publisher,
                 )
-            else:
-                print(
-                    "[NOTICE]Boundary box not found. Make sure the object recognition is running."
-                )
+
+    def is_active(self) -> bool:
+        return self.control_task is not None
 
     def start_auto_control(self) -> None:
         if self.scheduler is not None:
@@ -83,3 +84,36 @@ class BaseDirector(ABC):
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None
+
+    def set_manual_control(
+        self, hostname: str | None = None, manual: bool = True
+    ) -> bool | None:
+        """Sets the control mode of the connection. If hostname is None, sets the active connection.
+        Returns the new control mode (True for manual, False for auto) or None if no connection is found."""
+        conn = (
+            self.connections.get_active()
+            if hostname is None
+            else self.connections.get(hostname)
+        )
+        if conn is None:
+            logger.warning("No active connection found.")
+            return None
+        if conn.is_manual_only:
+            logger.warning(f"Connection for hostname {hostname} is manual only.")
+            conn.is_manual = True
+            return False
+        conn.is_manual = manual
+        return conn.is_manual
+
+    def get_manual_control(self, hostname: str | None = None) -> bool | None:
+        """Gets the control mode of the connection. If hostname is None, gets the active connection.
+        Returns the control mode (True for manual, False for auto) or None if no connection is found."""
+        conn = (
+            self.connections.get_active()
+            if hostname is None
+            else self.connections.get(hostname)
+        )
+        if conn is None:
+            logger.warning("No active connection found.")
+            return None
+        return conn.is_manual

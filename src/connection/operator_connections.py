@@ -5,7 +5,6 @@ import threading
 from loguru import logger
 
 from src.icd_config import CTypesInt, toBytes, toInt
-from src.utils import add_termination_handler, remove_termination_handler
 
 
 class OperatorConnection:
@@ -29,7 +28,6 @@ class OperatorConnection:
     def connect_on_thread(self):
         self.thread = threading.Thread(target=self.connect, daemon=True)
         self.thread.start()
-        self._term = add_termination_handler(self.close)
 
     def connect(self):
         self.is_running = True
@@ -74,7 +72,6 @@ class OperatorConnection:
 
     def close(self):
         """Cleanly close the socket port and stop listening to new connections."""
-        logger.info("Closing socket")
         self.is_running = False
         try:
             self.socket.shutdown(socket.SHUT_RDWR)
@@ -82,11 +79,8 @@ class OperatorConnection:
             pass
         if self.thread is not None:
             self.thread.join()
-        if self._term is not None:
-            remove_termination_handler(self._term)
-            self._term = None
         self.socket.close()
-        logger.info("Socket closed cleanly")
+        logger.debug(f"Socket closed cleanly {self.host}:{self.port}")
 
     def xor_checksum(self, data: bytes) -> int:
         result = 0

@@ -12,14 +12,24 @@ import assets
 from src.connection.publisher import Direction
 from src.talos_app import App, ControlMode
 from src.tk_gui.connection_manager import TKConnectionManager
-from src.tk_gui.styles import (BORDER_STYLE, BTN_STYLE,
-                               CONTROL_BTN_GRID_FIT_STYLE, CONTROL_BTN_STYLE,
-                               IS_SYSTEM_DARK, OPTIONS_MENU_STYLE,
-                               THEME_FRAME_BG_COLOR)
+from src.tk_gui.styles import (
+    BORDER_STYLE,
+    BTN_STYLE,
+    CONTROL_BTN_GRID_FIT_STYLE,
+    CONTROL_BTN_STYLE,
+    IS_SYSTEM_DARK,
+    OPTIONS_MENU_STYLE,
+    THEME_FRAME_BG_COLOR,
+)
 from src.tk_gui.tkscheduler import TKIterativeTask, TKScheduler
 from src.tracking import MODEL_OPTIONS
-from src.utils import (add_termination_handler, remove_termination_handler,
-                       start_termination_guard, terminate)
+from src.utils import (
+    add_termination_handler,
+    remove_termination_handler,
+    start_termination_guard,
+    terminate,
+)
+
 
 def set_mac_icon(icon_path: str) -> None:
     try:
@@ -117,7 +127,7 @@ class TKInterface(tk.Tk):
             text=ButtonText.CONTINUOUS_MODE_LABEL,
             font=("Cascadia Code", 16, "bold"),
             variable=self.continuous_mode,
-            command=self.app.toggle_control_mode,
+            command=self.app.set_control_mode,
             onvalue=ControlMode.CONTINUOUS,
             offvalue=ControlMode.DISCRETE,
         )
@@ -219,11 +229,7 @@ class TKInterface(tk.Tk):
         )
 
         self.selectedConnection = tk.StringVar(value="None")
-        self.selectedConnection.trace_add(
-            "write",
-            lambda *_: self.set_active_connection(self.selectedConnection.get()),
-        )
-        self.connectionMenuList = list(self.app.get_connections().keys()) or ["None"]
+        self.connectionMenuList = self.app.get_connection_hosts() or ["None"]
         self.connectionMenu = ctk.CTkOptionMenu(
             connection_frame,
             variable=self.selectedConnection,
@@ -286,7 +292,9 @@ class TKInterface(tk.Tk):
     def manage_connections(self) -> None:
         """Opens a pop-up window to manage socket connections."""
         self._set_modal_lock(True)
-        dialog = TKConnectionManager(self, self.app, self.update_ui)
+        dialog = TKConnectionManager(
+            self, self.app, self.update_ui, self.app.get_connection_hosts()
+        )
         self.wait_window(dialog)
         self._set_modal_lock(False)
 
@@ -295,27 +303,31 @@ class TKInterface(tk.Tk):
         self.update_ui()
 
     def update_ui(self) -> None:
-        if len(self.app.get_connections()) == 0:
+        if len(self.app.get_connection_hosts()) == 0:
             self.set_manual_control_btn_state("disabled")
             self.automatic_button.deselect()
             self.automatic_button.configure(state="disabled")
-            logger.debug("AUTOMATIC BUTTON DISABLED")
+            logger.debug("No connections")
             self.cancel_display_loop()
             return self.update_connection_menu()
         if (connection := self.app.get_active_connection()) is None:
+            self.selectedConnection.set("None")
             return
+        self.selectedConnection.set(connection.host)
         if self.app.get_director() is None or self.app.is_manual_only():
             self.automatic_button.configure(state="disabled")
-            logger.debug("AUTOMATIC BUTTON DISABLED")
+            logger.debug("director is None or connection is manual only")
         else:
             self.automatic_button.configure(state="normal")
-            logger.debug("AUTOMATIC BUTTON ENABLED")
+            logger.debug("automatic button enabled")
         if connection.is_manual:
             self.set_manual_control_btn_state("normal")
             self.automatic_button.deselect()
+            logger.debug("manual connection active")
         else:
             self.set_manual_control_btn_state("disabled")
             self.automatic_button.select()
+            logger.debug("manual connection not active")
         self.continuous_mode.set(self.app.get_control_mode())
         self.update_connection_menu()
         if not self.display_loop_task:
@@ -323,10 +335,10 @@ class TKInterface(tk.Tk):
 
     def update_connection_menu(self):
         """Refresh dropdown menu to show the latest connections"""
-        options = self.app.get_connections().keys()
-        self.connectionMenu.configure(values=options)
-        current_connection = self.app.get_active_connection()
-        host = "None" if current_connection is None else current_connection.host
+        self.connectionMenuList = self.app.get_connection_hosts()
+        self.connectionMenu.configure(values=self.connectionMenuList)
+        current_connection = self.app.get_active_hostname()
+        host = "None" if current_connection is None else current_connection
         self.selectedConnection.set(host)
 
     def start_display_loop(self) -> None:
@@ -374,7 +386,7 @@ class TKInterface(tk.Tk):
         """Toggles command mode between manual mode and automatic mode.
         Disables all other controls when in automatic mode.
         """
-        self.app.toggle_director()
+        self.app.set_manual_control(not self.app.get_manual_control())
         self.update_ui()
 
     def change_model(self, model_name: str) -> None:

@@ -1,7 +1,7 @@
 import cv2
 
 from assets import join_paths
-from src.tracking.tracker import ObjectModel
+from src.tracking.detector import ObjectModel
 
 MODEL_FILE = join_paths("haarcascade_frontalface_default.xml")
 
