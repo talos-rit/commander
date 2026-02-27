@@ -12,8 +12,8 @@ LOCAL_DEFAULT_PATH = get_file_path(
     os.path.join(os.path.dirname(__file__), "../../config/default_config.local.yaml")
 )
 APP_SETTINGS_PATH = get_file_path(
-    os.path.join(os.path.dirname(__file__), "../../config/app_settings.yaml")
+    os.path.join(os.path.dirname(__file__), "../../config/app_settings.local.yaml")
 )
 APP_SETTINGS_DEFAULT_PATH = get_file_path(
-    os.path.join(os.path.dirname(__file__), "../../config/app_settings.default.yaml")
+    os.path.join(os.path.dirname(__file__), "../../config/app_settings.yaml")
 )
