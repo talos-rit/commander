@@ -53,7 +53,7 @@ class PyVcamStreamController:
         raise RuntimeError("Timed out waiting for a video frame")
 
     def _stream_loop(self, width: int, height: int, fps: int = 30) -> None:
-        logger.info("Entering pyvcam stream loop with frame size {}x{}", width, height)
+        logger.info(f"Entering pyvcam stream loop with frame size {width}x{height}")
         with pyvcam.Camera(width=width, height=height, fps=fps, fmt=pyvcam.PixelFormat.BGR) as cam:
             while not self._stop_event.is_set():
                 frame = self._frame_getter()
