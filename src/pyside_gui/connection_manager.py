@@ -133,6 +133,7 @@ class QTConnectionManager(QDialog):
             self.app.remove_connection(hostname)
             self._refresh_connections()
             self.render_list()
+            self.update_connections.emit(hostname)
 
     def add_connection(self, conn: ConnectionConfig):
         self.app.open_connection(conn.socket_host)
