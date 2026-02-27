@@ -8,7 +8,12 @@ from loguru import logger
 from src.config import DEFAULT_ROBOT_CONFIG
 from src.scheduler import IterativeTask, Scheduler
 from src.talos_app import ConnectionCollection
-from src.tracking.detector import DetectionWaitingForModel, Detector, ObjectModel
+from src.tracking.detector import (
+    DetectionWaitingForModel,
+    Detector,
+    ObjectModel,
+    SendingFrameTooFast,
+)
 from src.utils import (
     add_termination_handler,
     remove_termination_handler,
@@ -38,6 +43,7 @@ class Tracker:
     _send_frame_task: IterativeTask | None = None
     _poll_bbox_task: IterativeTask | None = None
     _bbox_success_count: int = 0
+    _send_frame_success_count: int = 0
     _detector: Detector
 
     def __init__(
@@ -57,7 +63,7 @@ class Tracker:
         self.connections = connections
         self.max_fps = DEFAULT_ROBOT_CONFIG.max_fps
         self.frame_delay = 1000 / DEFAULT_ROBOT_CONFIG.fps
-        self.bbox_delay = 1000 / self.max_fps
+        self.bbox_delay = 1000 / DEFAULT_ROBOT_CONFIG.fps
         self._detector = Detector(model, connections, smm)
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
@@ -96,7 +102,18 @@ class Tracker:
             self.increase_bbox_frame_rate()
 
     def send_latest_frame(self) -> None:
-        self._detector.send_input()
+        try:
+            self._detector.send_input()
+        except DetectionWaitingForModel:
+            return
+        except SendingFrameTooFast:
+            if self._send_frame_success_count < 1:
+                self.decrease_send_frame_rate()
+            self._send_frame_success_count -= 1
+            return
+        self._send_frame_success_count += 1
+        if self._send_frame_success_count > 10:
+            self.increase_send_frame_rate()
 
     def is_pipeline_running(self) -> bool:
         return self._send_frame_task is not None and self._poll_bbox_task is not None
@@ -167,3 +184,33 @@ class Tracker:
         if self._send_frame_task is None:
             return 0.0
         return 1000.0 / self.frame_delay
+
+    def increase_send_frame_rate(self) -> None:
+        """Increase frame sending rate by 10%, down to a minimum of max_fps in config."""
+        if self._send_frame_task is None:
+            return
+        current_interval = self.frame_delay
+        new_interval = max(current_interval * 0.9, 1000.0 / self.max_fps)
+        self.reschedule_send_frame_task(new_interval)
+        if new_interval <= 1000.0 / self.max_fps:
+            logger.warning(
+                f"Frame sending rate is at maximum (max_fps={self.max_fps}). Consider upgrading your model or increasing max_fps in config."
+            )
+
+    def decrease_send_frame_rate(self) -> None:
+        """Decrease frame sending rate by 10%, up to a maximum of 1 FPS."""
+        if self._send_frame_task is None:
+            return
+        new_interval = min(self.frame_delay * 1.1, 1000.0)  # Maximum 1 FPS
+        self.reschedule_send_frame_task(new_interval)
+        if new_interval >= 900.0:
+            logger.warning(
+                "Resource seems to be struggling. Consider using a smaller model."
+            )
+
+    def reschedule_send_frame_task(self, new_delay: float) -> None:
+        """Reschedule the frame sending task with the current frame_delay."""
+        if self._send_frame_task is None:
+            return
+        self.frame_delay = new_delay
+        self._send_frame_task.set_interval(int(self.frame_delay))
