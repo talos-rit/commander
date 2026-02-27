@@ -3,6 +3,12 @@
 import argparse
 import multiprocessing
 import multiprocessing.managers
+import os
+import sys
+
+# Set the start method for multiprocessing to 'spawn' to avoid fork issues in multi-threaded Qt app
+if sys.platform == "darwin" or sys.platform == "linux":
+    multiprocessing.set_start_method("spawn", force=True)
 
 from src.logger import configure_logger
 from src.talos_app import App
@@ -10,6 +16,16 @@ from src.talos_endpoint import TalosEndpoint
 from src.textual_tui.main_interface import TextualInterface
 from src.tk_gui.main_interface import TKInterface
 from src.utils import terminate
+
+from src.pyside_gui.main_interface import PySide6Interface
+
+if sys.platform == "win32":
+    from pathlib import Path
+    pyside_dir = Path(sys.executable).resolve().parent.parent / "Lib" / "site-packages" / "PySide6"
+    if pyside_dir.exists():
+        os.add_dll_directory(str(pyside_dir))
+from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QFont
 
 
 def create_args():
@@ -19,6 +35,12 @@ def create_args():
         "--terminal",
         action="store_true",
         help="Use the terminal (textual) interface instead of the Tk GUI",
+    )
+    parser.add_argument(
+        "-tk",
+        "--tkinter",
+        action="store_true",
+        help="Use the Tkinter GUI instead of the PySide6 GUI",
     )
     return parser.parse_args()
 
@@ -49,6 +71,20 @@ def tk_interface(args=None):
     interface.mainloop()
 
 
+def pyside_interface(args=None):
+    configure_logger()
+    app = QApplication(sys.argv)
+
+    # Set application font
+    font = QFont("Cascadia Code", 10)
+    app.setFont(font)
+
+    window = PySide6Interface()
+    window.show()
+
+    sys.exit(app.exec())
+
+
 def main() -> None:
     args = create_args()
     # This is a required call for pyinstaller
@@ -57,8 +93,10 @@ def main() -> None:
 
     if args.terminal:
         terminal_interface(args)
-    else:
+    elif args.tkinter:
         tk_interface(args)
+    else:
+        pyside_interface(args)
 
 
 if __name__ == "__main__":
