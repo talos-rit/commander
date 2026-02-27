@@ -7,7 +7,16 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.timer import Timer
-from textual.widgets import Button, Footer, Header, Label, Select, Static, Switch
+from textual.widgets import (
+    Button,
+    Footer,
+    Header,
+    Select,
+    Static,
+    Switch,
+    TabbedContent,
+    TabPane,
+)
 
 from src.talos_app import App as TalosApp
 from src.talos_app import ControlMode, Direction
@@ -20,6 +29,7 @@ from src.tracking import MODEL_OPTIONS
 from ..talos_endpoint import TalosEndpoint
 from ..tk_gui.main_interface import start_termination_guard
 from ..utils import terminate
+from .metric_display import MetricDisplay
 
 MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)
 
@@ -71,7 +81,26 @@ class TextualInterface(App):
                     yield ReactiveButton(
                         "UP", id="up", classes="widget", on_blur=focus_home
                     )
-                    yield Label(id="placeholder", classes="widget")
+                    with TabbedContent(classes="widget"):
+                        with TabPane("Metrics", id="tab1"):
+                            with Vertical():
+                                yield Static("Tracking Metrics", classes="label-text")
+                                yield MetricDisplay(
+                                    id="input-fps",
+                                    poll_data=self.get_input_fps,
+                                    num_cached=5,
+                                    rate=0.1,
+                                    label="Det. Input FPS",
+                                    max_value=60.0,
+                                )
+                                yield MetricDisplay(
+                                    id="output-fps",
+                                    poll_data=self.get_output_fps,
+                                    num_cached=5,
+                                    rate=0.1,
+                                    label="Det. Output FPS",
+                                    max_value=60.0,
+                                )
                 with Horizontal():
                     yield ReactiveButton(
                         "LEFT", id="left", classes="widget", on_blur=focus_home
@@ -281,6 +310,16 @@ class TextualInterface(App):
     def stop_mv_direction(self, direction: Direction):
         logger.info(f"Stop move {direction}")
         self._talos_app.stop_move(direction)
+
+    def get_input_fps(self) -> float:
+        if not hasattr(self, "_talos_app"):
+            return 0.0
+        return self._talos_app.get_tracker_input_fps()
+
+    def get_output_fps(self) -> float:
+        if not hasattr(self, "_talos_app"):
+            return 0.0
+        return self._talos_app.get_tracker_output_fps()
 
 
 if __name__ == "__main__":
