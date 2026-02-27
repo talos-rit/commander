@@ -109,21 +109,6 @@ class Tracker:
         if self._poll_bbox_task is not None:
             self._poll_bbox_task.cancel()
             self._poll_bbox_task = None
-        with self._bbox_lock:
-            self._bboxes = dict()
-        if self._detection_process is not None:
-            try:
-                self.frame_ready_event.clear()
-                self.model_stopper.set()
-                self._detection_process.join()
-                self._bbox_queue.close()
-                self._bbox_queue.join_thread()
-                self.model_stopper.clear()
-            except Exception as e:
-                logger.error(f"Exception occured: {e}")
-                return False
-            self._detection_process = None
-            logger.info("Detection process stopped.")
         return True
 
     def stop(self) -> bool:

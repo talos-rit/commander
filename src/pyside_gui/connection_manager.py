@@ -26,7 +26,7 @@ class QTConnectionManager(QDialog):
     def __init__(self, parent, app: App):
         super().__init__(parent)
         self.app = app
-        self.connections = self.app.get_connections()
+        self.connections = self.app.get_connection_hosts()
         self.setParent(parent)
         # self.parent = parent
         self.setWindowTitle("Connection Manager")
@@ -102,10 +102,11 @@ class QTConnectionManager(QDialog):
         connections_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
         self.list_layout.addWidget(connections_label)
 
-        for hostname, connData in self.connections.items():
+        for hostname in self.connections:
+            cfg = ROBOT_CONFIGS[hostname]
             connection_item = QFrame()
             connection_item_layout = QHBoxLayout(connection_item)
-            url_text = f"{hostname}:{connData.port}"
+            url_text = f"{hostname}:{cfg.socket_port}"
             url_label = QLabel(url_text)
             url_label.setMaximumWidth(350)
             url_label.setTextInteractionFlags(

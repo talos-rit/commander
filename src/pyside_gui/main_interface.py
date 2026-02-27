@@ -162,7 +162,7 @@ class PySide6Interface(QMainWindow):
 
         self.automatic_slider = Toggle()
         self.automatic_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.automatic_slider.toggled.connect(self.toggle_command_mode)
+        self.automatic_slider.toggled.connect(lambda checked: self.app.set_manual_control(checked))
         self.automatic_slider.setEnabled(False)
 
         automatic_label = QLabel(ButtonText.AUTOMATIC_MODE_LABEL)
@@ -180,7 +180,7 @@ class PySide6Interface(QMainWindow):
 
         self.continuous_slider = Toggle()
         self.continuous_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.continuous_slider.toggled.connect(self.app.toggle_control_mode)
+        self.continuous_slider.toggled.connect(lambda checked: self.app.set_control_mode(checked))
 
         continuous_label = QLabel(ButtonText.CONTINUOUS_MODE_LABEL)
         continuous_label.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
@@ -376,11 +376,11 @@ class PySide6Interface(QMainWindow):
 
     def update_connection_list(self):
         """Update the connection combo box list"""
-        connections = self.app.get_connections()
+        connections = self.app.get_connection_hosts()
 
         with QSignalBlocker(self.connection_combo):
             self.connection_combo.clear()
-            options = list(connections.keys()) or ["None"]
+            options = list(connections) or ["None"]
             self.connection_combo.addItems(options)
 
             current_host = self.app.get_active_hostname() or "None"
@@ -390,7 +390,7 @@ class PySide6Interface(QMainWindow):
     def update_ui(self):
         """Update UI state based on current connections"""
 
-        if len(self.app.get_connections()) == 0:
+        if len(self.app.get_connection_hosts()) == 0:
             self.set_manual_control_btn_state(False)
             self.automatic_slider.setChecked(False)
             self.automatic_slider.setEnabled(False)
@@ -429,14 +429,14 @@ class PySide6Interface(QMainWindow):
 
     def toggle_command_mode(self, checked):
         """Toggle between manual and automatic mode"""
-        self.app.toggle_director()
+        self.app.set_manual_control(checked)
         self.update_ui()
 
     def toggle_continuous_mode(self, checked):
         """Toggle continuous/discrete mode"""
         # mode = ControlMode.CONTINUOUS if checked else ControlMode.DISCRETE
         # self.app.set_control_mode(mode)
-        self.app.toggle_control_mode()
+        self.app.set_control_mode(checked)
         self.update_ui()
 
     def change_model(self, model_name):
