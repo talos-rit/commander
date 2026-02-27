@@ -44,7 +44,9 @@ def load_app_settings(
         )
         if yon.strip().lower() != "y":
             raise e
-        return _recovery_method()
+    except FileNotFoundError as e:
+        print("app_settings.yaml not found creating settings file\n" + str(e))
+    return _recovery_method()
 
 
 APP_SETTINGS = load_app_settings()
