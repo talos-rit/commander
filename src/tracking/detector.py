@@ -21,6 +21,10 @@ class DetectionWaitingForModel(Exception):
     pass
 
 
+class SendingFrameTooFast(Exception):
+    pass
+
+
 class ObjectModel(ABC):
     """
     This is a model class where it can handle turning image frame into bounding box
@@ -173,7 +177,12 @@ class Detector(DetectorInterface):
                 logger.warning(
                     "Previous frame is still being processed, skipping sending new frame to detector."
                 )
-            return
+                raise SendingFrameTooFast(
+                    "Previous frame is still being processed, skipping sending new frame to detector."
+                )
+            raise DetectionWaitingForModel(
+                "Detection process is still starting up, please wait and try again."
+            )
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
             self.new_frame = self.connections[host].video_connection.get_frame()
@@ -191,7 +200,7 @@ class Detector(DetectorInterface):
             logger.warning(
                 f"No frames available to update frame buffer. {frames=} {self.frame_order=}"
             )
-            return
+            raise SendingFrameTooFast("No frames available to update frame buffer.")
         # Compare heights of frames and padd the bottom to the smaller ones to match the largest height
         max_height = max(frame.shape[0] for frame in frames)
         resized_frames = [
