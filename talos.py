@@ -20,9 +20,10 @@ from src.utils import terminate
 from src.pyside_gui.main_interface import PySide6Interface
 
 if sys.platform == "win32":
-    os.environ["PATH"] += os.pathsep + r".venv\Lib\site-packages\PySide6"
-
-    os.add_dll_directory(r".venv\Lib\site-packages\PySide6")
+    from pathlib import Path
+    pyside_dir = Path(sys.executable).resolve().parent.parent / "Lib" / "site-packages" / "PySide6"
+    if pyside_dir.exists():
+        os.add_dll_directory(str(pyside_dir))
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
 
