@@ -1,10 +1,39 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 
-class AppSettings(BaseModel):
+class AppSettings(BaseSettings):
     """
     Application-wide settings that are not specific to individual connections.
     """
+
+    model_config = SettingsConfigDict(
+        env_prefix="COMMANDER_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            env_settings,
+            dotenv_settings,
+            init_settings,
+            file_secret_settings,
+        )
 
     log_level: str = Field(
         default="INFO",
