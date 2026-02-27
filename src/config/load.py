@@ -7,7 +7,7 @@ from loguru import logger
 from pydantic import ValidationError
 
 from src.config.read import read_default_robot_config, read_robot_config_file
-from src.config.schema import ConnectionConfig
+from src.config.schema.robot import ConnectionConfig
 
 
 def load_default_robot_config() -> ConnectionConfig:

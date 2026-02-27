@@ -8,17 +8,6 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class AppSettings(BaseModel):
-    """
-    Application-wide settings that are not specific to individual connections.
-    """
-
-    log_level: str = Field(
-        default="INFO",
-        description="Logging level (e.g., DEBUG, INFO, WARNING, ERROR)",
-    )
-
-
 class ConnectionConfig(BaseModel):
     """
     Configuration for a single robot arm connection.

@@ -1,7 +1,7 @@
 # TODO: Stop exposing DEFAULT_ROBOT_CONFIG once AppSettings is implemented for non-connection specific settings/defaults
 import src.config.add as editor
 from src.config.load import DEFAULT_ROBOT_CONFIG, ROBOT_CONFIGS
-from src.config.schema import ConnectionConfig
+from src.config.schema.robot import ConnectionConfig
 
 # def __getattr__(name):
 #     """Lazy load add_config and validate_connection_config to avoid circular imports."""

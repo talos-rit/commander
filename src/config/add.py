@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from src.config.load import ROBOT_CONFIGS
 from src.config.path import ROBOT_CONFIGS_PATH
-from src.config.schema import ConnectionConfig
+from src.config.schema.robot import ConnectionConfig
 
 
 def add_config(connection_config: ConnectionConfig):
