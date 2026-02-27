@@ -14,6 +14,9 @@ dependencies = [
     "darkdetect>=0.8.0",
     "loguru>=0.7.3",
     "textual>=6.7.0",
+    # "PySide6>=6.10.1" # includes pyside6-essentials and pyside6-addons
+    "pyside6-essentials>=6.10.1",
+    # "qtwidgets" # for Toggle Switch Widget. Might be able to just take the code directly since it is MIT licensed
     "av>=16.1.0",
     "pydantic>=2.12.0",
     "pydantic-settings>=2.11.0",
@@ -33,6 +36,7 @@ build-backend = "setuptools.build_meta"
 commander = "talos:main"
 commander-terminal = "talos:terminal_interface"
 commander-tk = "talos:tk_interface"
+commander-pyside = "talos:pyside_interface"
 
 [dependency-groups]
 dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0"]

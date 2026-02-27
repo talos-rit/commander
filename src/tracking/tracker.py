@@ -1,6 +1,7 @@
 from enum import Enum
 from multiprocessing.managers import SharedMemoryManager
 from queue import Empty
+from typing import Any
 
 from loguru import logger
 
@@ -13,6 +14,7 @@ from src.utils import (
 )
 
 from ..config.load import APP_SETTINGS
+from ..connection.connection import ConnectionCollectionEvent
 from ..thread_scheduler import ThreadScheduler
 
 SHARED_MEM_FRAME_NAME = "frame"
@@ -59,6 +61,11 @@ class Tracker:
         self.bbox_delay = 1000 / self.max_fps
         self._detector = Detector(model, connections, smm)
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
+
+    def on_connection_update(self, event: ConnectionCollectionEvent, *_: Any):
+        if event == ConnectionCollectionEvent.REMOVED and len(self.connections) == 0:
+            logger.debug("No more connections available, stopping detection process...")
+            self.stop()
 
     def start_detection_process(self) -> None:
         if self._detector.is_running():
@@ -108,7 +115,6 @@ class Tracker:
         if self._poll_bbox_task is not None:
             self._poll_bbox_task.cancel()
             self._poll_bbox_task = None
-        logger.debug("Detection process stopped.")
         return True
 
     def stop(self) -> bool:

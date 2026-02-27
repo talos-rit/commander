@@ -223,23 +223,23 @@ class ConnectionCollection(dict[str, Connection]):
     def __delitem__(self, key: str) -> None:
         if key in self:
             connection = self[key]
+            super().__delitem__(key)
             self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
             connection.close()
             if key == self._active_host:
                 new_host = next((h for h in self if h != key), None)
                 self.set_active(new_host)
-        return super().__delitem__(key)
 
     def pop(self, key: str, default=None) -> Connection | None:
         """Pops the connection and notifies the listeners of removal. If connection is active, sets active connection to another available connection or None."""
-        if key in self:
-            connection = self[key]
+        connection = super().pop(key, None)
+        if connection is not None:
             self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
             connection.close()
             if key == self._active_host:
                 new_host = next((h for h in self if h != key), None)
                 self.set_active(new_host)
-        return super().pop(key, default)
+        return connection or default
 
     def clear(self) -> None:
         self.set_active(None)
