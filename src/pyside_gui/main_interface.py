@@ -38,7 +38,7 @@ class VideoThread(QThread):
 
     frame_processed = Signal(np.ndarray)
 
-    def __init__(self, app):
+    def __init__(self, app: App):
         super().__init__()
         self.app = app
         self.running = True
