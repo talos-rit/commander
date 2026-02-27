@@ -3,12 +3,4 @@ import src.config.add as editor
 from src.config.load import DEFAULT_ROBOT_CONFIG, ROBOT_CONFIGS
 from src.config.schema.robot import ConnectionConfig
 
-# def __getattr__(name):
-#     """Lazy load add_config and validate_connection_config to avoid circular imports."""
-
-#     if name == "editor":
-#         return editor
-#     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 __all__ = ["ROBOT_CONFIGS", "ConnectionConfig", "DEFAULT_ROBOT_CONFIG", "editor"]
