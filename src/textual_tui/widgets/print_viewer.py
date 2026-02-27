@@ -45,5 +45,6 @@ class PrintViewer(Widget):
         txt = event.text.rstrip("\n")
         if not txt:
             return
+        # Sanitize the text to remove ANSI escape codes before logging
         sanitized_txt = re.sub(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", txt)
         logger.info(sanitized_txt)
