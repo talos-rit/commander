@@ -50,7 +50,15 @@ def read_app_settings() -> dict[str, Any]:
 
 def app_settings_recovery() -> AppSettings:
     if os.path.exists(APP_SETTINGS_PATH):
-        path = shutil.copy(APP_SETTINGS_PATH, APP_SETTINGS_PATH + ".backup")
+        if os.path.exists(APP_SETTINGS_PATH + ".backup"):
+            file_num = 1
+            while os.path.exists(APP_SETTINGS_PATH + ".backup" + str(file_num)):
+                file_num += 1
+            path = shutil.copy(
+                APP_SETTINGS_PATH, APP_SETTINGS_PATH + f".backup{file_num}"
+            )
+        else:
+            path = shutil.copy(APP_SETTINGS_PATH, APP_SETTINGS_PATH + ".backup")
         print(f"Backed up existing app settings to {path}")
         os.remove(APP_SETTINGS_PATH)
     # Copy default app settings to app settings path if it doesn't exist
