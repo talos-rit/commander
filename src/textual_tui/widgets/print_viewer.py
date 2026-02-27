@@ -4,6 +4,8 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import RichLog
 
+from src.config.load import APP_SETTINGS
+
 
 class PrintViewer(Widget):
     """Captures print() output and displays it in a Log widget."""
@@ -22,6 +24,7 @@ class PrintViewer(Widget):
 
         logger.add(
             log_handler,
+            level=APP_SETTINGS.log_level,
         )
         self.begin_capture_print()
 
@@ -29,8 +32,6 @@ class PrintViewer(Widget):
         txt = event.text.rstrip("\n")
         if not txt:
             return
-        log = self.query_one("#log", RichLog)
-        log.write(txt)
         if event.stderr:
             logger.error(txt)
         else:
