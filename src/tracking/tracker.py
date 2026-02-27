@@ -154,3 +154,15 @@ class Tracker:
             return
         self.bbox_delay = new_delay
         self._poll_bbox_task.set_interval(int(self.bbox_delay))
+
+    def get_output_fps(self) -> float:
+        """Get the current frame rate of the bbox polling task."""
+        if self._poll_bbox_task is None:
+            return 0.0
+        return 1000.0 / self.bbox_delay
+
+    def get_input_fps(self) -> float:
+        """Get the current frame rate of the frame sending task."""
+        if self._send_frame_task is None:
+            return 0.0
+        return 1000.0 / self.frame_delay
