@@ -3,8 +3,9 @@ Configuration loading and management for Talos application.
 Supports both raw YAML dict access and validated Pydantic models.
 """
 
-from pydantic import ValidationError
 from loguru import logger
+from pydantic import ValidationError
+
 from src.config.read import read_default_robot_config, read_robot_config_file
 from src.config.schema import ConnectionConfig
 
@@ -58,3 +59,6 @@ def load_robot_config() -> dict[str, ConnectionConfig]:
             )
             continue
     return validated_config
+
+
+ROBOT_CONFIGS = load_robot_config()

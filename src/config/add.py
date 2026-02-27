@@ -3,7 +3,7 @@ from typing import Optional
 import yaml
 from pydantic import ValidationError
 
-from src.config import ROBOT_CONFIGS
+from src.config.load import ROBOT_CONFIGS
 from src.config.path import ROBOT_CONFIGS_PATH
 from src.config.schema import ConnectionConfig
 
@@ -53,7 +53,7 @@ def validate_connection_config(
 
     if not socket_host or not isinstance(socket_host, str):
         errors.append("Host must be a non-empty string")
-    
+
     if socket_host in ROBOT_CONFIGS:
         errors.append(f"Robot configuration for host '{socket_host}' already exists")
 
@@ -71,8 +71,6 @@ def validate_connection_config(
         return True, config, []
     except ValidationError as e:
         # Pydantic validation error
-        error_list = (
-            e.errors() if hasattr(e, "errors") else [{"msg": str(e)}]
-        )
+        error_list = e.errors() if hasattr(e, "errors") else [{"msg": str(e)}]
         errors = [err.get("msg", str(err)) for err in error_list]
         return False, None, errors
