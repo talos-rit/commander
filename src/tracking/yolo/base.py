@@ -9,7 +9,7 @@ from ultralytics import YOLO  # pyright: ignore[reportPrivateImportUsage]
 from ultralytics.engine.model import Model  # pyright: ignore[reportPrivateImportUsage]
 
 from assets import join_paths
-from src.tracking.tracker import ObjectModel
+from src.tracking.detector import ObjectModel
 
 
 class YOLOModelSize(StrEnum):
@@ -54,7 +54,13 @@ class YOLOBaseModel(ObjectModel):
         _pt_pose_file: str | None = None,
     ):
         self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
-        self.device = "cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+        self.device = (
+            "cuda:0"
+            if torch.cuda.is_available()
+            else "mps"
+            if torch.backends.mps.is_available()
+            else "cpu"
+        )
         logger.info(f"Using YOLO model size: {self.model_size}, device: {self.device}")
         self.object_detector: Model = YOLO(
             path.join(_yolo_pt_dir, _pt_file or self.model_size.pt_file)

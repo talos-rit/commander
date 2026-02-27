@@ -3,10 +3,11 @@ from multiprocessing.managers import SharedMemoryManager
 from loguru import logger
 from textual import on, work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.timer import Timer
-from textual.widgets import Button, Footer, Header, Select, Static, Switch
+from textual.widgets import Button, Footer, Header, Label, Select, Static, Switch
 
 from src.talos_app import App as TalosApp
 from src.talos_app import ControlMode, Direction
@@ -26,44 +27,66 @@ MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)
 class TextualInterface(App):
     CSS_PATH = "app.tcss"
     BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("space", "home", "Home"),
-        ("up", "mv_up", "Up"),
-        ("down", "mv_down", "Down"),
-        ("left", "mv_left", "Left"),
-        ("right", "mv_right", "Right"),
+        Binding(key="q", action="quit", description="Quit"),
+        Binding(key="space", action="home", description="Home"),
+        Binding(key="up", action="mv_up", description="Up"),
+        Binding(key="down", action="mv_down", description="Down"),
+        Binding(key="left", action="mv_left", description="Left"),
+        Binding(key="right", action="mv_right", description="Right"),
+        Binding(key="e", action="mode_switch", description="Toggle Auto Mode"),
+        Binding(key="m", action="manage_connection", description="Manage Connections"),
+        Binding(
+            key="c",
+            action="toggle_control_mode",
+            description="Toggle Continuous Control",
+        ),
     ]
     _talos_app: TalosApp
     debounce_timers: dict[str, Timer] = dict()
     smm: SharedMemoryManager = SharedMemoryManager()
-    connection_options = reactive([("None", None)])
+    connection_options = reactive(list())
+    auto_mode_state = reactive(False)
+    continuous_control_state = reactive(False)
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal():
+            home_btn = Button(
+                "HOME",
+                id="home",
+                classes="widget",
+                action="app.home()",
+            )
+            focus_home = home_btn.focus  # reactive button needs a component to focus on blur to not let another button accidentally trigger.
             with Vertical(classes="column"):
                 with Horizontal():
                     with Vertical(classes="widget"):
-                        yield Static("Control Mode:", classes="label-text")
-                        yield Switch(value=False, id="auto-mode-switch")
+                        yield Static("Automatic Mode:", classes="label-text")
+                        yield Switch(value=self.auto_mode_state, id="auto-mode-switch")
                         yield Static("Continuous Control:", classes="label-text")
-                        yield Switch(value=False, id="continuous-control-switch")
-                    yield ReactiveButton("UP", id="up", classes="widget")
-                    yield Static(id="placeholder", classes="widget")
-                with Horizontal():
-                    yield ReactiveButton("LEFT", id="left", classes="widget")
-                    yield Button(
-                        "HOME",
-                        id="home",
-                        classes="widget",
-                        action="app.home()",
+                        yield Switch(
+                            value=self.continuous_control_state,
+                            id="continuous-control-switch",
+                        )
+                    yield ReactiveButton(
+                        "UP", id="up", classes="widget", on_blur=focus_home
                     )
-                    yield ReactiveButton("RIGHT", id="right", classes="widget")
+                    yield Label(id="placeholder", classes="widget")
+                with Horizontal():
+                    yield ReactiveButton(
+                        "LEFT", id="left", classes="widget", on_blur=focus_home
+                    )
+                    yield home_btn
+                    yield ReactiveButton(
+                        "RIGHT", id="right", classes="widget", on_blur=focus_home
+                    )
                 with Horizontal():
                     with Vertical(classes="widget"):
-                        yield Static("Model:", classes="label-text")
+                        yield Static("Tracking Model", classes="label-text")
                         yield Select(MODEL_OPTIONS_TEXTUAL, id="model-select")
-                    yield ReactiveButton("DOWN", id="down", classes="widget")
+                    yield ReactiveButton(
+                        "DOWN", id="down", classes="widget", on_blur=focus_home
+                    )
                     with Vertical(classes="widget connection-widget"):
                         yield Button(
                             "Manage Connection",
@@ -75,7 +98,7 @@ class TextualInterface(App):
                             self.connection_options,
                             id="connection-select",
                         )
-            yield PrintViewer(classes="column")
+            yield PrintViewer(id="log-viewer", classes="column", disabled=True)
         yield Footer()
 
     def watch_connection_options(self, old_options, new_options):
@@ -95,13 +118,15 @@ class TextualInterface(App):
         scheduler = TextualScheduler(self)
         self._talos_app = TalosApp(scheduler, smm=self.smm)
         self.run_server()
-
         start_termination_guard()
-
-        continuous_switch = self.query_one("#continuous-control-switch", Switch)
-        continuous_switch.value = (
+        self.continuous_control_state = (
             self._talos_app.get_control_mode() == ControlMode.CONTINUOUS
         )
+        self.auto_mode_state = not self._talos_app.get_manual_control()
+        self.query_one(
+            "#continuous-control-switch", Switch
+        ).value = self.continuous_control_state
+        self.query_one("#auto-mode-switch", Switch).value = self.auto_mode_state
 
     @on(ReactiveButton.Active, "#up")
     def action_up(self):
@@ -137,17 +162,33 @@ class TextualInterface(App):
 
     @on(Select.Changed, "#model-select")
     def model_changed(self, event: Select.Changed) -> None:
-        if event.value is Select.BLANK:
+        if event.value is Select.NULL:
             return self._talos_app.change_model(None)
         self._talos_app.change_model(str(event.value))
 
+    def action_mode_switch(self):
+        switch = self.query_one("#auto-mode-switch", Switch)
+        switch.value = not switch.value
+
     @on(Switch.Changed, "#auto-mode-switch")
-    def auto_mode_changed(self, _: Switch.Changed) -> None:
-        self._talos_app.toggle_director()
+    def auto_mode_changed(self, e: Switch.Changed) -> None:
+        ctrl = e.value
+        # unfortunately the naming is a bit confusing here since the switch is for auto mode
+        # but the function is for manual control, so we need to invert the value.
+        self._talos_app.set_manual_control(manual=not ctrl)
+
+    def action_toggle_control_mode(self):
+        logger.debug("action_toggle_control_mode called")
+        switch = self.query_one("#continuous-control-switch", Switch)
+        switch.value = not switch.value
 
     @on(Switch.Changed, "#continuous-control-switch")
-    def continuous_control_changed(self, _: Switch.Changed) -> None:
-        self._talos_app.toggle_control_mode()
+    def continuous_control_changed(self, e: Switch.Changed) -> None:
+        logger.debug("continuous_control_changed called")
+        val = e.value
+        self._talos_app.set_control_mode(
+            ControlMode.CONTINUOUS if val else ControlMode.DISCRETE
+        )
 
     def debounce_input(self, name, func, wait_ms: int = 100):
         def called():
@@ -212,20 +253,25 @@ class TextualInterface(App):
             ManageConnectionScreen(self._talos_app), wait_for_dismiss=True
         )
 
-        connections = [
-            (conn, conn) for conn in self._talos_app.get_connections().keys()
-        ]
+        connections = [(conn, conn) for conn in self._talos_app.get_connection_hosts()]
         self.connection_options = connections
-        self.query_one("#connection-select", Select).value = (
-            self._talos_app._active_connection or Select.BLANK
-        )
+        host = self._talos_app.get_active_hostname()
+        if host is None:
+            return self.query_one("#connection-select", Select).clear()
+        self.query_one("#connection-select", Select).value = host
 
     @on(Select.Changed, "#connection-select")
     def handle_active_connection(self, active_connection: Select.Changed):
-        logger.info(f"Active connection changed to: {active_connection.value}")
         if not hasattr(self, "_talos_app"):
             return
-        new_connection = str(active_connection.value)
+        if self._talos_app.get_active_hostname() == active_connection.value:
+            return
+        logger.info(f"Active connection changed to: {active_connection.value}")
+        new_connection = (
+            None
+            if active_connection.value == Select.NULL
+            else str(active_connection.value)
+        )
         self._talos_app.set_active_connection(new_connection)
 
     def start_mv_direction(self, direction: Direction):
@@ -235,9 +281,6 @@ class TextualInterface(App):
     def stop_mv_direction(self, direction: Direction):
         logger.info(f"Stop move {direction}")
         self._talos_app.stop_move(direction)
-
-    def get_app(self) -> TalosApp:
-        return self._talos_app
 
 
 if __name__ == "__main__":

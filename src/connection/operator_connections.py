@@ -1,11 +1,10 @@
+import select
 import socket
 import threading
-import time
 
 from loguru import logger
 
 from src.icd_config import CTypesInt, toBytes, toInt
-from src.utils import add_termination_handler, remove_termination_handler
 
 
 class OperatorConnection:
@@ -21,6 +20,7 @@ class OperatorConnection:
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.setblocking(False)  # Set socket to non-blocking mode
         if connect_on_init:
             # Start connection on a separate thread so it doesn't block
             self.connect_on_thread()
@@ -28,7 +28,6 @@ class OperatorConnection:
     def connect_on_thread(self):
         self.thread = threading.Thread(target=self.connect, daemon=True)
         self.thread.start()
-        self._term = add_termination_handler(self.close)
 
     def connect(self):
         self.is_running = True
@@ -37,38 +36,51 @@ class OperatorConnection:
                 return  # Exit since this connection is not needed anymore
             try:
                 self.socket.connect((self.host, self.port))
-                logger.info(f"Bound to socket: {self.host}:{self.port}")
+                logger.info(f"Connected to socket: {self.host}:{self.port}")
                 break
+            except BlockingIOError:
+                # Wait for 5 seconds to see if socket connected or has an error
+                _, writeable, exceptional = select.select(
+                    [], [self.socket], [self.socket], 5.0
+                )
+                if exceptional:
+                    logger.error(
+                        f"[Connection]: Connection failed, retrying in 5s({attempt + 1}/5)"
+                    )
+                elif writeable:
+                    # Check if the socket actually connected
+                    err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                    if err == 0:
+                        logger.info(f"Connected to socket: {self.host}:{self.port}")
+                        break
+                    else:
+                        logger.error(
+                            f"[Connection]: Connection failed with error {err}, retrying in 5s({attempt + 1}/5)"
+                        )
+                else:
+                    logger.error(
+                        f"[Connection]: Connection timeout, retrying in 5s({attempt + 1}/5)"
+                    )
             except OSError as e:
                 logger.error(
-                    f"[Connection]: Bind failed, retrying in 5s({attempt + 1}/5) {e}"
+                    f"[Connection]: Connection failed, retrying in 5s({attempt + 1}/5) {e}"
                 )
-                time.sleep(5)
         else:
             return  # Failed to connect after retries
 
-        logger.info("Starting to listen!")
-        self.socket.listen()
-        while self.is_running:
-            try:
-                connection, address = self.socket.accept()
-                logger.info(f"Got connection from {address}")
-                self.listen(connection)
-            except OSError as e:
-                logger.error(f"OS Error: {e}")
-                break
+        self.listen()
 
     def close(self):
         """Cleanly close the socket port and stop listening to new connections."""
-        logger.info("Closing socket")
         self.is_running = False
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         if self.thread is not None:
             self.thread.join()
-        if self._term is not None:
-            remove_termination_handler(self._term)
-            self._term = None
         self.socket.close()
-        logger.info("Socket closed cleanly")
+        logger.debug(f"Socket closed cleanly {self.host}:{self.port}")
 
     def xor_checksum(self, data: bytes) -> int:
         result = 0
@@ -123,18 +135,25 @@ class OperatorConnection:
         # response = self.socket.recv(2048)
         return 0
 
-    def listen(self, connection: socket.socket):
+    def listen(self):
         while self.is_running:
-            message = connection.recv(2048)
-            if not message:
-                break  # Connection closed by the other side
+            try:
+                message = self.socket.recv(2048)
 
-            self.on_message(connection, message)
+                if not message:
+                    logger.info(f"Connection closed by {self.host}")
+                    break  # Connection closed by the other side
 
-        connection.close()  # Closes this client's connection socket only
+                self._on_message(message)
+            except BlockingIOError:
+                continue
+            except OSError as e:
+                if self.is_running:
+                    logger.error(f"Socket receive from {self.host} failed: {e}")
+                break
 
-    def on_message(self, connection: socket.socket, message: bytes):
-        logger.info(f"RECEIVED MESSAGE: {message.decode()}")
+    def _on_message(self, message: bytes):
+        logger.info(f"RECEIVED MESSAGE: {message.decode(errors='replace')}")
         logger.info("subclass must implement on_message method")
 
 
@@ -146,9 +165,9 @@ class CommandConnection(OperatorConnection):
         port: Port to bind the socket to usually 8000 for dev
     """
 
-    def on_message(self, connection: socket.socket, message: bytes):
+    def on_message(self, message: bytes):
         command_value_bytes = message[6:8]
         command_value = toInt(command_value_bytes)
         return_command_value = command_value + 0x8000
         return_command_value_bytes = toBytes(return_command_value, CTypesInt.UINT16)
-        connection.send(return_command_value_bytes)
+        self.socket.send(return_command_value_bytes)

@@ -14,8 +14,11 @@ class PrintViewer(Widget):
     def on_mount(self) -> None:
         def log_handler(message) -> None:
             record = message.record
-            log = self.query_one("#log", RichLog)
-            log.write(record["message"])
+            try:
+                log = self.query_one("#log", RichLog)
+                log.write(f"[{record['level'].name}] {record['message']}")
+            except Exception:
+                print(record["message"])
 
         logger.add(
             log_handler,

@@ -9,16 +9,21 @@ from src.talos_app import App
 
 
 class TKConnectionManager(tkinter.Toplevel):
-    def __init__(self, parent, app: App, update_gui_callback: Callable[[], None]):
+    def __init__(
+        self,
+        parent,
+        app: App,
+        update_gui_callback: Callable[[], None],
+        connections: list[str],
+    ):
         super().__init__(parent)
         self.title("Connection Manager")
         self.geometry("350x300")
         self.parent = parent
         self.app = app
-        self.connections = app.get_connections()
+        self.connections = connections
         self.update_gui_callback = update_gui_callback
         self.transient(parent)
-        self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.list_frame = ttk.Frame(self)
@@ -32,9 +37,23 @@ class TKConnectionManager(tkinter.Toplevel):
             side="left", padx=5
         )
         self.render_list()
+        self.update_idletasks()  # Ensure the window is rendered before setting grab
+        self.after_idle(self._set_modal_grab)
+
+    def _set_modal_grab(self):
+        if not self.winfo_exists():
+            return
+        try:
+            self.wait_visibility()
+            self.grab_set()
+        except tkinter.TclError:
+            logger.debug("Connection manager closed before modal grab could be set.")
 
     def on_close(self):
-        self.grab_release()
+        try:
+            self.grab_release()
+        except tkinter.TclError:
+            logger.debug("Connection manager (maybe????) already released grab on close.")
         self.destroy()
 
     def render_list(self):
@@ -53,9 +72,7 @@ class TKConnectionManager(tkinter.Toplevel):
             ttk.Button(
                 frame,
                 text="Connect",
-                command=lambda hostname=cfg.socket_host: self.add_from_config(
-                    hostname
-                ),
+                command=lambda hostname=cfg.socket_host: self.add_from_config(hostname),
             ).pack(side="right")
 
         ttk.Label(
@@ -63,12 +80,10 @@ class TKConnectionManager(tkinter.Toplevel):
         ).pack(anchor="w", padx=5, pady=(5, 0))
         ttk.Separator(self.list_frame, orient="horizontal").pack(fill="x", pady=5)
 
-        for _, (hostname, connData) in enumerate(self.connections.items()):
+        for hostname in self.connections:
             row = ttk.Frame(self.list_frame)
             row.pack(fill="x", pady=2, padx=5)
-            ttk.Label(row, text=f"{hostname}:{connData.port}").pack(
-                side="left", expand=True, fill="x"
-            )
+            ttk.Label(row, text=f"{hostname}").pack(side="left", expand=True, fill="x")
             ttk.Button(
                 row, text="X", command=lambda h=hostname: self.remove_connection(h)
             ).pack(side="right")
@@ -76,16 +91,19 @@ class TKConnectionManager(tkinter.Toplevel):
     def remove_connection(self, hostname):
         if hostname in self.connections:
             self.app.remove_connection(hostname)
+            self.connections = [h for h in self.connections if h != hostname]
             self.update_gui_callback()
             self.render_list()
 
     def add_connection(self, conn: ConnectionConfig):
         self.app.open_connection(conn.socket_host)
         self.update_gui_callback()
+        self.connections.append(conn.socket_host)
         self.render_list()
 
     def add_from_config(self, hostname):
         self.app.open_connection(hostname)
+        self.connections.append(hostname)
         self.update_gui_callback()
         self.render_list()
 
@@ -118,11 +136,13 @@ class TKConnectionManager(tkinter.Toplevel):
                 logger.warning("Host, port, and camera inputs are required.")
                 return
 
-            valid, conf, error_msg = editor.validate_connection_config(host, port_str, camera_str)
+            valid, conf, error_msg = editor.validate_connection_config(
+                host, port_str, camera_str
+            )
             if not valid or conf is None:
                 logger.warning(f"Invalid connection config: {error_msg}")
                 return
-            
+
             editor.add_config(conf)
             popup.destroy()
             self.add_connection(conf)

@@ -1,6 +1,8 @@
 import threading
 import time
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Callable
 
 import av
 import av.video
@@ -10,10 +12,15 @@ from loguru import logger
 
 from src.config import ROBOT_CONFIGS
 from src.connection.publisher import Publisher
-from src.utils import add_termination_handler, remove_termination_handler
+from src.utils import (
+    add_termination_handler,
+    remove_termination_handler,
+)
 
 
 class PyAVCapture:
+    _term: int | None = None
+
     def __init__(self, source, **options):
         self.container = av.open(source, options=options)
         self.video_stream = next(
@@ -91,7 +98,6 @@ class VideoConnection:
         else:
             self.cap = cv2.VideoCapture(source)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
-        self._term = add_termination_handler(self.close)
         frame = None
         for _ in range(6):
             ret, frame, *rest = self.cap.read()
@@ -107,9 +113,9 @@ class VideoConnection:
     def get_frame(self) -> np.ndarray | None:
         if self.cap is not None:
             with self._read_lock:
-                r, frame, *rest = self.cap.read()
-                if len(rest) > 0:
-                    logger.debug(f"{rest=}")
+                r, frame, *rest = (
+                    self.cap.read()
+                )  # rest sometimes have timestamp info from PyAVCapture
             if not r:
                 return None
             return frame
@@ -117,9 +123,7 @@ class VideoConnection:
     def close(self):
         if self.cap is not None:
             self.cap.release()
-        if self._term is not None:
-            remove_termination_handler(self._term)
-            self._term = None
+            logger.debug(f"Released video connection to {self.src}")
 
 
 @dataclass
@@ -129,6 +133,8 @@ class Connection:
     video_connection: VideoConnection
     is_manual: bool = True
     publisher: Publisher = field(init=False)
+    _bboxes: list[tuple[int, int, int, int]] | None = field(init=False, default=None)
+    _bboxes_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
 
     def __post_init__(self):
         self.publisher = Publisher(self.host, self.port)
@@ -137,8 +143,115 @@ class Connection:
     def set_manual(self, manual: bool) -> None:
         self.is_manual = manual
 
-    def toggle_manual(self) -> None:
+    def toggle_manual(self) -> bool:
         self.is_manual = not self.is_manual
+        return self.is_manual
 
     def close(self) -> None:
+        self.video_connection.close()
         self.publisher.close()
+
+    def get_bboxes(self) -> list[tuple[int, int, int, int]] | None:
+        with self._bboxes_lock:
+            return self._bboxes
+
+    def set_bboxes(self, bboxes: list[tuple[int, int, int, int]] | None) -> None:
+        with self._bboxes_lock:
+            self._bboxes = bboxes
+
+
+class ConnectionCollectionEvent(Enum):
+    ADDED = "added"
+    REMOVED = "removed"
+    ACTIVE_CHANGED = "active_changed"
+
+
+class ConnectionCollection(dict[str, Connection]):
+    _active_host: str | None = None
+    _listeners: list[
+        Callable[[ConnectionCollectionEvent, str, Connection | None], None]
+    ] = []
+    _term: int | None = None
+
+    def set_active(self, hostname: str | None) -> Connection | None:
+        if hostname is None:
+            self._active_host = None
+            self._notify_listeners(
+                ConnectionCollectionEvent.ACTIVE_CHANGED, "None", None
+            )
+            return None
+        if hostname not in self or (conn := self.get(hostname)) is None:
+            logger.error(f"Connection to {hostname} does not exist")
+            return None
+        self._active_host = hostname
+        self._notify_listeners(ConnectionCollectionEvent.ACTIVE_CHANGED, hostname, conn)
+        if hostname is not None and self._term is None:
+            self._term = add_termination_handler(self.clear)
+        return self.get_active()
+
+    def get_active(self) -> Connection | None:
+        if self._active_host is None:
+            return None
+        return self.get(self._active_host, None)
+
+    def add_listener(
+        self,
+        listener: Callable[[ConnectionCollectionEvent, str, Connection | None], None],
+    ) -> None:
+        self._listeners.append(listener)
+
+    def remove_listener(
+        self,
+        listener: Callable[[ConnectionCollectionEvent, str, Connection | None], None],
+    ) -> None:
+        self._listeners.remove(listener)
+
+    def _notify_listeners(
+        self,
+        event: ConnectionCollectionEvent,
+        hostname: str,
+        connection: Connection | None,
+    ) -> None:
+        for listener in self._listeners:
+            listener(event, hostname, connection)
+
+    def __setitem__(self, hostname: str, connection: Connection) -> None:
+        super().__setitem__(hostname, connection)
+        self._notify_listeners(ConnectionCollectionEvent.ADDED, hostname, connection)
+        self.set_active(hostname)
+
+    def __delitem__(self, key: str) -> None:
+        if key in self:
+            connection = self[key]
+            self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+            connection.close()
+            if key == self._active_host:
+                new_host = next((h for h in self if h != key), None)
+                self.set_active(new_host)
+        return super().__delitem__(key)
+
+    def pop(self, key: str, default=None) -> Connection | None:
+        """Pops the connection and notifies the listeners of removal. If connection is active, sets active connection to another available connection or None."""
+        if key in self:
+            connection = self[key]
+            self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+            connection.close()
+            if key == self._active_host:
+                new_host = next((h for h in self if h != key), None)
+                self.set_active(new_host)
+        return super().pop(key, default)
+
+    def clear(self) -> None:
+        self.set_active(None)
+        while self:
+            key, connection = self.popitem()
+            self._notify_listeners(ConnectionCollectionEvent.REMOVED, key, connection)
+            connection.close()
+            self.set_active(None)
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
+
+    def clear_bboxes(self) -> None:
+        for connection in self.values():
+            connection.set_bboxes(None)

@@ -14,7 +14,8 @@ from src.logger import configure_logger
 from src.talos_app import App
 from src.talos_endpoint import TalosEndpoint
 from src.textual_tui.main_interface import TextualInterface
-from src.tk_gui.main_interface import TKInterface, terminate
+from src.tk_gui.main_interface import TKInterface
+from src.utils import terminate
 
 from src.pyside_gui.main_interface import PySide6Interface
 
@@ -53,7 +54,10 @@ def terminal_interface(args=None):
     smm = multiprocessing.managers.SharedMemoryManager()
     interface = TextualInterface()
     interface.smm = smm
-    interface.run()
+    try:
+        interface.run()
+    finally:
+        terminate(0, 0)
 
 
 def tk_interface(args=None):

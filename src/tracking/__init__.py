@@ -2,11 +2,8 @@ from enum import StrEnum
 
 from loguru import logger
 
-from src.directors import BaseDirector, ContinuousDirector
-
+from .detector import ObjectModel
 from .haar_cascade.basic_model import BasicModel
-from .keep_away.keep_away_director import KeepAwayDirector
-from .tracker import ObjectModel
 
 
 class ModelOption(StrEnum):
@@ -21,18 +18,17 @@ class ModelOption(StrEnum):
     BASIC = "basic"
 
 
-USABLE_MODELS: dict[str, tuple[ObjectModel.__class__, BaseDirector.__class__]] = dict()
+USABLE_MODELS: dict[str, ObjectModel.__class__] = dict()
 
 # haar_cascade is imported via opencv-python by default
-USABLE_MODELS["basic"] = (BasicModel, ContinuousDirector)
+USABLE_MODELS["basic"] = BasicModel
 
 try:
-    from .keep_away.keep_away_model import KeepAwayModel
     from .media_pipe import MediaPipeModel, MediaPipePoseModel
 
-    USABLE_MODELS[ModelOption.KEEPAWAY] = (KeepAwayModel, KeepAwayDirector)
-    USABLE_MODELS[ModelOption.MEDIAPIPEPOSE] = (MediaPipeModel, ContinuousDirector)
-    USABLE_MODELS[ModelOption.MEDIAPIPE] = (MediaPipePoseModel, ContinuousDirector)
+    # USABLE_MODELS[ModelOption.KEEPAWAY] = (KeepAwayModel, KeepAwayDirector)
+    USABLE_MODELS[ModelOption.MEDIAPIPEPOSE] = MediaPipeModel
+    USABLE_MODELS[ModelOption.MEDIAPIPE] = MediaPipePoseModel
 except ImportError as e:
     logger.warning(
         f"""{e}
@@ -49,11 +45,11 @@ try:
         YOLOXLargeModel,
     )
 
-    USABLE_MODELS[ModelOption.YOLO_NANO] = (YOLONanoModel, ContinuousDirector)
-    USABLE_MODELS[ModelOption.YOLO_SMALL] = (YOLOSmallModel, ContinuousDirector)
-    USABLE_MODELS[ModelOption.YOLO_MEDIUM] = (YOLOMediumModel, ContinuousDirector)
-    USABLE_MODELS[ModelOption.YOLO_LARGE] = (YOLOLargeModel, ContinuousDirector)
-    USABLE_MODELS[ModelOption.YOLO_XLARGE] = (YOLOXLargeModel, ContinuousDirector)
+    USABLE_MODELS[ModelOption.YOLO_NANO] = YOLONanoModel
+    USABLE_MODELS[ModelOption.YOLO_SMALL] = YOLOSmallModel
+    USABLE_MODELS[ModelOption.YOLO_MEDIUM] = YOLOMediumModel
+    USABLE_MODELS[ModelOption.YOLO_LARGE] = YOLOLargeModel
+    USABLE_MODELS[ModelOption.YOLO_XLARGE] = YOLOXLargeModel
 except ImportError as e:
     logger.warning(
         f"""{e}
@@ -62,4 +58,3 @@ except ImportError as e:
     )
 
 MODEL_OPTIONS = list(USABLE_MODELS.keys())
-
