@@ -3,7 +3,6 @@ Configuration loading and management for Talos application.
 Supports both raw YAML dict access and validated Pydantic models.
 """
 
-from pprint import pprint
 from typing import Callable
 
 from loguru import logger
@@ -32,7 +31,7 @@ def load_app_settings(
     try:
         settings = AppSettings(**read_app_settings())
         print("App settings loaded successfully")
-        pprint(settings.model_dump_json(indent=2))
+        print("App Settings: ", settings.model_dump_json(indent=2))
         return settings
     except ValidationError as e:
         print(
