@@ -7,6 +7,7 @@ import numpy as np
 import pyvirtualcam as pyvcam
 from src.utils import add_termination_handler, remove_termination_handler
 
+
 class PyVcamStreamController:
     def __init__(self, frame_getter: Callable[[], np.ndarray | None]) -> None:
         self._frame_getter = frame_getter
@@ -54,7 +55,9 @@ class PyVcamStreamController:
 
     def _stream_loop(self, width: int, height: int, fps: int = 30) -> None:
         logger.info(f"Entering pyvcam stream loop with frame size {width}x{height}")
-        with pyvcam.Camera(width=width, height=height, fps=fps, fmt=pyvcam.PixelFormat.BGR) as cam:
+        with pyvcam.Camera(
+            width=width, height=height, fps=fps, fmt=pyvcam.PixelFormat.BGR
+        ) as cam:
             while not self._stop_event.is_set():
                 frame = self._frame_getter()
                 if frame is not None:
