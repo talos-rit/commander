@@ -303,6 +303,12 @@ class Detector(DetectorInterface):
     def reset_frame_order(self):
         self.frame_order = self._create_frame_order(self.connections)
         if self._detection_process is not None and self._detection_process.is_alive():
+            if len(self.connections) == 0:
+                logger.debug(
+                    "No more connections available, stopping detection process..."
+                )
+                self.stop()
+                return
             logger.debug("Restarting detection process to update frame order...")
             self.restart()
 
