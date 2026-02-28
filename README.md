@@ -109,6 +109,25 @@ The `config/example_default_config.yaml` file contains default parameters for th
 
 When you create a new connection in the commander application, it will automatically create a new config file, `config/robot_configs.local.yaml`. This file will contain the parameters for each connection you create. You can also edit this file directly to change the parameters for each connection.
 
+### App settings overrides
+`AppSettings` are loaded from `config/app_settings.local.yaml`, and can be overridden by environment variables.
+
+Priority order:
+1. Environment variables (including `.env`)
+2. `config/app_settings.local.yaml`
+3. Hardcoded defaults in the schema
+
+Supported environment variables:
+- `COMMANDER_LOG_LEVEL`
+- `COMMANDER_BBOX_MAX_FPS`
+- `COMMANDER_FRAME_PROCESS_FPS`
+
+Example:
+```bash
+export COMMANDER_BBOX_MAX_FPS=15
+uv run commander
+```
+
 
 ## Troubleshooting
 If you are having trouble connecting to the arm, try running the following command on the Pi:

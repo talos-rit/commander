@@ -5,8 +5,6 @@ from typing import Any
 
 from loguru import logger
 
-# TODO: Stop get rid of this import once AppSettings is implemented for non-connection specific settings/defaults
-from src.config import DEFAULT_ROBOT_CONFIG
 from src.scheduler import IterativeTask, Scheduler
 from src.talos_app import ConnectionCollection
 from src.tracking.detector import DetectionWaitingForModel, Detector, ObjectModel
@@ -15,11 +13,11 @@ from src.utils import (
     remove_termination_handler,
 )
 
+from ..config.load import APP_SETTINGS
 from ..connection.connection import ConnectionCollectionEvent
 from ..thread_scheduler import ThreadScheduler
 
 SHARED_MEM_FRAME_NAME = "frame"
-POLL_BBOX_CYCLE_INTERVAL_MS = 100  # 10 FPS
 
 
 class BBOX_COLOR(Enum):
@@ -31,9 +29,10 @@ class BBOX_COLOR(Enum):
 
 # Class for handling video feed and object detection model usage
 class Tracker:
-    max_fps = POLL_BBOX_CYCLE_INTERVAL_MS  # this will be set dynamically based on configuration see max_fps
-    frame_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
-    bbox_delay: float = POLL_BBOX_CYCLE_INTERVAL_MS  # same as above
+    # this will be set dynamically based on configuration see max_fps
+    max_fps: int
+    frame_delay: float  # same as above
+    bbox_delay: float  # same as above
     connections: ConnectionCollection
     _scheduler: Scheduler
     _term_handler_id: int | None = None
@@ -57,8 +56,8 @@ class Tracker:
         """
         self._scheduler = scheduler
         self.connections = connections
-        self.max_fps = DEFAULT_ROBOT_CONFIG.max_fps
-        self.frame_delay = 1000 / DEFAULT_ROBOT_CONFIG.fps
+        self.max_fps = APP_SETTINGS.bbox_max_fps
+        self.frame_delay = 1000 / APP_SETTINGS.frame_process_fps
         self.bbox_delay = 1000 / self.max_fps
         self._detector = Detector(model, connections, smm)
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
@@ -141,7 +140,7 @@ class Tracker:
         self.reschedule_bbox_task(new_interval)
         if new_interval <= 1000.0 / self.max_fps:
             logger.warning(
-                f"Bbox polling rate is at maximum (max_fps={self.max_fps}). Consider upgrading your model or increasing max_fps in config."
+                f"Bbox polling rate is at maximum (max_fps={self.max_fps}). Consider upgrading your model or increasing max_fps in settings."
             )
 
     def decrease_bbox_frame_rate(self) -> None:

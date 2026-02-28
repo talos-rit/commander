@@ -168,3 +168,4 @@ cython_debug/
 
 # Config
 config/**/*.local.yaml
+config/**/*.backup*
