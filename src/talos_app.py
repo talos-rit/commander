@@ -35,6 +35,7 @@ class App:
     streamer: Streamer
     director: BaseDirector | None = None
     control_mode: ControlMode = ControlMode.CONTINUOUS
+    model_selection: str | None = None
     move_delay_ms: int = 300  # time inbetween each directional command being sent while directional button is depressed
 
     # State for continuous and discrete movements
@@ -67,7 +68,11 @@ class App:
         if hostname in self.connections:
             return logger.warning(f"Connection to {hostname} already exists")
         conf = ROBOT_CONFIGS[hostname]
-        video_connection = VideoConnection(src=conf.camera_index)
+        try:
+            video_connection = VideoConnection(src=conf.camera_index)
+        except Exception as exc:
+            logger.warning(f"Failed to open video connection for {hostname}: {exc}")
+            video_connection = None
         conn = Connection(hostname, conf.socket_port, video_connection)
         self.connections[hostname] = conn
 
@@ -195,24 +200,38 @@ class App:
         """Returns the current director"""
         return self.director
 
-    def change_model(self, option: str | None = None) -> None:
+    def get_selected_model(self) -> str | None:
+        """Gets the name of the currently selected model, or None if no model is selected"""
+        return self.model_selection
+
+    def change_model(self, option: str | None = None) -> bool:
         """Changes the model to the new option and starts the detection process.
         Args:
             option (str | "None" | None, optional): New model option to swap to. Defaults to None.
         """
         option = option if option != "None" else None
-        if self.director is not None:
+        if option == self.model_selection:
+            return True  # No change needed
+        if option is not None and len(self.connections) == 0:
+            logger.warning("No connections available, skipping model initialization")
+            return False
+        if self.director is not None and self.director.is_active():
             self.director.stop_auto_control()
             logger.info("Director stopped")
         if option is None:
-            return self.tracker.swap_model(None)
+            self.tracker.swap_model(None)
+            self.model_selection = None
+            return True
         if option not in USABLE_MODELS:
-            return logger.error(
+            logger.error(
                 f"Model option was not found skipping initialization({option=})"
             )
+            return False
         model_class = USABLE_MODELS[option]
         self.tracker.swap_model(model_class)
         logger.info(f"Initialized {option} model")
+        self.model_selection = option
+        return True
 
     def is_manual_only(self) -> bool | None:
         """Gets the active connection's manual configuration"""
