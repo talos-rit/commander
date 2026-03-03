@@ -128,10 +128,26 @@ class PySide6Interface(QMainWindow):
 
         self._setup_video_display(main_layout)
         main_layout.addWidget(self._build_toggle_frame(), 1, 0)
+        self._setup_stream_button(main_layout)
         self._setup_directional_controls(main_layout)
         main_layout.addWidget(self._build_model_frame(), 3, 0)
         main_layout.addWidget(self._build_connection_frame(), 3, 2)
         self.update_ui()
+
+    def _setup_stream_button(self, layout: QGridLayout) -> None:
+        self.stream_button = QPushButton("Start PyVcam Stream")
+        self.stream_button.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
+        self.stream_button.setCheckable(True)
+        self.stream_button.toggled.connect(self._on_stream_toggled)
+        layout.addWidget(self.stream_button, 1, 2)
+
+    def _on_stream_toggled(self, checked: bool) -> None:
+        if checked:
+            self.app.start_stream(streamer_type="pyvcam")
+            self.stream_button.setText("Stop PyVcam Stream")
+        else:
+            self.app.stop_stream()
+            self.stream_button.setText("Start PyVcam Stream")
 
     def _setup_video_display(self, layout: QGridLayout) -> None:
         self.video_label = QLabel()
