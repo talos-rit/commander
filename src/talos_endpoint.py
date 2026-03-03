@@ -76,12 +76,17 @@ def _ensure_stream_started(talos_app: TalosApp) -> None:
         return
 
     logger.info(f"Calling start_stream for {active_conn.host}")
+    streamer_config = {
+        "output_url": MEDIAMTX_RTSP_URL,
+        "fps": int(MEDIAMTX_FPS) if MEDIAMTX_FPS else None,
+        "use_docker": MEDIAMTX_USE_DOCKER,
+        "docker_image": "jrottenberg/ffmpeg:6.1-alpine",
+        "docker_network": MEDIAMTX_DOCKER_NETWORK if MEDIAMTX_USE_DOCKER else None,
+    }
     talos_app.start_stream(
-        output_url=MEDIAMTX_RTSP_URL,
+        streamer_type="ffmpeg",
         hostname=active_conn.host,
-        fps=int(MEDIAMTX_FPS) if MEDIAMTX_FPS else None,
-        use_docker=MEDIAMTX_USE_DOCKER,
-        docker_network=MEDIAMTX_DOCKER_NETWORK if MEDIAMTX_USE_DOCKER else None,
+        stream_config=streamer_config
     )
     logger.debug(f"After start_stream: is_streaming={talos_app.is_streaming()}")
 
@@ -156,14 +161,17 @@ async def start_stream(data: dict, context: Context = Depends(ctx)):
     output_url = data.get("output_url")
     if not output_url:
         raise HTTPException(status_code=400, detail="Missing output_url")
-
+    streamer_config = {
+        "output_url": output_url,
+        "fps": data.get("fps"),
+        "use_docker": bool(data.get("use_docker", False)),
+        "docker_image": data.get("docker_image"),
+        "docker_network": data.get("docker_network"),
+    }
     context.talos_app.start_stream(
-        output_url=output_url,
+        streamer_type="ffmpeg",
         hostname=data.get("hostname"),
-        fps=data.get("fps"),
-        use_docker=bool(data.get("use_docker", False)),
-        docker_image=data.get("docker_image"),
-        docker_network=data.get("docker_network"),
+        stream_config=streamer_config
     )
 
     return {"status": "started", "output_url": output_url}

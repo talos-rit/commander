@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import time
 import threading
 from typing import Callable
@@ -5,12 +6,21 @@ from typing import Callable
 from loguru import logger
 import numpy as np
 import pyvirtualcam as pyvcam
+from src.streaming.stream_controller import StreamConfig, StreamController
 from src.utils import add_termination_handler, remove_termination_handler
 
 
-class PyVcamStreamController:
-    def __init__(self, frame_getter: Callable[[], np.ndarray | None]) -> None:
+@dataclass
+class PyVcamStreamConfig(StreamConfig):
+    fps: int = 30
+
+
+class PyVcamStreamController(StreamController):
+    def __init__(
+        self, frame_getter: Callable[[], np.ndarray | None], config: PyVcamStreamConfig
+    ) -> None:
         self._frame_getter = frame_getter
+        self._config: PyVcamStreamConfig = config
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._term_id: int | None = None
@@ -24,8 +34,7 @@ class PyVcamStreamController:
         first_frame = self._wait_for_frame()
         height, width = first_frame.shape[:2]
 
-        # TODO: Get FPS from somewhere in configs
-        fps = 30
+        fps = self._config.fps
         self._thread = threading.Thread(
             target=self._stream_loop,
             args=(width, height, fps),
