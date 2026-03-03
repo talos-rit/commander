@@ -83,7 +83,6 @@ class YOLOBaseModel(ObjectModel):
         detection_result = self.object_detector(
             frameRGB, classes=0, verbose=False, imgsz=(576, 320), device=self.device
         )
-        # print(detection_result)
         if not detection_result:
             return []
 
@@ -94,14 +93,6 @@ class YOLOBaseModel(ObjectModel):
             x2 = int(xyxy[2] * frameWidth)
             y2 = int(xyxy[3] * frameHeight)
             bboxes.append((x1, y1, x2, y2))
-        # for i, detection in enumerate(detection_result):
-        #     xyxy = detection.boxes.xyxyn
-        #     x1 = int(xyxy[i][0] * frameWidth)
-        #     y1 = int(xyxy[i][1] * frameHeight)
-        #     x2 = int(xyxy[i][2] * frameWidth)
-        #     y2 = int(xyxy[i][3] * frameHeight)
-        #     bboxes.append((x1, y1, x2, y2))
-        # print(bboxes)
 
         return bboxes
 

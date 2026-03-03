@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from multiprocessing import Event, Process, Queue, shared_memory, synchronize
 from multiprocessing.managers import SharedMemoryManager
 from queue import Empty, Full
+from typing import Literal
 
 import numpy as np
 from loguru import logger
@@ -185,14 +186,14 @@ class Detector(DetectorInterface):
             return
 
         frames = [
-            video_conn.get_frame()
+            frame
             for host, _ in self.frame_order
             if (video_conn := self.connections[host].video_connection) is not None
+            and (frame := video_conn.get_frame()) is not None
         ]
-        frames = [f for f in frames if f is not None]
         if len(frames) == 0:
             logger.warning(
-                f"No frames available to update frame buffer. {frames=} {self.frame_order=}"
+                f"No frames available to update frame buffer. {self.frame_order=}"
             )
             return
         # Compare heights of frames and padd the bottom to the smaller ones to match the largest height
@@ -324,7 +325,7 @@ class Detector(DetectorInterface):
         stopper,
         frame_ready_event: synchronize.Event,
         frame_mem: shared_memory.SharedMemory,
-        frame_shape,
+        frame_shape: tuple[int, int, Literal[3]],
         frame_dtype,
     ) -> None:
         configure_logger(process_name="detection_process", remove_existing=True)
