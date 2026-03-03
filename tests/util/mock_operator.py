@@ -22,6 +22,8 @@ class CommandConnection(OperatorConnection):
 
 
 class MockOperator:
+    """DEPRECATED: This class is no longer working. It was used to test the command connection and can be repurposed in the future if needed."""
+
     connection = CommandConnection(host="mock_socket_host", port=420)
 
     @staticmethod
