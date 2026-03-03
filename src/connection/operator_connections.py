@@ -4,7 +4,7 @@ import threading
 
 from loguru import logger
 
-from src.icd_config import CTypesInt, toBytes, toInt
+from src.icd_config import CTypesInt, toBytes
 
 
 class OperatorConnection:
@@ -155,19 +155,3 @@ class OperatorConnection:
     def _on_message(self, message: bytes):
         logger.info(f"RECEIVED MESSAGE: {message.decode(errors='replace')}")
         logger.info("subclass must implement on_message method")
-
-
-class CommandConnection(OperatorConnection):
-    """Connection Class used for Mock Operator. This is a receiving socket class.
-
-    Args:
-        host: Host to bind the socket to usually localhost for dev
-        port: Port to bind the socket to usually 8000 for dev
-    """
-
-    def on_message(self, message: bytes):
-        command_value_bytes = message[6:8]
-        command_value = toInt(command_value_bytes)
-        return_command_value = command_value + 0x8000
-        return_command_value_bytes = toBytes(return_command_value, CTypesInt.UINT16)
-        self.socket.send(return_command_value_bytes)
