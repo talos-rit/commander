@@ -130,7 +130,7 @@ class VideoConnection:
 class Connection:
     host: str
     port: int
-    video_connection: VideoConnection
+    video_connection: VideoConnection | None
     is_manual: bool = True
     publisher: Publisher = field(init=False)
     _bboxes: list[tuple[int, int, int, int]] | None = field(init=False, default=None)
@@ -148,7 +148,8 @@ class Connection:
         return self.is_manual
 
     def close(self) -> None:
-        self.video_connection.close()
+        if self.video_connection is not None:
+            self.video_connection.close()
         self.publisher.close()
 
     def get_bboxes(self) -> list[tuple[int, int, int, int]] | None:

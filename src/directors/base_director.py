@@ -56,7 +56,12 @@ class BaseDirector(ABC):
         for host, conn in self.connections.items():
             bbox = conn.get_bboxes()
             if host in self.connections and bbox is not None and len(bbox) > 0:
-                if conn.is_manual or (shape := conn.video_connection.shape) is None:
+                video_conn = conn.video_connection
+                if (
+                    conn.is_manual
+                    or video_conn is None
+                    or (shape := video_conn.shape) is None
+                ):
                     continue  # skip manual feeds
                 return self.process_frame(
                     host,
