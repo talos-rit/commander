@@ -185,15 +185,18 @@ class Detector(DetectorInterface):
             )
         if 1 == len(self.frame_order):
             (host, _) = self.frame_order[0]
-            self.new_frame = self.connections[host].video_connection.get_frame()
+            conn = self.connections[host]
+            video_conn = conn.video_connection
+            self.new_frame = video_conn.get_frame() if video_conn is not None else None
             if self.new_frame is not None and not self._frame_ready_event.is_set():
                 np.copyto(self._frame_buf, self.new_frame)
                 self._frame_ready_event.set()
             return
 
         frames = [
-            self.connections[host].video_connection.get_frame()
+            video_conn.get_frame()
             for host, _ in self.frame_order
+            if (video_conn := self.connections[host].video_connection) is not None
         ]
         frames = [f for f in frames if f is not None]
         if len(frames) == 0:
@@ -289,7 +292,8 @@ class Detector(DetectorInterface):
         max_height = 0
         frame_order = list()
         for host, conn in connections.items():
-            if (shape := conn.video_connection.shape) is None:
+            video_conn = conn.video_connection
+            if video_conn is None or (shape := video_conn.shape) is None:
                 continue
             max_height = max(max_height, shape[0])
             frame_order.append((host, total_width))
@@ -302,7 +306,8 @@ class Detector(DetectorInterface):
         total_width = 0
         max_height = 0
         for host, conn in connections.items():
-            if (shape := conn.video_connection.shape) is None:
+            video_conn = conn.video_connection
+            if video_conn is None or (shape := video_conn.shape) is None:
                 continue
             max_height = max(max_height, shape[0])
             frame_order.append((host, total_width))
@@ -312,6 +317,12 @@ class Detector(DetectorInterface):
     def reset_frame_order(self):
         self.frame_order = self._create_frame_order(self.connections)
         if self._detection_process is not None and self._detection_process.is_alive():
+            if len(self.connections) == 0:
+                logger.debug(
+                    "No more connections available, stopping detection process..."
+                )
+                self.stop()
+                return
             logger.debug("Restarting detection process to update frame order...")
             self.restart()
 

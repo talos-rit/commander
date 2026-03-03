@@ -192,8 +192,12 @@ class TextualInterface(App):
     @on(Select.Changed, "#model-select")
     def model_changed(self, event: Select.Changed) -> None:
         if event.value is Select.NULL:
-            return self._talos_app.change_model(None)
-        self._talos_app.change_model(str(event.value))
+            res = self._talos_app.change_model(None)
+        else:
+            res = self._talos_app.change_model(str(event.value))
+        if not res:
+            curr_option = self._talos_app.get_selected_model() or Select.NULL
+            self.query_one("#model-select", Select).value = curr_option
 
     def action_mode_switch(self):
         switch = self.query_one("#auto-mode-switch", Switch)

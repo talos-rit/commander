@@ -3,10 +3,52 @@ Configuration loading and management for Talos application.
 Supports both raw YAML dict access and validated Pydantic models.
 """
 
-from pydantic import ValidationError
+from typing import Callable
+
 from loguru import logger
-from src.config.read import read_default_robot_config, read_robot_config_file
-from src.config.schema import ConnectionConfig
+from pydantic import ValidationError
+
+from src.config.read import (
+    app_settings_recovery,
+    read_app_settings,
+    read_default_robot_config,
+    read_robot_config_file,
+)
+from src.config.schema.robot import ConnectionConfig
+
+from .schema.app import AppSettings
+
+
+def load_app_settings(
+    _recovery_method: Callable[[], AppSettings] = app_settings_recovery,
+) -> AppSettings:
+    """
+    Load the app settings from settings file. If it does not it exist it will run a recovery method.
+
+    Returns:
+        AppSettings: A validated AppSettings object with the loaded settings.
+    """
+    try:
+        settings = AppSettings(**read_app_settings())
+        print("App settings loaded successfully")
+        print("App Settings: ", settings.model_dump_json(indent=2))
+        return settings
+    except ValidationError as e:
+        print(
+            "Invalid app settings in app_settings.yaml, using hardcoded defaults\n"
+            + str(e)
+        )
+        yon = input(
+            "Press Enter to continue with defaults, or fix app_settings.yaml and restart the app.(y/N)"
+        )
+        if yon.strip().lower() != "y":
+            raise e
+    except FileNotFoundError as e:
+        print("app_settings.yaml not found creating settings file\n" + str(e))
+    return _recovery_method()
+
+
+APP_SETTINGS = load_app_settings()
 
 
 def load_default_robot_config() -> ConnectionConfig:
@@ -58,3 +100,6 @@ def load_robot_config() -> dict[str, ConnectionConfig]:
             )
             continue
     return validated_config
+
+
+ROBOT_CONFIGS = load_robot_config()

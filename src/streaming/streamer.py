@@ -66,7 +66,8 @@ class Streamer:
     def get_frame(self, hostname: str):
         if hostname in self.connections:
             conn = self.connections[hostname]
-            frame = conn.video_connection.get_frame()
+            video_conn = conn.video_connection
+            frame = video_conn.get_frame() if video_conn is not None else None
             if (
                 frame is not None
                 and self.draw_bboxes
@@ -81,7 +82,8 @@ class Streamer:
     def get_active_frame(self):
         active_conn = self.connections.get_active()
         if active_conn is not None:
-            frame = active_conn.video_connection.get_frame()
+            video_conn = active_conn.video_connection
+            frame = video_conn.get_frame() if video_conn is not None else None
             if (
                 frame is not None
                 and self.draw_bboxes
