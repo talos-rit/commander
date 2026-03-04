@@ -21,7 +21,13 @@ from src.pyside_gui.main_interface import PySide6Interface
 
 if sys.platform == "win32":
     from pathlib import Path
-    pyside_dir = Path(sys.executable).resolve().parent.parent / "Lib" / "site-packages" / "PySide6"
+
+    pyside_dir = (
+        Path(sys.executable).resolve().parent.parent
+        / "Lib"
+        / "site-packages"
+        / "PySide6"
+    )
     if pyside_dir.exists():
         os.add_dll_directory(str(pyside_dir))
 from PySide6.QtWidgets import QApplication

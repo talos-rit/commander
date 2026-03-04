@@ -1,4 +1,3 @@
-
 import argparse
 
 
@@ -17,9 +16,9 @@ def _create_arg_parser():
         help="Use the Tkinter GUI instead of the PySide6 GUI",
     )
     parser.add_argument(
-        '--draw-bboxes',
-        action='store_true',
-        help='Draw bounding boxes around detected speakers in the video feed.',
+        "--draw-bboxes",
+        action="store_true",
+        help="Draw bounding boxes around detected speakers in the video feed.",
     )
     parser.add_argument(
         "-d",
@@ -46,9 +45,11 @@ def _create_arg_parser():
     parser.add_argument(
         "--director",
         default="continuous",
+        choices=["continuous", "discrete"],
         type=str,
         help="Specify the director to use for robot control (e.g. 'continuous')",
     )
     return parser
+
 
 ARG_PARSER = _create_arg_parser()

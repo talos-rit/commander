@@ -246,6 +246,7 @@ class TKInterface(tk.Tk):
             **BTN_STYLE,
         )
         self.stream_btn.grid(row=1, column=2, padx=10, pady=10, sticky="ew")
+        self.update_ui()
 
     def _on_stream_toggled(self) -> None:
         if self.stream_btn.cget("text") == "Start PyVcam Stream":
@@ -345,6 +346,7 @@ class TKInterface(tk.Tk):
             self.automatic_button.select()
             logger.debug("manual connection not active")
         self.continuous_mode.set(self.app.get_control_mode())
+        self.model_menu.set(self.app.get_selected_model() or "None")
         self.update_connection_menu()
         if not self.display_loop_task:
             self.after("idle", self.start_display_loop)
