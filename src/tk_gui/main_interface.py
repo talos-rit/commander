@@ -77,7 +77,7 @@ class TKInterface(tk.Tk):
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
     _term: int | None = None
 
-    def __init__(self) -> None:
+    def __init__(self, args=None) -> None:
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
         sv_ttk.set_theme("dark" if IS_SYSTEM_DARK else "light")
@@ -85,7 +85,7 @@ class TKInterface(tk.Tk):
         self._term = add_termination_handler(super().destroy)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.scheduler = TKScheduler(self)
-        self.app = App()
+        self.app = App(draw_bboxes=args.draw_bboxes if args else False)
         self.title("Talos Manual Interface")
         icon_path, icon_type = assets.get_icon()
         if icon_path is not None:

@@ -83,7 +83,7 @@ class PySide6Interface(QMainWindow):
     the robotic arm which holds the camera.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, args) -> None:
         """Constructor sets up PySide6 manual interface"""
         super().__init__()
 
@@ -97,7 +97,7 @@ class PySide6Interface(QMainWindow):
         self.setStyleSheet(get_main_stylesheet())
 
         self.scheduler = QTScheduler()
-        self.app = App(self.scheduler)
+        self.app = App(self.scheduler, draw_bboxes=args.draw_bboxes)
 
         # Video thread
         self.video_thread = VideoThread(self.app)

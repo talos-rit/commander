@@ -41,10 +41,10 @@ def run_server(app: App):
     endpoint.run()
 
 
-def terminal_interface(args=None):
+def terminal_interface(args=create_args()):
     configure_logger(True)
     smm = multiprocessing.managers.SharedMemoryManager()
-    interface = TextualInterface()
+    interface = TextualInterface(args=args)
     interface.smm = smm
     try:
         interface.run()
@@ -52,9 +52,9 @@ def terminal_interface(args=None):
         terminate(0, 0)
 
 
-def tk_interface(args=None):
+def tk_interface(args=create_args()):
     configure_logger()
-    interface = TKInterface()
+    interface = TKInterface(args)
     # TODO: TKinter is incapable of running this much resource intensive tasks
     # in the same thread as the mainloop, so will be resolved later.
     # app = interface.get_app()
@@ -62,7 +62,7 @@ def tk_interface(args=None):
     interface.mainloop()
 
 
-def pyside_interface(args=None):
+def pyside_interface(args=create_args()):
     configure_logger()
     app = QApplication(sys.argv)
 
@@ -70,7 +70,7 @@ def pyside_interface(args=None):
     font = QFont("Cascadia Code", 10)
     app.setFont(font)
 
-    window = PySide6Interface()
+    window = PySide6Interface(args)
     window.show()
 
     sys.exit(app.exec())

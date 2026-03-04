@@ -5,8 +5,10 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.driver import Driver
 from textual.reactive import reactive
 from textual.timer import Timer
+from textual.types import CSSPathType
 from textual.widgets import (
     Button,
     Footer,
@@ -57,6 +59,14 @@ class TextualInterface(App):
     connection_options = reactive(list())
     auto_mode_state = reactive(False)
     continuous_control_state = reactive(False)
+
+    def __init__(self,driver_class: type[Driver] | None = None,
+    css_path: CSSPathType | None = None,
+    watch_css: bool = False,
+    ansi_color: bool = False,
+    args=None) -> None:
+        super().__init__(css_path=css_path, watch_css=watch_css, ansi_color=ansi_color)
+        self.draw_bboxes = args.draw_bboxes if args is not None else False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -145,7 +155,7 @@ class TextualInterface(App):
     def on_mount(self) -> None:
         logger.debug("Mounting Interface")
         scheduler = TextualScheduler(self)
-        self._talos_app = TalosApp(scheduler, smm=self.smm)
+        self._talos_app = TalosApp(scheduler, smm=self.smm, draw_bboxes=self.draw_bboxes)
         self.run_server()
         start_termination_guard()
         self.continuous_control_state = (
