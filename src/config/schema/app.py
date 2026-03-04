@@ -1,9 +1,14 @@
+import os
+
 from pydantic import Field
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
+    YamlConfigSettingsSource,
     SettingsConfigDict,
 )
+
+from src.config.path import APP_SETTINGS_DEFAULT_PATH, APP_SETTINGS_PATH
 
 
 class AppSettings(BaseSettings):
@@ -17,6 +22,8 @@ class AppSettings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        yaml_file=APP_SETTINGS_PATH if os.path.exists(APP_SETTINGS_PATH) else APP_SETTINGS_DEFAULT_PATH,
+        yaml_file_encoding="utf-8",
     )
 
     @classmethod
@@ -32,7 +39,7 @@ class AppSettings(BaseSettings):
             env_settings,
             dotenv_settings,
             init_settings,
-            file_secret_settings,
+            YamlConfigSettingsSource(settings_cls),
         )
 
     log_level: str = Field(
