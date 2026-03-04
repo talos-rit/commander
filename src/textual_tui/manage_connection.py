@@ -56,7 +56,7 @@ class ManageConnectionScreen(Screen):
         current_connections = self._app.get_connection_hosts()
         for conn in current_connections:
             if conn not in selected:
-                self._app.remove_connection(conn)
+                self._app.disconnect_connection(conn)
                 self.current_connections.remove(conn)
         for conn in selected:
             if conn not in current_connections:

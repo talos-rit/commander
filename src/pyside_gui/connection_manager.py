@@ -1,18 +1,17 @@
+from loguru import logger
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
-    QVBoxLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
-    QPushButton,
-    QFrame,
-    QScrollArea,
-    QWidget,
     QLineEdit,
     QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal
-
-from loguru import logger
 
 from src.config import ROBOT_CONFIGS, ConnectionConfig, editor
 from src.talos_app import App
@@ -72,7 +71,9 @@ class QTConnectionManager(QDialog):
         for hostname in self.connections:
             cfg = ROBOT_CONFIGS.get(hostname)
             if cfg is not None:
-                self.list_layout.addWidget(self._build_connection_row(hostname, cfg.socket_port))
+                self.list_layout.addWidget(
+                    self._build_connection_row(hostname, cfg.socket_port)
+                )
 
         self.list_layout.addStretch()
 
@@ -130,7 +131,7 @@ class QTConnectionManager(QDialog):
 
     def remove_connection(self, hostname: str):
         if hostname in self.connections:
-            self.app.remove_connection(hostname)
+            self.app.disconnect_connection(hostname)
             self._refresh_connections()
             self.render_list()
             self.update_connections.emit(hostname)
@@ -170,7 +171,7 @@ class QTConnectionManager(QDialog):
         layout.addWidget(camera_label)
         camera_input = QLineEdit()
         layout.addWidget(camera_input)
-        
+
         if robot_id and robot_id in ROBOT_CONFIGS:
             host_input.setText(ROBOT_CONFIGS[robot_id].socket_host)
             port_input.setText(str(ROBOT_CONFIGS[robot_id].socket_port))
@@ -198,7 +199,9 @@ class QTConnectionManager(QDialog):
 
         dialog.exec()
 
-    def validate_and_submit(self, dialog, host: str, port_str: str, camera_str: str, editing=False):
+    def validate_and_submit(
+        self, dialog, host: str, port_str: str, camera_str: str, editing=False
+    ):
         host = host.strip()
         port_str = port_str.strip()
         camera_str = camera_str.strip()
