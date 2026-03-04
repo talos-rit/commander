@@ -1,6 +1,5 @@
 #!/usr/bin/env -S uv run --script
 
-import argparse
 import multiprocessing
 import multiprocessing.managers
 import os
