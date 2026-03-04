@@ -85,7 +85,7 @@ class TKInterface(tk.Tk):
         self._term = add_termination_handler(super().destroy)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.scheduler = TKScheduler(self)
-        self.app = App(draw_bboxes=args.draw_bboxes if args else False)
+        self.app = App(args=args)
         self.title("Talos Manual Interface")
         icon_path, icon_type = assets.get_icon()
         if icon_path is not None:

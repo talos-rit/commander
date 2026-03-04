@@ -48,15 +48,16 @@ class App:
         self,
         scheduler: Scheduler = ThreadScheduler(),
         smm: SharedMemoryManager = SharedMemoryManager(),
-        draw_bboxes: bool = False,
+        args=None,
     ) -> None:
         self.scheduler = scheduler
         self.connections = ConnectionCollection()
         self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
-        self.streamer = Streamer(self.connections, draw_bboxes=draw_bboxes)
+        self.streamer = Streamer(self.connections, draw_bboxes=args.draw_bboxes if args else False)
         self.director = ContinuousDirector(
             self.tracker, self.connections, self.scheduler
         )
+        
 
     def open_connection(
         self,

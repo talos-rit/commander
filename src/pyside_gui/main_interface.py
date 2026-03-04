@@ -97,7 +97,7 @@ class PySide6Interface(QMainWindow):
         self.setStyleSheet(get_main_stylesheet())
 
         self.scheduler = QTScheduler()
-        self.app = App(self.scheduler, draw_bboxes=args.draw_bboxes)
+        self.app = App(self.scheduler, args=args)
 
         # Video thread
         self.video_thread = VideoThread(self.app)

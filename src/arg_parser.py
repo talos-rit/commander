@@ -27,6 +27,28 @@ def _create_arg_parser():
         action="store_true",
         help="Enable debug mode, which sets the log level to DEBUG and sets draw_bboxes to True",
     )
+    parser.add_argument(
+        "--connection",
+        type=str,
+        help="Specify the hostname of a connection to connect to on startup (e.g. 'unctalos.student.rit.edu')",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        help="Specify the model to use for speaker detection and tracking (e.g. 'yolov8m')",
+    )
+    parser.add_argument(
+        "--control-mode",
+        type=str,
+        choices=["manual", "auto"],
+        help="Specify the initial control mode (manual or auto)",
+    )
+    parser.add_argument(
+        "--director",
+        default="continuous",
+        type=str,
+        help="Specify the director to use for robot control (e.g. 'continuous')",
+    )
     return parser
 
 ARG_PARSER = _create_arg_parser()

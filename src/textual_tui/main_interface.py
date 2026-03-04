@@ -66,7 +66,7 @@ class TextualInterface(App):
     ansi_color: bool = False,
     args=None) -> None:
         super().__init__(css_path=css_path, watch_css=watch_css, ansi_color=ansi_color)
-        self.draw_bboxes = args.draw_bboxes if args is not None else False
+        self.args = args
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -155,7 +155,7 @@ class TextualInterface(App):
     def on_mount(self) -> None:
         logger.debug("Mounting Interface")
         scheduler = TextualScheduler(self)
-        self._talos_app = TalosApp(scheduler, smm=self.smm, draw_bboxes=self.draw_bboxes)
+        self._talos_app = TalosApp(scheduler, smm=self.smm, args=self.args)
         self.run_server()
         start_termination_guard()
         self.continuous_control_state = (
