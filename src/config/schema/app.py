@@ -1,4 +1,6 @@
+import argparse
 import os
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import (
@@ -12,7 +14,18 @@ from pydantic_settings import (
 from src.arg_parser import ARG_PARSER
 from src.config.path import APP_SETTINGS_DEFAULT_PATH, APP_SETTINGS_PATH
 
+def _parse_args(root_parser: argparse.ArgumentParser, args) -> argparse.Namespace:
+    """
+    Implement overrides for App Settings that are triggered by providing certain cli args
 
+    Returns:
+        Namespace: arguments parsed from the command line, with any necessary overrides applied.
+    """
+    args = root_parser.parse_args(args)
+    if args.debug:
+        args.log_level = "DEBUG"
+        args.draw_bboxes = True
+    return args
 
 class AppSettings(BaseSettings):
     """
@@ -28,6 +41,7 @@ class AppSettings(BaseSettings):
         yaml_file=APP_SETTINGS_PATH if os.path.exists(APP_SETTINGS_PATH) else APP_SETTINGS_DEFAULT_PATH,
         yaml_file_encoding="utf-8",
         cli_parse_args=True,
+        cli_kebab_case=True,
     )
 
     @classmethod
@@ -40,14 +54,14 @@ class AppSettings(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
-            env_settings,
-            dotenv_settings,
             init_settings,
+            CliSettingsSource(settings_cls, root_parser=ARG_PARSER, parse_args_method=_parse_args),
             YamlConfigSettingsSource(settings_cls),
-            CliSettingsSource(settings_cls, root_parser=ARG_PARSER),
+            dotenv_settings,
+            env_settings,
         )
 
-    log_level: str = Field(
+    log_level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = Field(
         default="INFO",
         description="Logging level (e.g., DEBUG, INFO, WARNING, ERROR)",
     )
