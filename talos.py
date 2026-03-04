@@ -30,20 +30,11 @@ from PySide6.QtGui import QFont
 
 
 def create_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-t",
-        "--terminal",
-        action="store_true",
-        help="Use the terminal (textual) interface instead of the Tk GUI",
-    )
-    parser.add_argument(
-        "-tk",
-        "--tkinter",
-        action="store_true",
-        help="Use the Tkinter GUI instead of the PySide6 GUI",
-    )
-    return parser.parse_args()
+    args = ARG_PARSER.parse_args()
+    if args.debug:
+        args.log_level = "DEBUG"
+        args.draw_bboxes = True
+    return args
 
 
 def run_server(app: App):
@@ -88,7 +79,7 @@ def pyside_interface(args=None):
 
 def main() -> None:
     # args = create_args()
-    args = ARG_PARSER.parse_args()
+    args = create_args()
     # This is a required call for pyinstaller
     # https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing
     multiprocessing.freeze_support()
