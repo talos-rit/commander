@@ -10,6 +10,7 @@ import sys
 if sys.platform == "darwin" or sys.platform == "linux":
     multiprocessing.set_start_method("spawn", force=True)
 
+from src.arg_parser import ARG_PARSER
 from src.logger import configure_logger
 from src.talos_app import App
 from src.talos_endpoint import TalosEndpoint
@@ -86,7 +87,8 @@ def pyside_interface(args=None):
 
 
 def main() -> None:
-    args = create_args()
+    # args = create_args()
+    args = ARG_PARSER.parse_args()
     # This is a required call for pyinstaller
     # https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing
     multiprocessing.freeze_support()

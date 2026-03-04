@@ -5,10 +5,13 @@ from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     YamlConfigSettingsSource,
+    CliSettingsSource,
     SettingsConfigDict,
 )
 
+from src.arg_parser import ARG_PARSER
 from src.config.path import APP_SETTINGS_DEFAULT_PATH, APP_SETTINGS_PATH
+
 
 
 class AppSettings(BaseSettings):
@@ -24,6 +27,7 @@ class AppSettings(BaseSettings):
         extra="ignore",
         yaml_file=APP_SETTINGS_PATH if os.path.exists(APP_SETTINGS_PATH) else APP_SETTINGS_DEFAULT_PATH,
         yaml_file_encoding="utf-8",
+        cli_parse_args=True,
     )
 
     @classmethod
@@ -40,6 +44,7 @@ class AppSettings(BaseSettings):
             dotenv_settings,
             init_settings,
             YamlConfigSettingsSource(settings_cls),
+            CliSettingsSource(settings_cls, root_parser=ARG_PARSER),
         )
 
     log_level: str = Field(
