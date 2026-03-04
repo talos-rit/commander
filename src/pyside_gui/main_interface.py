@@ -441,5 +441,4 @@ class PySide6Interface(QMainWindow):
         if hasattr(self.scheduler, "cleanup"):
             self.scheduler.cleanup()
 
-        terminate(0, 0)
         event.accept()
