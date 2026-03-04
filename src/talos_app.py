@@ -164,7 +164,7 @@ class App:
             return conn
         return self.connections.set_active(hostname)
 
-    def remove_connection(self, hostname: str) -> Connection | None:
+    def disconnect_connection(self, hostname: str) -> Connection | None:
         """
         Removes a connection by hostname.
         If the connection is active, sets the active connection to another available connection or None.
@@ -297,7 +297,9 @@ class App:
         if self._streamer is not None:
             self._streamer.stop()
             self._streamer = None
-        self._streamer = StreamControllerFactory.create(streamer_type, frame_getter, stream_config)
+        self._streamer = StreamControllerFactory.create(
+            streamer_type, frame_getter, stream_config
+        )
         try:
             self._streamer.start()
         except RuntimeError as exc:

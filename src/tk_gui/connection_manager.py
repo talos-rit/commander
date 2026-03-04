@@ -53,7 +53,9 @@ class TKConnectionManager(tkinter.Toplevel):
         try:
             self.grab_release()
         except tkinter.TclError:
-            logger.debug("Connection manager (maybe????) already released grab on close.")
+            logger.debug(
+                "Connection manager (maybe????) already released grab on close."
+            )
         self.destroy()
 
     def render_list(self):
@@ -90,7 +92,7 @@ class TKConnectionManager(tkinter.Toplevel):
 
     def remove_connection(self, hostname):
         if hostname in self.connections:
-            self.app.remove_connection(hostname)
+            self.app.disconnect_connection(hostname)
             self.connections = [h for h in self.connections if h != hostname]
             self.update_gui_callback()
             self.render_list()
