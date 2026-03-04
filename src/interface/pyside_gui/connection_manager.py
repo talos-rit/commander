@@ -1,20 +1,21 @@
+from loguru import logger
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
-    QVBoxLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
-    QPushButton,
-    QFrame,
-    QScrollArea,
-    QWidget,
     QLineEdit,
     QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal
 
-from loguru import logger
-
-from src.config import ROBOT_CONFIGS, ConnectionConfig, editor
+import src.config as config
+from src.config.add import add_config, validate_connection_config
+from src.config.schema.robot import ConnectionConfig
 from src.talos_app import App
 
 
@@ -62,7 +63,7 @@ class QTConnectionManager(QDialog):
         configs_label.setStyleSheet("font-weight: bold;")
         self.list_layout.addWidget(configs_label)
 
-        for cfg in ROBOT_CONFIGS.values():
+        for cfg in config.ROBOT_CONFIGS.values():
             self.list_layout.addWidget(self._build_config_row(cfg))
 
         connections_label = QLabel("Current Connections:")
@@ -70,9 +71,11 @@ class QTConnectionManager(QDialog):
         self.list_layout.addWidget(connections_label)
 
         for hostname in self.connections:
-            cfg = ROBOT_CONFIGS.get(hostname)
+            cfg = config.ROBOT_CONFIGS.get(hostname)
             if cfg is not None:
-                self.list_layout.addWidget(self._build_connection_row(hostname, cfg.socket_port))
+                self.list_layout.addWidget(
+                    self._build_connection_row(hostname, cfg.socket_port)
+                )
 
         self.list_layout.addStretch()
 
@@ -170,11 +173,11 @@ class QTConnectionManager(QDialog):
         layout.addWidget(camera_label)
         camera_input = QLineEdit()
         layout.addWidget(camera_input)
-        
-        if robot_id and robot_id in ROBOT_CONFIGS:
-            host_input.setText(ROBOT_CONFIGS[robot_id].socket_host)
-            port_input.setText(str(ROBOT_CONFIGS[robot_id].socket_port))
-            camera_input.setText(str(ROBOT_CONFIGS[robot_id].camera_index))
+
+        if robot_id and robot_id in config.ROBOT_CONFIGS:
+            host_input.setText(config.ROBOT_CONFIGS[robot_id].socket_host)
+            port_input.setText(str(config.ROBOT_CONFIGS[robot_id].socket_port))
+            camera_input.setText(str(config.ROBOT_CONFIGS[robot_id].camera_index))
 
         # Buttons
         button_layout = QHBoxLayout()
@@ -198,7 +201,9 @@ class QTConnectionManager(QDialog):
 
         dialog.exec()
 
-    def validate_and_submit(self, dialog, host: str, port_str: str, camera_str: str, editing=False):
+    def validate_and_submit(
+        self, dialog, host: str, port_str: str, camera_str: str, editing=False
+    ):
         host = host.strip()
         port_str = port_str.strip()
         camera_str = camera_str.strip()
@@ -209,9 +214,7 @@ class QTConnectionManager(QDialog):
             )
             return
 
-        valid, conf, error_msg = editor.validate_connection_config(
-            host, port_str, camera_str
-        )
+        valid, conf, error_msg = validate_connection_config(host, port_str, camera_str)
         if not valid or conf is None:
             logger.warning(f"Invalid connection config: {error_msg}")
             if isinstance(error_msg, list):
@@ -222,9 +225,9 @@ class QTConnectionManager(QDialog):
             return
 
         if editing:
-            # editor.update_config(conf)
+            # update_config(conf)
             pass
         else:
-            editor.add_config(conf)
+            add_config(conf)
             self.add_connection(conf)
         dialog.accept()

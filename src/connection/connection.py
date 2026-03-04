@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from loguru import logger
 
-from src.config import ROBOT_CONFIGS
+import src.config as config
 from src.connection.publisher import Publisher
 from src.utils import (
     add_termination_handler,
@@ -138,7 +138,7 @@ class Connection:
 
     def __post_init__(self):
         self.publisher = Publisher(self.host, self.port)
-        self.is_manual_only = ROBOT_CONFIGS[self.host].manual_only
+        self.is_manual_only = config.ROBOT_CONFIGS[self.host].manual_only
 
     def set_manual(self, manual: bool) -> None:
         self.is_manual = manual

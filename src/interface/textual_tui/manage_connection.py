@@ -5,7 +5,8 @@ from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import Button, Header, Input, SelectionList
 
-from src.config import ROBOT_CONFIGS, editor
+import src.config as config
+from src.config.add import add_config, validate_connection_config
 from src.talos_app import App
 
 
@@ -23,7 +24,9 @@ class ManageConnectionScreen(Screen):
     def __init__(self, app: App):
         super().__init__()
         self._app = app
-        self.set_reactive(ManageConnectionScreen.config_connections, ROBOT_CONFIGS)
+        self.set_reactive(
+            ManageConnectionScreen.config_connections, config.ROBOT_CONFIGS
+        )
         self.set_reactive(
             ManageConnectionScreen.current_connections, self._app.get_connection_hosts()
         )
@@ -88,16 +91,14 @@ class ManageConnectionScreen(Screen):
             self.notify("Invalid operator URL. Please use the format hostname:port")
             return
         camera = camera_src.value.strip()
-        valid, conf, error_msg = editor.validate_connection_config(
-            hostname, port, camera
-        )
+        valid, conf, error_msg = validate_connection_config(hostname, port, camera)
         if not valid:
             self.notify(f"Invalid connection config: {error_msg}")
             return
         if conf is None:
             self.notify("Invalid connection config: Unknown error")
             return
-        editor.add_config(conf)
+        add_config(conf)
         self._app.open_connection(conf.socket_host)
         self.current_connections.append(conf.socket_host)
         self.notify(f"Added new connection: {conf.socket_host}:{conf.socket_port}")
