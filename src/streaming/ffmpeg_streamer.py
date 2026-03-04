@@ -11,11 +11,12 @@ import cv2
 import numpy as np
 from loguru import logger
 
+from src.streaming.stream_controller import StreamConfig, StreamController
 from src.utils import add_termination_handler, remove_termination_handler
 
 
-@dataclass(frozen=True)
-class StreamConfig:
+@dataclass
+class FfmpegStreamConfig(StreamConfig):
     output_url: str
     fps: int | None = None
     use_docker: bool = False
@@ -28,11 +29,11 @@ class StreamConfig:
     loglevel: str = "warning"
 
 
-class FfmpegStreamController:
+class FfmpegStreamController(StreamController):
     def __init__(
         self,
         frame_getter: Callable[[], np.ndarray | None],
-        config: StreamConfig,
+        config: FfmpegStreamConfig,
     ) -> None:
         self._frame_getter = frame_getter
         self._config = config

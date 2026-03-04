@@ -238,7 +238,23 @@ class TKInterface(tk.Tk):
             **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
         )
         self.connectionMenu.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
+        
+        self.stream_btn = ctk.CTkButton(
+            container,
+            text="Start PyVcam Stream",
+            command=self._on_stream_toggled,
+            **BTN_STYLE,
+        )
+        self.stream_btn.grid(row=1, column=2, padx=10, pady=10, sticky="ew")
 
+    def _on_stream_toggled(self) -> None:
+        if self.stream_btn.cget("text") == "Start PyVcam Stream":
+            self.app.start_stream(streamer_type="pyvcam")
+            self.stream_btn.configure(text="Stop PyVcam Stream")
+        else:
+            self.app.stop_stream()
+            self.stream_btn.configure(text="Start PyVcam Stream")
+    
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
         for key, dir in DIRECTIONAL_KEY_BINDING_MAPPING.items():
