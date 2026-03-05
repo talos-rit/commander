@@ -94,7 +94,7 @@ class TKConnectionManager(tkinter.Toplevel):
 
     def remove_connection(self, hostname):
         if hostname in self.connections:
-            self.app.remove_connection(hostname)
+            self.app.disconnect_connection(hostname)
             self.connections = [h for h in self.connections if h != hostname]
             self.update_gui_callback()
             self.render_list()

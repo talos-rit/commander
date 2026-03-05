@@ -40,14 +40,6 @@ def read_robot_config_file() -> dict[str, dict]:
         return {}
 
 
-def read_app_settings() -> dict[str, Any]:
-    """
-    Load the app settings from config/app_settings.yaml. Returns a dictionary of raw app settings data.
-    """
-    with open(APP_SETTINGS_PATH, "r") as f:
-        return yaml.safe_load(f) or {}
-
-
 def app_settings_recovery() -> AppSettings:
     if os.path.exists(APP_SETTINGS_PATH):
         if os.path.exists(APP_SETTINGS_PATH + ".backup"):
@@ -68,7 +60,7 @@ def app_settings_recovery() -> AppSettings:
         yaml.safe_dump(default_app_settings, f)
     # Try loading again after recovery
     try:
-        return AppSettings(**read_app_settings())
+        return AppSettings()
     except Exception as e:
         print(
             "Failed to recover valid app settings from defaults. Please check app_settings.yaml for issues.\n"

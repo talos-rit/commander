@@ -133,7 +133,7 @@ class QTConnectionManager(QDialog):
 
     def remove_connection(self, hostname: str):
         if hostname in self.connections:
-            self.app.remove_connection(hostname)
+            self.app.disconnect_connection(hostname)
             self._refresh_connections()
             self.render_list()
             self.update_connections.emit(hostname)

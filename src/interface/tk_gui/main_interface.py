@@ -239,6 +239,22 @@ class TKInterface(tk.Tk):
         )
         self.connectionMenu.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
 
+        self.stream_btn = ctk.CTkButton(
+            container,
+            text="Start PyVcam Stream",
+            command=self._on_stream_toggled,
+            **BTN_STYLE,
+        )
+        self.stream_btn.grid(row=1, column=2, padx=10, pady=10, sticky="ew")
+
+    def _on_stream_toggled(self) -> None:
+        if self.stream_btn.cget("text") == "Start PyVcam Stream":
+            self.app.start_stream(streamer_type="pyvcam")
+            self.stream_btn.configure(text="Stop PyVcam Stream")
+        else:
+            self.app.stop_stream()
+            self.stream_btn.configure(text="Start PyVcam Stream")
+
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
         for key, dir in DIRECTIONAL_KEY_BINDING_MAPPING.items():
@@ -276,7 +292,7 @@ class TKInterface(tk.Tk):
 
     def close_connection(self, hostname: str) -> None:
         """Closes hostname connection if it exists"""
-        self.app.remove_connection(hostname)
+        self.app.disconnect_connection(hostname)
         self.update_ui()
 
     def _set_modal_lock(self, locked: bool) -> None:
