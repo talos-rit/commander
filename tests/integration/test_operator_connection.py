@@ -1,3 +1,10 @@
+"""
+This file contains integration tests for the OperatorConnection class, which
+manages a TCP connection to an operator interface. The tests verify that the
+connection can be established, messages can be received, and that the
+connection properly handles shutdown and peer disconnection scenarios.
+"""
+
 import socket
 import threading
 import time
