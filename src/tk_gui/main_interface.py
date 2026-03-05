@@ -77,7 +77,7 @@ class TKInterface(tk.Tk):
     move_delay_ms = 300  # time inbetween each directional command being sent while directional button is depressed
     _term: int | None = None
 
-    def __init__(self) -> None:
+    def __init__(self, args=None) -> None:
         """Constructor sets up tkinter manual interface, including buttons and labels"""
         super().__init__()
         sv_ttk.set_theme("dark" if IS_SYSTEM_DARK else "light")
@@ -85,7 +85,7 @@ class TKInterface(tk.Tk):
         self._term = add_termination_handler(super().destroy)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.scheduler = TKScheduler(self)
-        self.app = App()
+        self.app = App(args=args)
         self.title("Talos Manual Interface")
         icon_path, icon_type = assets.get_icon()
         if icon_path is not None:
@@ -246,6 +246,7 @@ class TKInterface(tk.Tk):
             **BTN_STYLE,
         )
         self.stream_btn.grid(row=1, column=2, padx=10, pady=10, sticky="ew")
+        self.update_ui()
 
     def _on_stream_toggled(self) -> None:
         if self.stream_btn.cget("text") == "Start PyVcam Stream":
@@ -345,6 +346,7 @@ class TKInterface(tk.Tk):
             self.automatic_button.select()
             logger.debug("manual connection not active")
         self.continuous_mode.set(self.app.get_control_mode())
+        self.model_menu.set(self.app.get_selected_model() or "None")
         self.update_connection_menu()
         if not self.display_loop_task:
             self.after("idle", self.start_display_loop)
