@@ -1,4 +1,5 @@
 import argparse
+from src.model_options import MODEL_OPTIONS
 
 
 def _create_arg_parser():
@@ -33,6 +34,7 @@ def _create_arg_parser():
     )
     parser.add_argument(
         "--model",
+        choices=MODEL_OPTIONS,
         type=str,
         help="Specify the model to use for speaker detection and tracking (e.g. 'yolov8m'). This doesn't do anything if the connection argument is not provided",
     )
