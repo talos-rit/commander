@@ -39,7 +39,7 @@ commander-tk = "talos:tk_interface"
 commander-pyside = "talos:pyside_interface"
 
 [dependency-groups]
-dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0", "pytest"]
+dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0", "pytest", "pytest-mock"]
 
 [project.optional-dependencies]
 mediapipe = [
