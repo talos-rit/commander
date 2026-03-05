@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import RichLog
 
-from src.config.load import APP_SETTINGS
+import src.config as config
 
 LEVEL_COLORS = {
     "DEBUG": "cyan",
@@ -37,7 +37,7 @@ class PrintViewer(Widget):
 
         logger.add(
             log_handler,
-            level=APP_SETTINGS.log_level,
+            level=config.APP_SETTINGS.log_level,
         )
         self.begin_capture_print()
 
