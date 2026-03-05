@@ -34,20 +34,20 @@ def _create_arg_parser():
     parser.add_argument(
         "--model",
         type=str,
-        help="Specify the model to use for speaker detection and tracking (e.g. 'yolov8m')",
+        help="Specify the model to use for speaker detection and tracking (e.g. 'yolov8m'). This doesn't do anything if the connection argument is not provided",
     )
     parser.add_argument(
         "--control-mode",
         type=str,
         choices=["manual", "auto"],
-        help="Specify the initial control mode (manual or auto)",
+        help="Specify the initial control mode (manual or auto). This doesn't do anything if the connection argument is not provided",
     )
     parser.add_argument(
         "--director",
         default="continuous",
         choices=["continuous", "discrete"],
         type=str,
-        help="Specify the director to use for robot control (e.g. 'continuous')",
+        help="Specify the director to use for robot control (e.g. 'continuous'). This doesn't do anything if the connection argument is not provided",
     )
     return parser
 
