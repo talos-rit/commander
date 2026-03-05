@@ -10,22 +10,27 @@ import sys
 if sys.platform == "darwin" or sys.platform == "linux":
     multiprocessing.set_start_method("spawn", force=True)
 
+from src.interface.pyside_gui.main_interface import PySide6Interface
+from src.interface.textual_tui.main_interface import TextualInterface
+from src.interface.tk_gui.main_interface import TKInterface
 from src.logger import configure_logger
 from src.talos_app import App
 from src.talos_endpoint import TalosEndpoint
-from src.textual_tui.main_interface import TextualInterface
-from src.tk_gui.main_interface import TKInterface
 from src.utils import terminate
-
-from src.pyside_gui.main_interface import PySide6Interface
 
 if sys.platform == "win32":
     from pathlib import Path
-    pyside_dir = Path(sys.executable).resolve().parent.parent / "Lib" / "site-packages" / "PySide6"
+
+    pyside_dir = (
+        Path(sys.executable).resolve().parent.parent
+        / "Lib"
+        / "site-packages"
+        / "PySide6"
+    )
     if pyside_dir.exists():
         os.add_dll_directory(str(pyside_dir))
-from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QApplication
 
 
 def create_args():
