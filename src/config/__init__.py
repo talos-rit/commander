@@ -5,7 +5,7 @@ import src.config.path as path
 import src.config.read as read
 
 __all__ = ["add", "load", "manager", "path", "read"]
-# This is not used for type checking, but it shuts up type checkers for unused imports
+# This is not used for type checking, but it shuts up lint for unused imports
 
 
 def __getattr__(name: str):
@@ -24,6 +24,10 @@ def __getattr__(name: str):
 
 
 def __setattr__(name, value):
+    """
+    While we really don't care about the app settings being reloaded, for consistency I am going to add this here for both app settings and robot configs.
+    Just in case we want to add reloading functionality without killing the process.
+    """
     if name == "APP_SETTINGS":
         from . import __instance as instance
 
