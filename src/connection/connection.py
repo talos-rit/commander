@@ -2,7 +2,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable
+from typing import Any, Callable
 
 import av
 import av.video
@@ -231,7 +231,7 @@ class ConnectionCollection(dict[str, Connection]):
                 new_host = next((h for h in self if h != key), None)
                 self.set_active(new_host)
 
-    def pop(self, key: str, default=None) -> Connection | None:
+    def pop(self, key: str, default: Any = None) -> Connection | Any:
         """Pops the connection and notifies the listeners of removal. If connection is active, sets active connection to another available connection or None."""
         connection = super().pop(key, None)
         if connection is not None:
