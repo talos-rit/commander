@@ -1,58 +1,63 @@
 from loguru import logger
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver
 
-from ..utils import add_termination_handler
-from .read import APP_SETTINGS_PATH
-from .schema.app import AppSettings
-
-
-class AppSettingsEventHandler(FileSystemEventHandler):
-    def on_any_event(self, event: FileSystemEvent) -> None:
-        print(event)
+from ..utils import add_termination_handler, remove_termination_handler
 
 
-class AppSettingsManager:
-    _observer = None
+class FileManager:
+    _observers: dict[str, BaseObserver] = dict()
+    _term = None
 
     @staticmethod
-    def edit_app_settings(on_change=None, on_error=None) -> None:
+    def register_listener(
+        file_path: str,
+        listener: FileSystemEventHandler,
+        recursive: bool = False,
+        event_filter: list[type[FileSystemEvent]] | None = None,
+    ):
         """
-        Edit the app settings and save to file.
+        Registers a listener function that will be called when the file change is detected.
         Args:
-            new_settings: A validated AppSettings object with the new settings to save.
+            listener: A function that takes a FileSystemEvent as an argument. The event will contain information about the type of change (created, modified, deleted, moved), the src_path (the path of the file that triggered the event), and dest_path (the destination path for moved events, or None for other events).
         """
-        import src.config as config
-
-        try:
-            app_settings = AppSettings()
-            logger.info(
-                f"Current App Settings: {app_settings.model_dump_json(indent=2)}"
-            )
-            if on_change is not None:
-                on_change(app_settings)
-            config.APP_SETTINGS = app_settings
-        except Exception as e:
-            logger.error("Error loading app settings, using defaults\n" + str(e))
-            if on_error is not None:
-                on_error(e)
+        if FileManager._term is None:
+            FileManager._term = add_termination_handler(FileManager.terminate)
+        if file_path in FileManager._observers:
+            FileManager.start_watch_dog(file_path)
+        FileManager._observers[file_path].schedule(
+            listener, file_path, recursive=recursive, event_filter=event_filter
+        )
 
     @staticmethod
-    def start_watch_dog():
-        if AppSettingsManager._observer is not None:
-            logger.warning("Watchdog already running, skipping start")
+    def start_watch_dog(file_path: str):
+        if file_path in FileManager._observers:
+            logger.debug("Watchdog already running for this file, skipping start")
             return
-        event_handler = AppSettingsEventHandler()
-        observer = Observer()
-        AppSettingsManager._observer = observer
-        observer.schedule(event_handler, APP_SETTINGS_PATH)
-        observer.start()
-        logger.info("Started watchdog to monitor app settings changes")
-        add_termination_handler(AppSettingsManager.stop_watch_dog)
+        FileManager._observers[file_path] = Observer()
+        FileManager._observers[file_path].start()
+        logger.debug(f"Started watchdog for file: {file_path}")
 
     @staticmethod
-    def stop_watch_dog():
-        if AppSettingsManager._observer is not None:
-            AppSettingsManager._observer.stop()
-            AppSettingsManager._observer = None
-            logger.info("Stopped watchdog monitoring app settings changes")
+    def stop_watch_dog(file_path: str):
+        if file_path not in FileManager._observers:
+            return
+        obs = FileManager._observers.pop(file_path)
+        obs.stop()
+        logger.debug(f"Stopped watchdog for file: {file_path}")
+        if FileManager._term is not None and not FileManager._observers:
+            remove_termination_handler(FileManager._term)
+            FileManager._term = None
+
+    @staticmethod
+    def terminate():
+        if FileManager._term is not None:
+            remove_termination_handler(FileManager._term)
+        for file_path, obs in FileManager._observers.items():
+            obs.stop()
+            logger.debug(f"Stopped watchdog for file: {file_path}")
+        FileManager._observers.clear()
+        if FileManager._term is not None:
+            remove_termination_handler(FileManager._term)
+            FileManager._term = None

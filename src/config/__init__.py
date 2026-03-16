@@ -3,15 +3,23 @@ import src.config.load as load
 import src.config.manager as manager
 import src.config.path as path
 import src.config.read as read
+import src.config.watchers.app_settings_file_handler as app_settings_file_handler
 
 __all__ = ["add", "load", "manager", "path", "read"]
 # This is not used for type checking, but it shuts up lint for unused imports
+
+
+def start_app_settings_watchdog():
+    manager.FileManager.register_listener(
+        path.APP_SETTINGS_PATH, app_settings_file_handler.AppSettingFileHandler()
+    )
 
 
 def __getattr__(name: str):
     if name == "APP_SETTINGS":
         from .__instance import __APP_SETTINGS as APP_SETTINGS
 
+        start_app_settings_watchdog()
         return APP_SETTINGS
     elif name == "ROBOT_CONFIGS":
         from .__instance import __ROBOT_CONFIGS as ROBOT_CONFIGS

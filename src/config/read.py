@@ -6,12 +6,16 @@ import yaml
 
 from src.config.path import (
     APP_SETTINGS_DEFAULT_PATH,
+    APP_SETTINGS_FILENAME,
     APP_SETTINGS_PATH,
-    DEFAULT_PATH,
-    LOCAL_DEFAULT_PATH,
+    BACKUP_DIR,
+    DEFAULT_ROBOT_CONFIG_PATH,
+    EXAMPLE_DEFAULT_ROBOT_CONFIG_PATH,
     ROBOT_CONFIGS_PATH,
 )
 from src.config.schema.app import AppSettings
+
+from ..utils import get_file_path
 
 
 def read_default_robot_config() -> dict[str, Any]:
@@ -19,11 +23,11 @@ def read_default_robot_config() -> dict[str, Any]:
     Load the default configuration from config/default_config.yaml or
     config/default_config.local.yaml if it exists.
     """
-    if os.path.exists(LOCAL_DEFAULT_PATH):
-        with open(LOCAL_DEFAULT_PATH, "r") as f:
+    if os.path.exists(DEFAULT_ROBOT_CONFIG_PATH):
+        with open(DEFAULT_ROBOT_CONFIG_PATH, "r") as f:
             default_config = yaml.safe_load(f)
     else:
-        with open(DEFAULT_PATH, "r") as f:
+        with open(EXAMPLE_DEFAULT_ROBOT_CONFIG_PATH, "r") as f:
             default_config = yaml.safe_load(f)
     return default_config
 
@@ -42,15 +46,15 @@ def read_robot_config_file() -> dict[str, dict]:
 
 def app_settings_recovery() -> AppSettings:
     if os.path.exists(APP_SETTINGS_PATH):
-        if os.path.exists(APP_SETTINGS_PATH + ".backup"):
+        path = get_file_path(
+            os.path.join(BACKUP_DIR, APP_SETTINGS_FILENAME + ".backup")
+        )
+        if os.path.exists(path):
             file_num = 1
-            while os.path.exists(APP_SETTINGS_PATH + ".backup" + str(file_num)):
+            while os.path.exists(path + str(file_num)):
                 file_num += 1
-            path = shutil.copy(
-                APP_SETTINGS_PATH, APP_SETTINGS_PATH + f".backup{file_num}"
-            )
-        else:
-            path = shutil.copy(APP_SETTINGS_PATH, APP_SETTINGS_PATH + ".backup")
+            path = path + str(file_num)
+        path = shutil.copy(APP_SETTINGS_PATH, path)
         print(f"Backed up existing app settings to {path}")
         os.remove(APP_SETTINGS_PATH)
     # Copy default app settings to app settings path if it doesn't exist
