@@ -16,7 +16,7 @@ ROBOT_CONFIG_FILE_HANDLER = robot_config_handler.RobotConfigFileHandler()
 
 def _start_app_settings_watchdog():
     """This is automatically called when the app settings are first accessed, so don't call this manually."""
-    if WATCHDOG_STARTED.get("app_settings"):
+    if WATCHDOG_STARTED.get("app_settings", False):
         return
     WATCHDOG_STARTED["app_settings"] = True
     manager.FileManager.register_listener(
@@ -26,7 +26,7 @@ def _start_app_settings_watchdog():
 
 def _start_robot_configs_watchdog():
     """This is automatically called when the robot configs are first accessed, so don't call this manually."""
-    if WATCHDOG_STARTED.get("robot_configs"):
+    if WATCHDOG_STARTED.get("robot_configs", False):
         return
     WATCHDOG_STARTED["robot_configs"] = True
     manager.FileManager.register_listener(
