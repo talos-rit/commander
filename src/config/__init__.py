@@ -9,17 +9,28 @@ import src.config.watchers.robot_config_handler as robot_config_handler
 __all__ = ["add", "load", "manager", "path", "read"]
 # This is not used for type checking, but it shuts up lint for unused imports
 
+WATCHDOG_STARTED = dict()
+APP_SETTINGS_FILE_HANDLER = app_settings_file_handler.AppSettingFileHandler()
+ROBOT_CONFIG_FILE_HANDLER = robot_config_handler.RobotConfigFileHandler()
 
-def start_app_settings_watchdog():
+
+def _start_app_settings_watchdog():
+    """This is automatically called when the app settings are first accessed, so don't call this manually."""
+    if WATCHDOG_STARTED.get("app_settings"):
+        return
+    WATCHDOG_STARTED["app_settings"] = True
     manager.FileManager.register_listener(
-        path.APP_SETTINGS_PATH, app_settings_file_handler.AppSettingFileHandler()
+        path.APP_SETTINGS_PATH, APP_SETTINGS_FILE_HANDLER
     )
 
 
-def start_robot_configs_watchdog():
-
+def _start_robot_configs_watchdog():
+    """This is automatically called when the robot configs are first accessed, so don't call this manually."""
+    if WATCHDOG_STARTED.get("robot_configs"):
+        return
+    WATCHDOG_STARTED["robot_configs"] = True
     manager.FileManager.register_listener(
-        path.ROBOT_CONFIGS_PATH, robot_config_handler.RobotConfigFileHandler()
+        path.ROBOT_CONFIGS_PATH, ROBOT_CONFIG_FILE_HANDLER
     )
 
 
@@ -27,12 +38,12 @@ def __getattr__(name: str):
     if name == "APP_SETTINGS":
         from .__instance import __APP_SETTINGS as APP_SETTINGS
 
-        start_app_settings_watchdog()
+        _start_app_settings_watchdog()
         return APP_SETTINGS
     elif name == "ROBOT_CONFIGS":
         from .__instance import __ROBOT_CONFIGS as ROBOT_CONFIGS
 
-        start_robot_configs_watchdog()
+        _start_robot_configs_watchdog()
         return ROBOT_CONFIGS
     elif name == "__instance":
         raise AttributeError(f"module '{__name__}' has no attribute '__instance'")
