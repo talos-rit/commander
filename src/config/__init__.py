@@ -12,6 +12,11 @@ __all__ = ["add", "load", "manager", "path", "read"]
 WATCHDOG_STARTED = dict()
 APP_SETTINGS_FILE_HANDLER = app_settings_file_handler.AppSettingFileHandler()
 ROBOT_CONFIG_FILE_HANDLER = robot_config_handler.RobotConfigFileHandler()
+register_robot_config_observer = robot_config_handler.register_listener(
+    ROBOT_CONFIG_FILE_HANDLER
+)
+"""Use this to register a callback to be called when the robot config file is modified or deleted. 
+The callback should take in a FileModifiedEvent or DirModifiedEvent as an argument."""
 
 
 def _start_app_settings_watchdog():
