@@ -4,6 +4,7 @@ import src.config.manager as manager
 import src.config.path as path
 import src.config.read as read
 import src.config.watchers.app_settings_file_handler as app_settings_file_handler
+import src.config.watchers.robot_config_handler as robot_config_handler
 
 __all__ = ["add", "load", "manager", "path", "read"]
 # This is not used for type checking, but it shuts up lint for unused imports
@@ -12,6 +13,13 @@ __all__ = ["add", "load", "manager", "path", "read"]
 def start_app_settings_watchdog():
     manager.FileManager.register_listener(
         path.APP_SETTINGS_PATH, app_settings_file_handler.AppSettingFileHandler()
+    )
+
+
+def start_robot_configs_watchdog():
+
+    manager.FileManager.register_listener(
+        path.ROBOT_CONFIGS_PATH, robot_config_handler.RobotConfigFileHandler()
     )
 
 
@@ -24,6 +32,7 @@ def __getattr__(name: str):
     elif name == "ROBOT_CONFIGS":
         from .__instance import __ROBOT_CONFIGS as ROBOT_CONFIGS
 
+        start_robot_configs_watchdog()
         return ROBOT_CONFIGS
     elif name == "__instance":
         raise AttributeError(f"module '{__name__}' has no attribute '__instance'")
