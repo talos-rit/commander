@@ -28,18 +28,16 @@ def one_frame_getter(sample_frame: np.ndarray):
 
 
 def test_wait_for_frame_returns_first_frame(one_frame_getter, sample_frame):
-    # Arrange
+
     controller = PyVcamStreamController(frame_getter=one_frame_getter, config=PyVcamStreamConfig())
 
-    # Act
     result = controller._wait_for_frame(timeout_s=1.0)
 
-    # Assert
     assert result is sample_frame
 
 
 def test_wait_for_frame_times_out(monkeypatch):
-    # Arrange
+
     controller = PyVcamStreamController(frame_getter=lambda: None, config=PyVcamStreamConfig())
 
     # Make time.monotonic advance so that it always reports timeout
@@ -51,13 +49,12 @@ def test_wait_for_frame_times_out(monkeypatch):
     monkeypatch.setattr("src.streaming.pyvcam_streamer.time.monotonic", fake_monotonic)
     monkeypatch.setattr("src.streaming.pyvcam_streamer.time.sleep", lambda _: None)
 
-    # Act / Assert
     with pytest.raises(RuntimeError, match="Timed out waiting for a video frame"):
         controller._wait_for_frame(timeout_s=0.001)
 
 
 def test_start_registers_termination_handler_and_starts_thread(mocker, one_frame_getter):
-    # Arrange
+
     term_id = 999
 
     mock_add = mocker.patch(
@@ -74,10 +71,8 @@ def test_start_registers_termination_handler_and_starts_thread(mocker, one_frame
     config = PyVcamStreamConfig(fps=12)
     controller = PyVcamStreamController(frame_getter=one_frame_getter, config=config)
 
-    # Act
     controller.start()
 
-    # Assert
     assert controller._is_running is True
     assert controller._term_id == term_id
     mock_add.assert_called_once_with(controller.stop)
@@ -91,7 +86,7 @@ def test_start_registers_termination_handler_and_starts_thread(mocker, one_frame
 
 
 def test_stop_joins_thread_and_removes_termination_handler(mocker):
-    # Arrange
+
     mock_remove = mocker.patch("src.streaming.pyvcam_streamer.remove_termination_handler")
 
     controller = PyVcamStreamController(frame_getter=lambda: None, config=PyVcamStreamConfig())
@@ -99,17 +94,15 @@ def test_stop_joins_thread_and_removes_termination_handler(mocker):
     controller._thread = mock_thread
     controller._term_id = 42
 
-    # Act
     controller.stop(timeout_s=0.5)
 
-    # Assert
     mock_thread.join.assert_called_once_with(timeout=0.5)
     mock_remove.assert_called_once_with(42)
     assert controller._term_id is None
 
 
 def test_stream_loop_sends_frame_and_exits(mocker, sample_frame):
-    # Arrange
+
     mock_cam = mocker.Mock()
     mock_cam.send = mocker.Mock()
     mock_cam.sleep_until_next_frame = mocker.Mock()
@@ -131,23 +124,18 @@ def test_stream_loop_sends_frame_and_exits(mocker, sample_frame):
     controller = PyVcamStreamController(frame_getter=frame_getter, config=PyVcamStreamConfig())
     controller._stop_event = stop_event
 
-    # Act
     controller._stream_loop(width=3, height=2, fps=7)
 
-    # Assert
     mock_cam.send.assert_called_once_with(sample_frame)
     mock_cam.sleep_until_next_frame.assert_called_once()
 
 
 def test_is_running_depends_on_thread_state(mocker):
-    # Arrange
     controller = PyVcamStreamController(frame_getter=lambda: None, config=PyVcamStreamConfig())
 
-    # No thread => not running
     controller._thread = None
     assert controller.is_running() is False
 
-    # Thread alive => running
     mock_thread = mocker.Mock(spec=threading.Thread)
     mock_thread.is_alive.return_value = True
     controller._thread = mock_thread
