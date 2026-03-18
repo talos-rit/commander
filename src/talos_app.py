@@ -3,12 +3,13 @@ from multiprocessing.managers import SharedMemoryManager
 
 from loguru import logger
 
+from src.streaming import StreamController, StreamControllerFactory
+
 from .config import ROBOT_CONFIGS, ConnectionConfig
 from .connection.connection import Connection, ConnectionCollection, VideoConnection
 from .connection.publisher import Direction
 from .directors import BaseDirector, ContinuousDirector
 from .scheduler import IterativeTask, Scheduler
-from .streaming import FfmpegStreamController, StreamConfig
 from .streaming.streamer import Streamer
 from .thread_scheduler import ThreadScheduler
 from .tracking import USABLE_MODELS
@@ -41,20 +42,33 @@ class App:
     # State for continuous and discrete movements
     current_continuous_directions: set[Direction] = set()
     discrete_move_task: dict[Direction, IterativeTask] = dict()
-    _streamer: FfmpegStreamController | None = None
+    _streamer: StreamController | None = None
 
     def __init__(
         self,
         scheduler: Scheduler = ThreadScheduler(),
         smm: SharedMemoryManager = SharedMemoryManager(),
+        args=None,
     ) -> None:
         self.scheduler = scheduler
         self.connections = ConnectionCollection()
         self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
-        self.streamer = Streamer(self.connections, draw_bboxes=True)
+        self.streamer = Streamer(
+            self.connections, draw_bboxes=args.draw_bboxes if args else False
+        )
         self.director = ContinuousDirector(
             self.tracker, self.connections, self.scheduler
         )
+        if args:
+            if args.connection is not None:
+                self.open_connection(args.connection)
+            if len(self.connections) > 0:
+                if args.model is not None:
+                    self.change_model(args.model)
+                if args.control_mode is not None:
+                    self.set_manual_control(args.control_mode == "manual")
+                if args.director is not None:
+                    self.set_control_mode(ControlMode(args.director))
 
     def open_connection(
         self,
@@ -67,7 +81,10 @@ class App:
         logger.info(f"Opening connection to {hostname}")
         if hostname in self.connections:
             return logger.warning(f"Connection to {hostname} already exists")
-        conf = ROBOT_CONFIGS[hostname]
+        if (conf := ROBOT_CONFIGS.get(hostname)) is None:
+            return logger.error(
+                f"Connection hostname {hostname} not found in config, not opening connection"
+            )
         try:
             video_connection = VideoConnection(src=conf.camera_index)
         except Exception as exc:
@@ -163,7 +180,7 @@ class App:
             return conn
         return self.connections.set_active(hostname)
 
-    def remove_connection(self, hostname: str) -> Connection | None:
+    def disconnect_connection(self, hostname: str) -> Connection | None:
         """
         Removes a connection by hostname.
         If the connection is active, sets the active connection to another available connection or None.
@@ -271,15 +288,13 @@ class App:
 
     def start_stream(
         self,
-        output_url: str,
+        streamer_type: str,
         hostname: str | None = None,
         fps: int | None = None,
-        use_docker: bool = False,
-        docker_image: str | None = None,
-        docker_network: str | None = None,
+        stream_config: dict[str, int | bool | str | None] = {},
     ) -> None:
         """Start streaming the active (or specified) connection via ffmpeg."""
-        logger.info("Starting stream to {}", output_url)
+        logger.info("Starting stream using {}", streamer_type)
         if hostname is None:
             frame_getter = self.streamer.get_active_frame  # pyright: ignore[reportAssignmentType]
             cfg = self.get_active_config()
@@ -298,14 +313,9 @@ class App:
         if self._streamer is not None:
             self._streamer.stop()
             self._streamer = None
-        stream_config = StreamConfig(
-            output_url=output_url,
-            fps=fps,
-            use_docker=use_docker,
-            docker_image=docker_image or StreamConfig.docker_image,
-            docker_network=docker_network,
+        self._streamer = StreamControllerFactory.create(
+            streamer_type, frame_getter, stream_config
         )
-        self._streamer = FfmpegStreamController(frame_getter, stream_config)
         try:
             self._streamer.start()
         except RuntimeError as exc:

@@ -10,7 +10,6 @@ from pydantic import ValidationError
 
 from src.config.read import (
     app_settings_recovery,
-    read_app_settings,
     read_default_robot_config,
     read_robot_config_file,
 )
@@ -29,7 +28,7 @@ def load_app_settings(
         AppSettings: A validated AppSettings object with the loaded settings.
     """
     try:
-        settings = AppSettings(**read_app_settings())
+        settings = AppSettings()
         print("App settings loaded successfully")
         print("App Settings: ", settings.model_dump_json(indent=2))
         return settings

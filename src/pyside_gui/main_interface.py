@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QThread, QSignalBlocker
 from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QKeyEvent
 import cv2
+from loguru import logger
 import numpy as np
 
 from src.pyside_gui.qtwidgets import Toggle
@@ -82,7 +83,7 @@ class PySide6Interface(QMainWindow):
     the robotic arm which holds the camera.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, args) -> None:
         """Constructor sets up PySide6 manual interface"""
         super().__init__()
 
@@ -96,7 +97,7 @@ class PySide6Interface(QMainWindow):
         self.setStyleSheet(get_main_stylesheet())
 
         self.scheduler = QTScheduler()
-        self.app = App(self.scheduler)
+        self.app = App(self.scheduler, args=args)
 
         # Video thread
         self.video_thread = VideoThread(self.app)
@@ -127,10 +128,26 @@ class PySide6Interface(QMainWindow):
 
         self._setup_video_display(main_layout)
         main_layout.addWidget(self._build_toggle_frame(), 1, 0)
+        self._setup_stream_button(main_layout)
         self._setup_directional_controls(main_layout)
         main_layout.addWidget(self._build_model_frame(), 3, 0)
         main_layout.addWidget(self._build_connection_frame(), 3, 2)
         self.update_ui()
+
+    def _setup_stream_button(self, layout: QGridLayout) -> None:
+        self.stream_button = QPushButton("Start PyVcam Stream")
+        self.stream_button.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
+        self.stream_button.setCheckable(True)
+        self.stream_button.toggled.connect(self._on_stream_toggled)
+        layout.addWidget(self.stream_button, 1, 2)
+
+    def _on_stream_toggled(self, checked: bool) -> None:
+        if checked:
+            self.app.start_stream(streamer_type="pyvcam")
+            self.stream_button.setText("Stop PyVcam Stream")
+        else:
+            self.app.stop_stream()
+            self.stream_button.setText("Start PyVcam Stream")
 
     def _setup_video_display(self, layout: QGridLayout) -> None:
         self.video_label = QLabel()
@@ -139,7 +156,9 @@ class PySide6Interface(QMainWindow):
         self.video_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self.video_label.setStyleSheet("border: 2px solid gray; background-color: black;")
+        self.video_label.setStyleSheet(
+            "border: 2px solid gray; background-color: black;"
+        )
         layout.addWidget(self.video_label, 0, 0, 1, 3)
         self.draw_no_signal_display()
 
@@ -153,7 +172,9 @@ class PySide6Interface(QMainWindow):
 
         self.automatic_slider = Toggle()
         self.automatic_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.automatic_slider.toggled.connect(self._on_automatic_toggled)
+        self.automatic_slider.toggled.connect(
+            lambda checked: self.app.set_manual_control(not checked)
+        )
         self.automatic_slider.setEnabled(False)
 
         automatic_row_layout = QHBoxLayout()
@@ -168,7 +189,11 @@ class PySide6Interface(QMainWindow):
 
         self.continuous_slider = Toggle()
         self.continuous_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.continuous_slider.toggled.connect(self._on_continuous_toggled)
+        self.continuous_slider.toggled.connect(
+            lambda checked: self.app.set_control_mode(
+                ControlMode.CONTINUOUS if checked else ControlMode.DISCRETE
+            )
+        )
 
         continuous_row_layout = QHBoxLayout()
         continuous_row_layout.setContentsMargins(0, 0, 0, 0)
@@ -267,15 +292,6 @@ class PySide6Interface(QMainWindow):
         connection_layout.addWidget(self.connection_combo)
 
         return connection_frame
-
-    def _on_automatic_toggled(self, checked: bool) -> None:
-        self.app.set_manual_control(not checked)
-        self.update_ui()
-
-    def _on_continuous_toggled(self, checked: bool) -> None:
-        mode = ControlMode.CONTINUOUS if checked else ControlMode.DISCRETE
-        self.app.set_control_mode(mode)
-        self.update_ui()
 
     def keyPressEvent(self, event: QKeyEvent):
         """Handle key press events for directional controls"""
@@ -376,8 +392,7 @@ class PySide6Interface(QMainWindow):
 
         if len(self.app.get_connection_hosts()) == 0:
             self.set_manual_control_btn_state(False)
-            with QSignalBlocker(self.automatic_slider):
-                self.automatic_slider.setChecked(False)
+            self.automatic_slider.setChecked(False)
             self.automatic_slider.setEnabled(False)
             self.video_thread.stop()
             self.draw_no_signal_display()
@@ -395,18 +410,24 @@ class PySide6Interface(QMainWindow):
         # Update control mode
         if connection.is_manual:
             self.set_manual_control_btn_state(True)
-            with QSignalBlocker(self.automatic_slider):
-                self.automatic_slider.setChecked(False)
+            self.automatic_slider.setChecked(False)
         else:
             self.set_manual_control_btn_state(False)
-            with QSignalBlocker(self.automatic_slider):
-                self.automatic_slider.setChecked(True)
+            self.automatic_slider.setChecked(True)
 
         # Update continuous mode
-        with QSignalBlocker(self.continuous_slider):
-            self.continuous_slider.setChecked(
-                self.app.get_control_mode() == ControlMode.CONTINUOUS
-            )
+        self.continuous_slider.setChecked(
+            self.app.get_control_mode() == ControlMode.CONTINUOUS
+        )
+
+        self.model_combo.setCurrentText(self.app.get_selected_model() or "None")
+
+        logger.info(
+            "UI updated. Active connection: {}, Manual control: {}, Control mode: {}",
+            self.app.get_active_hostname(),
+            self.app.get_manual_control(),
+            self.app.get_control_mode(),
+        )
 
         # Start video thread if not running
         if not self.video_thread.isRunning():

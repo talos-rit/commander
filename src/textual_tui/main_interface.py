@@ -1,3 +1,4 @@
+import argparse
 from multiprocessing.managers import SharedMemoryManager
 
 from loguru import logger
@@ -5,8 +6,10 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.driver import Driver
 from textual.reactive import reactive
 from textual.timer import Timer
+from textual.types import CSSPathType
 from textual.widgets import (
     Button,
     Footer,
@@ -57,6 +60,17 @@ class TextualInterface(App):
     connection_options = reactive(list())
     auto_mode_state = reactive(False)
     continuous_control_state = reactive(False)
+
+    def __init__(
+        self,
+        driver_class: type[Driver] | None = None,
+        css_path: CSSPathType | None = None,
+        watch_css: bool = False,
+        ansi_color: bool = False,
+        args: argparse.Namespace | None = None,
+    ) -> None:
+        super().__init__(css_path=css_path, watch_css=watch_css, ansi_color=ansi_color)
+        self.args = args
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -144,10 +158,10 @@ class TextualInterface(App):
 
     def on_mount(self) -> None:
         logger.debug("Mounting Interface")
-        scheduler = TextualScheduler(self)
-        self._talos_app = TalosApp(scheduler, smm=self.smm)
-        self.run_server()
         start_termination_guard()
+        scheduler = TextualScheduler(self)
+        self._talos_app = TalosApp(scheduler, smm=self.smm, args=self.args)
+        self.run_server()
         self.continuous_control_state = (
             self._talos_app.get_control_mode() == ControlMode.CONTINUOUS
         )
@@ -156,6 +170,14 @@ class TextualInterface(App):
             "#continuous-control-switch", Switch
         ).value = self.continuous_control_state
         self.query_one("#auto-mode-switch", Switch).value = self.auto_mode_state
+        connections = [(conn, conn) for conn in self._talos_app.get_connection_hosts()]
+        self.connection_options = connections
+        self.query_one("#connection-select", Select).value = (
+            self._talos_app.get_active_hostname() or Select.NULL
+        )
+        self.query_one("#model-select", Select).value = (
+            self._talos_app.get_selected_model() or Select.NULL
+        )
 
     @on(ReactiveButton.Active, "#up")
     def action_up(self):
