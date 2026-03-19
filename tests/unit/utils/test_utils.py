@@ -1,10 +1,6 @@
 import sys
 
-import pytest
-
 from src.utils import (
-    ID_GEN,
-    TerminationHandler,
     add_termination_handler,
     calculate_acceptable_box,
     calculate_center_box,
