@@ -71,4 +71,3 @@ include = ["src*", "assets*", "config*"]
 
 [tool.pytest]
 addopts = ["--cov=src", "--cov-report=html"]
-testpaths = ["tests"]
