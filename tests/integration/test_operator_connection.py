@@ -10,8 +10,6 @@ import threading
 import time
 
 import pytest
-
-import src.connection.operator_connections as operator_connections_module
 from src.connection.operator_connections import OperatorConnection
 
 
@@ -22,18 +20,6 @@ def wait_until(predicate, timeout=2.0, interval=0.01):
             return True
         time.sleep(interval)
     return False
-
-
-@pytest.fixture
-def no_termination_handlers(monkeypatch):
-    monkeypatch.setattr(
-        operator_connections_module, "add_termination_handler", lambda _call: None
-    )
-    monkeypatch.setattr(
-        operator_connections_module,
-        "remove_termination_handler",
-        lambda _handler_id: None,
-    )
 
 
 @pytest.fixture
