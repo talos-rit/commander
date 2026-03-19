@@ -133,6 +133,20 @@ uv run commander
 ```
 
 
+## Running Tests
+To run the tests, use the following command. By default, this command will run both unit and integration tests and generate a coverage report:
+```bash
+uv run pytest
+```
+To run only unit tests:
+```bash
+uv run pytest tests/unit/
+```
+To run only integration tests:
+```bash
+uv run pytest tests/integration/
+```
+
 ## Troubleshooting
 If you are having trouble connecting to the arm, try running the following command on the Pi:
 ```bash
