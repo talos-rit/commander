@@ -74,8 +74,5 @@ addopts = ["--cov=src", "--cov-report=html"]
 
 [tool.coverage.run]
 omit =[
-    "tests/*",
-    "src/pyside_gui/*",
-    "src/tk_gui/*",
-    "src/textual_tui/*",
+    "tests/*"
 ]
