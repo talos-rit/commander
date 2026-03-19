@@ -67,7 +67,7 @@ def test_polar_pan_continuous_direction_start(mockOperatorConnection):
     )
 
 
-def test_polar_pan_continuous_direction_start_invalid_raises():
+def test_polar_pan_continuous_direction_start_invalid_raises(mockOperatorConnection):
     publisher = Publisher("localhost", 12345, True)
 
     with pytest.raises(AssertionError):
