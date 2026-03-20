@@ -108,7 +108,6 @@ class VideoConnection:
                 self.dtype = frame.dtype
                 return
         logger.warning("Unable to pull frame from camera")
-        return
 
     def get_frame(self) -> np.ndarray | None:
         if self.cap is not None:
