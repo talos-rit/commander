@@ -366,6 +366,5 @@ class Detector(DetectorInterface):
                 logger.info("Stop event received, exiting detection loop.")
         except KeyboardInterrupt:
             logger.info("Detection process received KeyboardInterrupt, exiting.")
-            pass
         except ValueError:
             logger.error("bbox_queue closed")
