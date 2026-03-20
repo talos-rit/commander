@@ -41,7 +41,7 @@ class App:
 
     # State for continuous and discrete movements
     current_continuous_directions: set[Direction] = set()
-    discrete_move_task: dict[Direction, IterativeTask] = dict()
+    discrete_move_task: dict[Direction, IterativeTask] = {}
     _streamer: StreamController | None = None
 
     def __init__(

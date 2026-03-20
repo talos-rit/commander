@@ -16,8 +16,8 @@ class ManageConnectionScreen(Screen):
     BINDINGS = [
         ("escape", "dismiss", "Close this screen"),
     ]
-    current_connections: reactive[list[str]] = reactive(list())
-    config_connections = reactive(dict())
+    current_connections: reactive[list[str]] = reactive([])
+    config_connections = reactive({})
     _app: App
 
     def __init__(self, app: App):

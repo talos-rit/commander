@@ -94,7 +94,7 @@ ID_GEN = id_generator()
 def start_termination_guard():
     logger.debug("Setting up cleanup handlers")
     global TERMINATION_HANDLERS
-    TERMINATION_HANDLERS = list()
+    TERMINATION_HANDLERS = []
     signal.signal(signal.SIGINT, terminate)
 
 

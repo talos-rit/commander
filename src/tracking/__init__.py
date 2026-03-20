@@ -7,7 +7,7 @@ from .haar_cascade.basic_model import BasicModel
 __all__ = ["ModelOption", "MODEL_OPTIONS", "USABLE_MODELS"]
 
 
-USABLE_MODELS: dict[str, ObjectModel.__class__] = dict()
+USABLE_MODELS: dict[str, ObjectModel.__class__] = {}
 
 # haar_cascade is imported via opencv-python by default
 USABLE_MODELS["basic"] = BasicModel
