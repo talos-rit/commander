@@ -139,13 +139,6 @@ class Connection:
         self.publisher = Publisher(self.host, self.port)
         self.is_manual_only = ROBOT_CONFIGS[self.host].manual_only
 
-    def set_manual(self, manual: bool) -> None:
-        self.is_manual = manual
-
-    def toggle_manual(self) -> bool:
-        self.is_manual = not self.is_manual
-        return self.is_manual
-
     def close(self) -> None:
         if self.video_connection is not None:
             self.video_connection.close()
