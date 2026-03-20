@@ -1,0 +1,83 @@
+services:
+  sonarqube-talos-commander:
+    image: sonarqube:community
+    container_name: sonarqube_talos_commander
+    ports:
+      - 9888:9000
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+      SONAR_JDBC_URL: jdbc:postgresql://talos_commander_db:5432/${POSTGRES_DB}
+      SONAR_JDBC_USERNAME: ${POSTGRES_USER}
+      SONAR_JDBC_PASSWORD: ${POSTGRES_PASSWORD}
+
+
+    volumes:
+    - sonarqube_data:/opt/sonarqube/data
+    - sonarqube_extensions:/opt/sonarqube/extensions
+    - sonarqube_logs:/opt/sonarqube/logs
+
+    healthcheck:
+      test: >
+        sh -c '
+          curl -s -u "${SONAR_DEFAULT_USER}:${SONAR_DEFAULT_PASS}" -f http://localhost:9000/api/system/health ||
+          curl -s -u "${SONAR_TOKEN}:" -f http://localhost:9000/api/system/health || exit 1
+        '
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      talos_commander_db:
+        condition: service_healthy
+
+  talos_commander_db:
+    image: postgres:15
+    container_name: talos_commander_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - sonarqube_db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  init:
+    image: curlimages/curl:latest
+    container_name: sonarqube_init_talos_commander
+    user: root
+    depends_on:
+      sonarqube-talos-commander:
+        condition: service_healthy
+    volumes:
+      - ./sonar_config.sh:/workspace/init-sonarqube.sh:rw
+      - ./.env:/workspace/.env:rw
+    working_dir: /workspace
+    entrypoint: ["/bin/sh", "-c"]
+    command: "./init-sonarqube.sh"
+
+  sonarscanner:
+    image: sonarsource/sonar-scanner-cli:latest
+    container_name: sonarscanner_talos_commander
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    environment:
+      SONAR_HOST_URL: ${SONAR_HOST}
+      SONAR_TOKEN: ${SONAR_TOKEN}
+    volumes:
+      - ./sonar-project.properties:/usr/src/sonar-project.properties:rw
+      - ./src:/usr/src/src:rw
+      - ./tests:/usr/src/tests:rw
+      - ./coverage.xml:/usr/src/coverage.xml:rw
+      - ./pytest_report.xml:/usr/src/pytest_report.xml:rw
+    working_dir: /usr/src
+
+
+volumes:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
+  sonarqube_db:
