@@ -1,21 +1,10 @@
-from enum import StrEnum
-
 from loguru import logger
+from src.model_options import MODEL_OPTIONS, ModelOption
 
 from .detector import ObjectModel
 from .haar_cascade.basic_model import BasicModel
 
-
-class ModelOption(StrEnum):
-    YOLO_NANO = "yolo_nano"
-    YOLO_SMALL = "yolo_small"
-    YOLO_MEDIUM = "yolo_medium"
-    YOLO_LARGE = "yolo_large"
-    YOLO_XLARGE = "yolo_xlarge"
-    MEDIAPIPE = "mediapipe"
-    MEDIAPIPEPOSE = "mediapipepose"
-    KEEPAWAY = "keepaway"
-    BASIC = "basic"
+__all__ = ["ModelOption", "MODEL_OPTIONS", "USABLE_MODELS"]
 
 
 USABLE_MODELS: dict[str, ObjectModel.__class__] = dict()
@@ -57,4 +46,4 @@ except ImportError as e:
         This can be installed using `uv sync --extra yolo` or `uv sync --all-extras`"""
     )
 
-MODEL_OPTIONS = list(USABLE_MODELS.keys())
+

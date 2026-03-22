@@ -1,6 +1,5 @@
 #!/usr/bin/env -S uv run --script
 
-import argparse
 import multiprocessing
 import multiprocessing.managers
 import os
@@ -10,6 +9,7 @@ import sys
 if sys.platform == "darwin" or sys.platform == "linux":
     multiprocessing.set_start_method("spawn", force=True)
 
+from src.arg_parser import ARG_PARSER
 from src.interface.pyside_gui.main_interface import PySide6Interface
 from src.interface.textual_tui.main_interface import TextualInterface
 from src.interface.tk_gui.main_interface import TKInterface
@@ -34,20 +34,11 @@ from PySide6.QtWidgets import QApplication
 
 
 def create_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-t",
-        "--terminal",
-        action="store_true",
-        help="Use the terminal (textual) interface instead of the Tk GUI",
-    )
-    parser.add_argument(
-        "-tk",
-        "--tkinter",
-        action="store_true",
-        help="Use the Tkinter GUI instead of the PySide6 GUI",
-    )
-    return parser.parse_args()
+    args = ARG_PARSER.parse_args()
+    if args.debug:
+        args.log_level = "DEBUG"
+        args.draw_bboxes = True
+    return args
 
 
 def run_server(app: App):
@@ -55,10 +46,10 @@ def run_server(app: App):
     endpoint.run()
 
 
-def terminal_interface(args=None):
+def terminal_interface(args=create_args()):
     configure_logger(True)
     smm = multiprocessing.managers.SharedMemoryManager()
-    interface = TextualInterface()
+    interface = TextualInterface(args=args)
     interface.smm = smm
     try:
         interface.run()
@@ -66,9 +57,9 @@ def terminal_interface(args=None):
         terminate(0, 0)
 
 
-def tk_interface(args=None):
+def tk_interface(args=create_args()):
     configure_logger()
-    interface = TKInterface()
+    interface = TKInterface(args)
     # TODO: TKinter is incapable of running this much resource intensive tasks
     # in the same thread as the mainloop, so will be resolved later.
     # app = interface.get_app()
@@ -76,7 +67,7 @@ def tk_interface(args=None):
     interface.mainloop()
 
 
-def pyside_interface(args=None):
+def pyside_interface(args=create_args()):
     configure_logger()
     app = QApplication(sys.argv)
 
@@ -84,13 +75,14 @@ def pyside_interface(args=None):
     font = QFont("Cascadia Code", 10)
     app.setFont(font)
 
-    window = PySide6Interface()
+    window = PySide6Interface(args)
     window.show()
 
     sys.exit(app.exec())
 
 
 def main() -> None:
+    # args = create_args()
     args = create_args()
     # This is a required call for pyinstaller
     # https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing

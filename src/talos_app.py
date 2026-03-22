@@ -49,14 +49,27 @@ class App:
         self,
         scheduler: Scheduler = ThreadScheduler(),
         smm: SharedMemoryManager = SharedMemoryManager(),
+        args=None,
     ) -> None:
         self.scheduler = scheduler
         self.connections = ConnectionCollection()
         self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
-        self.streamer = Streamer(self.connections, draw_bboxes=True)
+        self.streamer = Streamer(
+            self.connections, draw_bboxes=args.draw_bboxes if args else False
+        )
         self.director = ContinuousDirector(
             self.tracker, self.connections, self.scheduler
         )
+        if args:
+            if args.connection is not None:
+                self.open_connection(args.connection)
+            if len(self.connections) > 0:
+                if args.model is not None:
+                    self.change_model(args.model)
+                if args.control_mode is not None:
+                    self.set_manual_control(args.control_mode == "manual")
+                if args.director is not None:
+                    self.set_control_mode(ControlMode(args.director))
 
     def open_connection(
         self,
@@ -69,7 +82,10 @@ class App:
         logger.info(f"Opening connection to {hostname}")
         if hostname in self.connections:
             return logger.warning(f"Connection to {hostname} already exists")
-        conf = config.ROBOT_CONFIGS[hostname]
+        if (conf := config.ROBOT_CONFIGS.get(hostname)) is None:
+            return logger.error(
+                f"Connection hostname {hostname} not found in config, not opening connection"
+            )
         try:
             video_connection = VideoConnection(src=conf.camera_index)
         except Exception as exc:
