@@ -1,30 +1,30 @@
 from enum import StrEnum
 
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGridLayout,
-    QLabel,
-    QPushButton,
-    QFrame,
-    QComboBox,
-    QSizePolicy,
-    QDialog,
-)
-from PySide6.QtCore import Qt, Signal, QThread, QSignalBlocker
-from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QKeyEvent
 import cv2
-from loguru import logger
 import numpy as np
+from loguru import logger
+from PySide6.QtCore import QSignalBlocker, Qt, QThread, Signal
+from PySide6.QtGui import QColor, QFont, QImage, QKeyEvent, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
-from src.pyside_gui.qtwidgets import Toggle
 from src.connection.publisher import Direction
+from src.interface.pyside_gui.connection_manager import QTConnectionManager
+from src.interface.pyside_gui.qtscheduler import QTScheduler
+from src.interface.pyside_gui.qtwidgets import Toggle
+from src.interface.pyside_gui.styles import get_main_stylesheet
 from src.talos_app import App, ControlMode
-from src.pyside_gui.connection_manager import QTConnectionManager
-from src.pyside_gui.styles import get_main_stylesheet
-from src.pyside_gui.qtscheduler import QTScheduler
 from src.tracking import MODEL_OPTIONS
 from src.utils import (
     add_termination_handler,
@@ -156,7 +156,9 @@ class PySide6Interface(QMainWindow):
         self.video_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self.video_label.setStyleSheet("border: 2px solid gray; background-color: black;")
+        self.video_label.setStyleSheet(
+            "border: 2px solid gray; background-color: black;"
+        )
         layout.addWidget(self.video_label, 0, 0, 1, 3)
         self.draw_no_signal_display()
 
@@ -170,7 +172,9 @@ class PySide6Interface(QMainWindow):
 
         self.automatic_slider = Toggle()
         self.automatic_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.automatic_slider.toggled.connect(lambda checked: self.app.set_manual_control(not checked))
+        self.automatic_slider.toggled.connect(
+            lambda checked: self.app.set_manual_control(not checked)
+        )
         self.automatic_slider.setEnabled(False)
 
         automatic_row_layout = QHBoxLayout()
@@ -185,7 +189,11 @@ class PySide6Interface(QMainWindow):
 
         self.continuous_slider = Toggle()
         self.continuous_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.continuous_slider.toggled.connect(lambda checked: self.app.set_control_mode(ControlMode.CONTINUOUS if checked else ControlMode.DISCRETE))
+        self.continuous_slider.toggled.connect(
+            lambda checked: self.app.set_control_mode(
+                ControlMode.CONTINUOUS if checked else ControlMode.DISCRETE
+            )
+        )
 
         continuous_row_layout = QHBoxLayout()
         continuous_row_layout.setContentsMargins(0, 0, 0, 0)
@@ -411,8 +419,13 @@ class PySide6Interface(QMainWindow):
         self.continuous_slider.setChecked(
             self.app.get_control_mode() == ControlMode.CONTINUOUS
         )
-        
-        logger.info("UI updated. Active connection: {}, Manual control: {}, Control mode: {}", self.app.get_active_hostname(), self.app.get_manual_control(), self.app.get_control_mode())
+
+        logger.info(
+            "UI updated. Active connection: {}, Manual control: {}, Control mode: {}",
+            self.app.get_active_hostname(),
+            self.app.get_manual_control(),
+            self.app.get_control_mode(),
+        )
 
         # Start video thread if not running
         if not self.video_thread.isRunning():

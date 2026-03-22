@@ -18,17 +18,16 @@ from textual.widgets import (
     TabPane,
 )
 
+from src.interface.textual_tui.manage_connection import ManageConnectionScreen
+from src.interface.textual_tui.scheduler import TextualScheduler
+from src.interface.textual_tui.widgets.button import ReactiveButton
+from src.interface.textual_tui.widgets.print_viewer import PrintViewer
 from src.talos_app import App as TalosApp
 from src.talos_app import ControlMode, Direction
-from src.textual_tui.manage_connection import ManageConnectionScreen
-from src.textual_tui.scheduler import TextualScheduler
-from src.textual_tui.widgets.button import ReactiveButton
-from src.textual_tui.widgets.print_viewer import PrintViewer
+from src.talos_endpoint import TalosEndpoint
 from src.tracking import MODEL_OPTIONS
+from src.utils import start_termination_guard, terminate
 
-from ..talos_endpoint import TalosEndpoint
-from ..tk_gui.main_interface import start_termination_guard
-from ..utils import terminate
 from .metric_display import MetricDisplay
 
 MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)

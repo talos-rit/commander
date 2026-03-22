@@ -1,3 +1,5 @@
+from loguru import logger
+
 import src.config.add as add
 import src.config.load as load
 import src.config.manager as manager
@@ -23,6 +25,7 @@ def _start_app_settings_watchdog():
     """This is automatically called when the app settings are first accessed, so don't call this manually."""
     if WATCHDOG_STARTED.get("app_settings", False):
         return
+    logger.debug("Starting app settings watchdog...")
     WATCHDOG_STARTED["app_settings"] = True
     manager.FileManager.register_listener(
         path.APP_SETTINGS_PATH, APP_SETTINGS_FILE_HANDLER
@@ -33,6 +36,7 @@ def _start_robot_configs_watchdog():
     """This is automatically called when the robot configs are first accessed, so don't call this manually."""
     if WATCHDOG_STARTED.get("robot_configs", False):
         return
+    logger.debug("Starting robot configs watchdog...")
     WATCHDOG_STARTED["robot_configs"] = True
     manager.FileManager.register_listener(
         path.ROBOT_CONFIGS_PATH, ROBOT_CONFIG_FILE_HANDLER

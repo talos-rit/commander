@@ -10,9 +10,8 @@ from PIL import Image, ImageDraw, ImageTk
 
 import assets
 from src.connection.publisher import Direction
-from src.talos_app import App, ControlMode
-from src.tk_gui.connection_manager import TKConnectionManager
-from src.tk_gui.styles import (
+from src.interface.tk_gui.connection_manager import TKConnectionManager
+from src.interface.tk_gui.styles import (
     BORDER_STYLE,
     BTN_STYLE,
     CONTROL_BTN_GRID_FIT_STYLE,
@@ -21,7 +20,8 @@ from src.tk_gui.styles import (
     OPTIONS_MENU_STYLE,
     THEME_FRAME_BG_COLOR,
 )
-from src.tk_gui.tkscheduler import TKIterativeTask, TKScheduler
+from src.interface.tk_gui.tkscheduler import TKIterativeTask, TKScheduler
+from src.talos_app import App, ControlMode
 from src.tracking import MODEL_OPTIONS
 from src.utils import (
     add_termination_handler,

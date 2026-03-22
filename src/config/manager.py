@@ -1,3 +1,5 @@
+import os
+
 from loguru import logger
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -6,9 +8,22 @@ from watchdog.observers.api import BaseObserver
 from ..utils import add_termination_handler, remove_termination_handler
 
 
+class DebugFileSystemEventHandler(FileSystemEventHandler):
+    def on_any_event(self, event: FileSystemEvent):
+        logger.debug(f"File event detected: {event.event_type} on {event.src_path}")
+
+
 class FileManager:
     _observers: dict[str, BaseObserver] = dict()
     _term = None
+
+    @staticmethod
+    def _resolve_watch_path(path_value: str) -> str:
+        """Watch directories for both file and directory inputs."""
+        normalized = os.path.abspath(path_value)
+        if os.path.isdir(normalized):
+            return normalized
+        return os.path.dirname(normalized) or "."
 
     @staticmethod
     def register_listener(
@@ -24,20 +39,28 @@ class FileManager:
         """
         if FileManager._term is None:
             FileManager._term = add_termination_handler(FileManager.terminate)
-        if file_path in FileManager._observers:
-            FileManager.start_watch_dog(file_path)
-        FileManager._observers[file_path].schedule(
-            listener, file_path, recursive=recursive, event_filter=event_filter
+        watch_path = FileManager._resolve_watch_path(file_path)
+        if watch_path not in FileManager._observers:
+            FileManager.start_watch_dog(watch_path)
+        FileManager._observers[watch_path].schedule(
+            listener, watch_path, recursive=recursive, event_filter=event_filter
+        )
+        logger.debug(
+            f"Registered listener for file: {file_path} (watching {watch_path})"
         )
 
     @staticmethod
-    def start_watch_dog(file_path: str):
-        if file_path in FileManager._observers:
-            logger.debug("Watchdog already running for this file, skipping start")
-            return
-        FileManager._observers[file_path] = Observer()
-        FileManager._observers[file_path].start()
-        logger.debug(f"Started watchdog for file: {file_path}")
+    def start_watch_dog(
+        file_path: str, debug: bool = True
+    ):  # TODO: hook debug to env var
+        if file_path not in FileManager._observers:
+            FileManager._observers[file_path] = Observer()
+            FileManager._observers[file_path].start()
+            logger.debug(f"Started watchdog for file: {file_path} {debug=}")
+        if debug:
+            FileManager._observers[file_path].schedule(
+                DebugFileSystemEventHandler(), file_path, recursive=False
+            )
 
     @staticmethod
     def stop_watch_dog(file_path: str):
