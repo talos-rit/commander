@@ -5,10 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "PySide UI - No Extras",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "talos.py",
+            "preLaunchTask": "uv sync base",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Tkinter UI - No Extras",
             "type": "debugpy",
             "request": "launch",
             "program": "talos.py",
+            "args": ["-tk"],
             "preLaunchTask": "uv sync base",
             "console": "integratedTerminal",
             "justMyCode": false
@@ -24,10 +34,20 @@
             "justMyCode": false
         },
         {
+            "name": "PySide UI - All Extras",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "talos.py",
+            "preLaunchTask": "uv sync all",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Tkinter UI - All Extras",
             "type": "debugpy",
             "request": "launch",
             "program": "talos.py",
+            "args": ["-tk"],
             "preLaunchTask": "uv sync all",
             "console": "integratedTerminal",
             "justMyCode": false

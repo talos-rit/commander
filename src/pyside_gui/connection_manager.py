@@ -48,7 +48,7 @@ class QTConnectionManager(QDialog):
 
         # Add button
         add_button = QPushButton("Add")
-        add_button.clicked.connect(self.show_host_port_input)
+        add_button.clicked.connect(lambda _: self.show_host_port_input())
         layout.addWidget(add_button)
 
         self.render_list()
