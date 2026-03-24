@@ -37,8 +37,8 @@ class Direction(IntEnum):
 
 
 def assert_normalized(*nums: int):
-    nums_abs = list(map(lambda x: abs(x), nums))
-    return all(map(lambda x: x in [0, 1], nums_abs))
+    nums_abs = [abs(x) for x in nums]
+    return all(x in [0, 1] for x in nums_abs)
 
 
 class Publisher:
