@@ -41,7 +41,7 @@ commander-tk = "talos:tk_interface"
 commander-pyside = "talos:pyside_interface"
 
 [dependency-groups]
-dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0"]
+dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0", "pytest", "pytest-cov", "pytest-mock"]
 
 [project.optional-dependencies]
 mediapipe = [
@@ -69,3 +69,12 @@ config = ["**/*"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*", "assets*", "config*"]
+
+[tool.pytest]
+addopts = ["--cov=src", "--cov-report=html"]
+
+[tool.coverage.run]
+omit =[
+    "tests/*"
+]
+relative_files = true

@@ -133,6 +133,59 @@ uv run commander
 ```
 
 
+## Running Tests
+To run the tests, use the following command. By default, this command will run both unit and integration tests and generate a coverage report:
+```bash
+uv run pytest
+```
+To run only unit tests:
+```bash
+uv run pytest tests/unit/
+```
+To run only integration tests:
+```bash
+uv run pytest tests/integration/
+```
+
+## Static Analysis
+To run static analysis using sonarqube locally, you can use the provided docker-compose file to set up a SonarQube instance. The following steps outline how to setup your environment so that you can run SonarQube properly.
+
+1. Make sure you have docker and docker-compose installed on your machine.
+
+2. Setup the .env file
+```bash
+cp .env.example .env
+```
+Then update the values in the .env file as needed. The default values should work for most cases, but you can change the `SONAR_NEW_PASS` value to something more secure if you plan on using this in a production environment.
+
+3. Configure proper permissions:
+```bash
+sudo chown -R 1000:1000 .
+```
+
+4. Create the xml reports for coverage and test results by running the following command:
+```bash
+uv run pytest --cov-report=xml:coverage.xml --junitxml=pytest_report.xml
+```
+
+5. Run the following command in the root directory of the project:
+```bash
+docker-compose -f docker-compose.sonarqube.yml up -d
+```
+
+6. See the results.
+```bash
+visit http://localhost:9888 in the browser
+login with the credentials from .env
+```
+
+7. If you want to run the analysis again after making changes, make sure to regenerate the xml reports by running the command in step 4 again, then run the following command to trigger a new analysis:
+```bash
+docker compose -f docker-compose.sonarqube.yml run --rm sonarscanner
+```
+
+You can use `docker-compose -f docker-compose.sonarqube.yml down` to stop the SonarQube instance when you are done.
+
 ## Troubleshooting
 If you are having trouble connecting to the arm, try running the following command on the Pi:
 ```bash

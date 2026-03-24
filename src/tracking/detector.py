@@ -63,7 +63,7 @@ class DetectorInterface(ABC):
 
 class Detector(DetectorInterface):
     connections: ConnectionCollection
-    frame_order: list[tuple[str, int]] = list()
+    frame_order: list[tuple[str, int]] = []
     model: ObjectModel.__class__ | None
     _smm: SharedMemoryManager
     _detection_process: Process | None = None
@@ -290,7 +290,7 @@ class Detector(DetectorInterface):
     def total_frame_shape(connections: ConnectionCollection):
         total_width = 0
         max_height = 0
-        frame_order = list()
+        frame_order = []
         for host, conn in connections.items():
             video_conn = conn.video_connection
             if video_conn is None or (shape := video_conn.shape) is None:
@@ -302,7 +302,7 @@ class Detector(DetectorInterface):
 
     @staticmethod
     def _create_frame_order(connections: ConnectionCollection):
-        frame_order = list()
+        frame_order = []
         total_width = 0
         max_height = 0
         for host, conn in connections.items():
@@ -366,6 +366,5 @@ class Detector(DetectorInterface):
                 logger.info("Stop event received, exiting detection loop.")
         except KeyboardInterrupt:
             logger.info("Detection process received KeyboardInterrupt, exiting.")
-            pass
         except ValueError:
             logger.error("bbox_queue closed")

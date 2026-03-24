@@ -108,7 +108,6 @@ class VideoConnection:
                 self.dtype = frame.dtype
                 return
         logger.warning("Unable to pull frame from camera")
-        return
 
     def get_frame(self) -> np.ndarray | None:
         if self.cap is not None:
@@ -139,13 +138,6 @@ class Connection:
     def __post_init__(self):
         self.publisher = Publisher(self.host, self.port)
         self.is_manual_only = config.ROBOT_CONFIGS[self.host].manual_only
-
-    def set_manual(self, manual: bool) -> None:
-        self.is_manual = manual
-
-    def toggle_manual(self) -> bool:
-        self.is_manual = not self.is_manual
-        return self.is_manual
 
     def close(self) -> None:
         if self.video_connection is not None:

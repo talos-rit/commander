@@ -14,7 +14,7 @@ class MetricDisplay(Static):
 
     # For some reason, float doesn't get converted to string when displayed
     metric = "0.00"
-    cache = list()
+    cache = []
 
     def __init__(
         self,

@@ -275,27 +275,6 @@ class TKInterface(tk.Tk):
         draw.text((225, 180), "No Signal", fill="white")
         return ImageTk.PhotoImage(no_signal_image)
 
-    def open_connection(
-        self,
-        hostname: str,
-        port: int | None = None,
-        camera: int | None = None,
-        write_config=False,
-    ) -> None:
-        """Opens a new connection. Port and camera are supplied only if opening a new connection not from config.
-        Args:
-            hostname (string): the host ip address of the socket connection
-            port (int): the port number of the socket connection(default picked from config)
-            camera (int): the index of the camera to use for this connection(default picked from config)
-        """
-        self.app.open_connection(hostname)
-        self.update_ui()
-
-    def close_connection(self, hostname: str) -> None:
-        """Closes hostname connection if it exists"""
-        self.app.disconnect_connection(hostname)
-        self.update_ui()
-
     def _set_modal_lock(self, locked: bool) -> None:
         self._modal_open = locked
         state = "disabled" if locked else "normal"

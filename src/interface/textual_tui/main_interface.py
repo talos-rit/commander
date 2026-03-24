@@ -33,7 +33,7 @@ from src.utils import start_termination_guard, terminate
 
 from .metric_display import MetricDisplay
 
-MODEL_OPTIONS_TEXTUAL = list((e, e) for e in MODEL_OPTIONS)
+MODEL_OPTIONS_TEXTUAL = [(e,e) for e in MODEL_OPTIONS]
 
 
 class TextualInterface(App):
@@ -54,9 +54,9 @@ class TextualInterface(App):
         ),
     ]
     _talos_app: TalosApp
-    debounce_timers: dict[str, Timer] = dict()
+    debounce_timers: dict[str, Timer] = {}
     smm: SharedMemoryManager = SharedMemoryManager()
-    connection_options = reactive(list())
+    connection_options = reactive([])
     auto_mode_state = reactive(False)
     continuous_control_state = reactive(False)
 
