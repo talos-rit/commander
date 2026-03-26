@@ -7,8 +7,9 @@ import src.config.path as path
 import src.config.read as read
 import src.config.watchers.app_settings_file_handler as app_settings_file_handler
 import src.config.watchers.robot_config_handler as robot_config_handler
+from src.config.load import DEFAULT_ROBOT_CONFIG
 
-__all__ = ["add", "load", "manager", "path", "read"]
+__all__ = ["add", "load", "manager", "path", "read", "DEFAULT_ROBOT_CONFIG"]
 # This is not used for type checking, but it shuts up lint for unused imports
 
 WATCHDOG_STARTED = dict()

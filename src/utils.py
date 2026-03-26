@@ -4,6 +4,8 @@ import sys
 
 from loguru import logger
 
+import src.config as config
+
 
 def get_file_path(relative_path: str) -> str:
     """
@@ -31,10 +33,9 @@ def calculate_acceptable_box(
     - bbox_width
     - frame_height
     """
-    from src.config import DEFAULT_ROBOT_CONFIG
 
     acceptable_box_percent = (
-        acceptable_box_percent or DEFAULT_ROBOT_CONFIG.acceptable_box_percent
+        acceptable_box_percent or config.DEFAULT_ROBOT_CONFIG.acceptable_box_percent
     )
 
     # Use the frame height and width to calculate an acceptable box
