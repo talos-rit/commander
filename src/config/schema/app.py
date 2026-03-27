@@ -5,14 +5,15 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import (
     BaseSettings,
-    PydanticBaseSettingsSource,
-    YamlConfigSettingsSource,
     CliSettingsSource,
+    PydanticBaseSettingsSource,
     SettingsConfigDict,
+    YamlConfigSettingsSource,
 )
 
 from src.arg_parser import ARG_PARSER
 from src.config.path import APP_SETTINGS_DEFAULT_PATH, APP_SETTINGS_PATH
+
 
 def _parse_args(root_parser: argparse.ArgumentParser, args) -> argparse.Namespace:
     """
@@ -27,6 +28,7 @@ def _parse_args(root_parser: argparse.ArgumentParser, args) -> argparse.Namespac
         args.draw_bboxes = True
     return args
 
+
 class AppSettings(BaseSettings):
     """
     Application-wide settings that are not specific to individual connections.
@@ -38,7 +40,9 @@ class AppSettings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
-        yaml_file=APP_SETTINGS_PATH if os.path.exists(APP_SETTINGS_PATH) else APP_SETTINGS_DEFAULT_PATH,
+        yaml_file=APP_SETTINGS_PATH
+        if os.path.exists(APP_SETTINGS_PATH)
+        else APP_SETTINGS_DEFAULT_PATH,
         yaml_file_encoding="utf-8",
         cli_parse_args=True,
         cli_kebab_case=True,
@@ -55,13 +59,15 @@ class AppSettings(BaseSettings):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
             init_settings,
-            CliSettingsSource(settings_cls, root_parser=ARG_PARSER, parse_args_method=_parse_args),
+            CliSettingsSource(
+                settings_cls, root_parser=ARG_PARSER, parse_args_method=_parse_args
+            ),
             YamlConfigSettingsSource(settings_cls),
             dotenv_settings,
             env_settings,
         )
 
-    log_level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = Field(
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO",
         description="Logging level (e.g., DEBUG, INFO, WARNING, ERROR)",
     )
@@ -72,4 +78,8 @@ class AppSettings(BaseSettings):
     frame_process_fps: int = Field(
         default=30,
         description="Frames per second for pulling video streams (can be lower than max_fps to reduce load)",
+    )
+    disable_performance_warnings: bool = Field(
+        default=False,
+        description="Whether to disable warnings about performance issues (e.g., if processing is taking too long and frames are being dropped or the opposite)",
     )
