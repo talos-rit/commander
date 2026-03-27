@@ -74,6 +74,7 @@ class ObjectModel(ABC):
         inHeight,
         inWidth=None,
         frame_size_determiner: FrameSizeDeterminer | None = None,
+        cvtColorCode=cv2.COLOR_BGR2RGB,
     ) -> tuple[np.ndarray, FrameSizeData]:
         frameOpenCV = frame.copy()
         original_size = frameOpenCV.shape[:2]
@@ -83,7 +84,7 @@ class ObjectModel(ABC):
         )
         scale_size = (frameHeight / size[0], frameWidth / size[1])
         frameSmall = cv2.resize(frameOpenCV, size[::-1])
-        return cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB), FrameSizeData(
+        return cv2.cvtColor(frameSmall, cvtColorCode), FrameSizeData(
             original_size=original_size, size=size, scale_size=scale_size
         )
 
@@ -97,6 +98,11 @@ class ObjectModel(ABC):
             x2 * scaleWidth,
             y2 * scaleHeight,
         )
+
+    @classmethod
+    def xywh_to_xyxy(cls, bbox: BBox) -> BBox:
+        x, y, w, h = bbox
+        return (x, y, x + w, y + h)
 
 
 class DetectorInterface(ABC):

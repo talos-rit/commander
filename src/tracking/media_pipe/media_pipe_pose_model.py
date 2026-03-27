@@ -12,6 +12,8 @@ from src.tracking.media_pipe.model_path import (
 )
 from src.tracking.types import BBox
 
+from .media_pipe_model import detection_result_to_xywh
+
 
 class MediaPipePoseModel(ObjectModel):
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
@@ -55,12 +57,8 @@ class MediaPipePoseModel(ObjectModel):
 
         bboxes = []
         for detection in detection_result.detections:
-            bboxC = detection.bounding_box
-            x1 = bboxC.origin_x
-            y1 = bboxC.origin_y
-            x2 = bboxC.origin_x + bboxC.width
-            y2 = bboxC.origin_y + bboxC.height
-            bboxes.append(self.fix_bbox_scale((x1, y1, x2, y2), size))
+            xywh = detection_result_to_xywh(detection)
+            bboxes.append(self.fix_bbox_scale(self.xywh_to_xyxy(xywh), size))
         return bboxes
 
     def is_x_pose(self, pose_landmarks):

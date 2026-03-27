@@ -45,15 +45,12 @@ class YOLOModelSize(StrEnum):
 class YOLOBaseModel(ObjectModel):
     model_size: YOLOModelSize = YOLOModelSize.MEDIUM
     speaker_color: int | None = None
-    color_threshold: int = 15
-    lost_threshold: int = 300
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
     def __init__(
         self,
         _yolo_pt_dir=join_paths("yolo"),
         _pt_file: str | None = None,
-        _pt_pose_file: str | None = None,
     ):
         self.speaker_bbox = None  # Shared reference. Only here to avoid pylint errors.
         self.device = (
@@ -67,7 +64,6 @@ class YOLOBaseModel(ObjectModel):
         self.object_detector: Model = YOLO(
             path.join(_yolo_pt_dir, _pt_file or self.model_size.pt_file), verbose=False
         )
-        self.lost_counter = 0
 
     def size_32_determiner(self, frame, inHeight, inWidth=None) -> Frame:
         """
@@ -81,14 +77,13 @@ class YOLOBaseModel(ObjectModel):
         frameRGB, metadata = self.resize_frame(
             frame, inHeight, inWidth, self.size_32_determiner
         )
-        logger.debug(metadata)
-        detection_result = self.object_detector(
+        (detection_result,) = self.object_detector(
             frameRGB,
             classes=HUMAN_DETECTION_CLASS_ID,
             verbose=False,
             imgsz=metadata.size,
             device=self.device,
-        )[0]
+        )
         return [
             self.fix_bbox_scale(xyxy, metadata) for xyxy in detection_result.boxes.xyxy
         ]

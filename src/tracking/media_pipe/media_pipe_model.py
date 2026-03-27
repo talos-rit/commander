@@ -1,10 +1,19 @@
 import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
+from mediapipe.tasks.python import BaseOptions, vision
 
 from src.tracking.detector import ObjectModel
 from src.tracking.media_pipe.model_path import path_efficientdet_lite0
 from src.tracking.types import BBox
+
+
+def detection_result_to_xywh(detection_result) -> BBox:
+    bboxC = detection_result.bounding_box
+    return (
+        bboxC.origin_x,
+        bboxC.origin_y,
+        bboxC.width,
+        bboxC.height,
+    )
 
 
 class MediaPipeModel(ObjectModel):
@@ -15,7 +24,7 @@ class MediaPipeModel(ObjectModel):
     def __init__(
         self,
     ):
-        base_options = python.BaseOptions(model_asset_path=path_efficientdet_lite0)
+        base_options = BaseOptions(model_asset_path=path_efficientdet_lite0)
         options = vision.ObjectDetectorOptions(
             base_options=base_options,
             score_threshold=0.5,
@@ -27,13 +36,9 @@ class MediaPipeModel(ObjectModel):
         frameRGB, size = self.resize_frame(frame, self.inHeight, self.inWidth)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
         detection_result = self.object_detector.detect(mp_image)
-        bboxes: list[BBox] = []
+        bboxes = []
         if detection_result:
             for detection in detection_result.detections:
-                bboxC = detection.bounding_box
-                x1 = bboxC.origin_x
-                y1 = bboxC.origin_y
-                x2 = bboxC.origin_x + bboxC.width
-                y2 = bboxC.origin_y + bboxC.height
-                bboxes.append(self.fix_bbox_scale((x1, y1, x2, y2), size))
+                xywh = detection_result_to_xywh(detection)
+                bboxes.append(self.fix_bbox_scale(self.xywh_to_xyxy(xywh), size))
         return bboxes

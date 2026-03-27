@@ -3,6 +3,8 @@ import cv2
 from assets import join_paths
 from src.tracking.detector import ObjectModel
 
+from ..types import BBox
+
 MODEL_FILE = join_paths("haarcascade_frontalface_default.xml")
 
 
@@ -13,29 +15,8 @@ class BasicModel(ObjectModel):
 
     # Detect faces in the frame
     def detect_person(self, frame, inHeight=500, inWidth=0):
-        frameOpenCVHaar = frame.copy()
-        frameHeight = frameOpenCVHaar.shape[0]
-        frameWidth = frameOpenCVHaar.shape[1]
-        inWidth = inWidth or int((frameWidth / frameHeight) * inHeight)
-
-        scaleHeight = frameHeight / inHeight
-        scaleWidth = frameWidth / inWidth
-
-        frameOpenCVHaarSmall = cv2.resize(frameOpenCVHaar, (inWidth, inHeight))
-        frameGray = cv2.cvtColor(frameOpenCVHaarSmall, cv2.COLOR_BGR2GRAY)
-
-        faces = self.faceCascade.detectMultiScale(frameGray)
-        bboxes = []
-        for x, y, w, h in faces:
-            x1 = x
-            y1 = y
-            x2 = x + w
-            y2 = y + h
-            cvRect = [
-                int(x1 * scaleWidth),
-                int(y1 * scaleHeight),
-                int(x2 * scaleWidth),
-                int(y2 * scaleHeight),
-            ]
-            bboxes.append(cvRect)
-        return bboxes
+        frameGray, meta = self.resize_frame(
+            frame, inHeight, inWidth, cvtColorCode=cv2.COLOR_BGR2GRAY
+        )
+        faces: list[BBox] = self.faceCascade.detectMultiScale(frameGray)  # pyright: ignore[reportAssignmentType]
+        return [self.fix_bbox_scale(self.xywh_to_xyxy(xywh), meta) for xywh in faces]
