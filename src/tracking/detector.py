@@ -76,12 +76,13 @@ class ObjectModel(ABC):
         frame_size_determiner: FrameSizeDeterminer | None = None,
         cvtColorCode=cv2.COLOR_BGR2RGB,
     ) -> tuple[np.ndarray, FrameSizeData]:
+        frame_size_determiner = frame_size_determiner or cls.determine_frame_size
         frameOpenCV = frame.copy()
         original_size = frameOpenCV.shape[:2]
         frameHeight, frameWidth = original_size
-        size = (frame_size_determiner or cls.determine_frame_size)(
-            frame, inHeight, inWidth
-        )
+        size = frame_size_determiner(frame, inHeight, inWidth)
+        if any(s == 0 for s in size):
+            raise ValueError(f"Invalid frame size determined: {size}")
         scale_size = (frameHeight / size[0], frameWidth / size[1])
         frameSmall = cv2.resize(frameOpenCV, size[::-1])
         return cv2.cvtColor(frameSmall, cvtColorCode), FrameSizeData(
@@ -414,7 +415,11 @@ class Detector(DetectorInterface):
                 # Not clear immediately to make a copy here safely
                 raw_frame = np.copy(frame)
                 frame_ready_event.clear()
-                bboxes = model.detect_person(frame=raw_frame)
+                try:
+                    bboxes = model.detect_person(frame=raw_frame)
+                except Exception as e:
+                    logger.error(f"Error during detection: {e}")
+                    continue
                 if bbox_queue.full():
                     logger.warning("bbox_queue is full, deleting oldest output")
                     try:

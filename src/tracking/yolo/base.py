@@ -89,5 +89,8 @@ class YOLOBaseModel(ObjectModel):
 
     def to_numpy(self, tensor_or_array):
         if hasattr(tensor_or_array, "numpy"):
+            # If the tensor has a cpu method, move it to CPU first (handles MPS, CUDA, etc.)
+            if hasattr(tensor_or_array, "cpu"):
+                return tensor_or_array.cpu().numpy()
             return tensor_or_array.numpy()
         return np.asarray(tensor_or_array)
