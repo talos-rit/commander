@@ -4,6 +4,8 @@ import sys
 
 from loguru import logger
 
+import src.config as config
+
 
 def get_file_path(relative_path: str) -> str:
     """
@@ -31,10 +33,9 @@ def calculate_acceptable_box(
     - bbox_width
     - frame_height
     """
-    from src.config import DEFAULT_ROBOT_CONFIG
 
     acceptable_box_percent = (
-        acceptable_box_percent or DEFAULT_ROBOT_CONFIG.acceptable_box_percent
+        acceptable_box_percent or config.DEFAULT_ROBOT_CONFIG.acceptable_box_percent
     )
 
     # Use the frame height and width to calculate an acceptable box
@@ -87,8 +88,17 @@ class TerminationHandler:
         return self.func(*args, **kwds)
 
 
-TERMINATION_HANDLERS: list[TerminationHandler]
+TERMINATION_HANDLERS: list[TerminationHandler] | None = None
 ID_GEN = id_generator()
+
+
+def _ensure_termination_handlers() -> list[TerminationHandler]:
+    global TERMINATION_HANDLERS
+    if TERMINATION_HANDLERS is None:
+        start_termination_guard()
+    if TERMINATION_HANDLERS is None:
+        TERMINATION_HANDLERS = []
+    return TERMINATION_HANDLERS
 
 
 def start_termination_guard():
@@ -100,27 +110,26 @@ def start_termination_guard():
 
 def add_termination_handler(call):
     global TERMINATION_HANDLERS, ID_GEN
-    if TERMINATION_HANDLERS is None:
-        start_termination_guard()
+    handlers = _ensure_termination_handlers()
     handler = TerminationHandler(call)
     handler.id = next(ID_GEN)
-    TERMINATION_HANDLERS.append(handler)
+    handlers.append(handler)
     return handler.id
 
 
 def terminate(signum, frame):
     global TERMINATION_HANDLERS
+    handlers = _ensure_termination_handlers()
     logger.debug(f"\nSignal {signum} received! Executing handler.")
-    logger.debug(
-        f"Performing cleanup or specific action... {len(TERMINATION_HANDLERS)}"
-    )
+    logger.debug(f"Performing cleanup or specific action... {len(handlers)}")
 
-    while len(TERMINATION_HANDLERS) > 0:
-        handler = TERMINATION_HANDLERS.pop()
+    while len(handlers) > 0:
+        handler = handlers.pop()
         handler()
     logger.info("Finished clean up")
 
 
 def remove_termination_handler(id: int):
     global TERMINATION_HANDLERS
-    TERMINATION_HANDLERS = [h for h in TERMINATION_HANDLERS if h.id != id]
+    handlers = _ensure_termination_handlers()
+    TERMINATION_HANDLERS = [h for h in handlers if h.id != id]

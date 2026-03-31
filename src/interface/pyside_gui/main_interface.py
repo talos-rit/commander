@@ -1,30 +1,30 @@
 from enum import StrEnum
 
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGridLayout,
-    QLabel,
-    QPushButton,
-    QFrame,
-    QComboBox,
-    QSizePolicy,
-    QDialog,
-)
-from PySide6.QtCore import Qt, Signal, QThread, QSignalBlocker
-from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QKeyEvent
 import cv2
-from loguru import logger
 import numpy as np
+from loguru import logger
+from PySide6.QtCore import QSignalBlocker, Qt, QThread, Signal
+from PySide6.QtGui import QColor, QFont, QImage, QKeyEvent, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
-from src.pyside_gui.qtwidgets import Toggle
 from src.connection.publisher import Direction
+from src.interface.pyside_gui.connection_manager import QTConnectionManager
+from src.interface.pyside_gui.qtscheduler import QTScheduler
+from src.interface.pyside_gui.qtwidgets import Toggle
+from src.interface.pyside_gui.styles import get_main_stylesheet
 from src.talos_app import App, ControlMode
-from src.pyside_gui.connection_manager import QTConnectionManager
-from src.pyside_gui.styles import get_main_stylesheet
-from src.pyside_gui.qtscheduler import QTScheduler
 from src.tracking import MODEL_OPTIONS
 from src.utils import (
     add_termination_handler,
