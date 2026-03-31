@@ -107,3 +107,6 @@ class ConnectionConfig(BaseModel):
                 raise ValueError("Camera URL cannot be empty string")
             return v
         raise ValueError(f"Camera index must be int or str, got {type(v)}")
+
+
+type RobotConfigs = dict[str, ConnectionConfig]

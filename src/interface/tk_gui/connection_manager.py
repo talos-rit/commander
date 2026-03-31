@@ -4,7 +4,9 @@ from typing import Callable
 
 from loguru import logger
 
-from src.config import ROBOT_CONFIGS, ConnectionConfig, editor
+import src.config as config
+from src.config.add import add_config, validate_connection_config
+from src.config.schema.robot import ConnectionConfig
 from src.talos_app import App
 
 
@@ -64,7 +66,7 @@ class TKConnectionManager(tkinter.Toplevel):
         ttk.Label(
             self.list_frame, text="Available Configs:", font=("Segoe UI", 10, "bold")
         ).pack(anchor="w", padx=5, pady=(5, 0))
-        for cfg in ROBOT_CONFIGS.values():
+        for cfg in config.ROBOT_CONFIGS.values():
             frame = ttk.Frame(self.list_frame)
             frame.pack(fill="x", padx=10, pady=2)
 
@@ -138,14 +140,14 @@ class TKConnectionManager(tkinter.Toplevel):
                 logger.warning("Host, port, and camera inputs are required.")
                 return
 
-            valid, conf, error_msg = editor.validate_connection_config(
+            valid, conf, error_msg = validate_connection_config(
                 host, port_str, camera_str
             )
             if not valid or conf is None:
                 logger.warning(f"Invalid connection config: {error_msg}")
                 return
 
-            editor.add_config(conf)
+            add_config(conf)
             popup.destroy()
             self.add_connection(conf)
 

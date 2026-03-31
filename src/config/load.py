@@ -47,9 +47,6 @@ def load_app_settings(
     return _recovery_method()
 
 
-APP_SETTINGS = load_app_settings()
-
-
 def load_default_robot_config() -> ConnectionConfig:
     """
     Load the default robot configuration from config/default_config.yaml or
@@ -99,6 +96,3 @@ def load_robot_config() -> dict[str, ConnectionConfig]:
             )
             continue
     return validated_config
-
-
-ROBOT_CONFIGS = load_robot_config()

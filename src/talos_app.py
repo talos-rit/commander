@@ -5,7 +5,8 @@ from loguru import logger
 
 from src.streaming import StreamController, StreamControllerFactory
 
-from .config import ROBOT_CONFIGS, ConnectionConfig
+from . import config
+from .config.schema.robot import ConnectionConfig
 from .connection.connection import Connection, ConnectionCollection, VideoConnection
 from .connection.publisher import Direction
 from .directors import BaseDirector, ContinuousDirector
@@ -81,7 +82,7 @@ class App:
         logger.info(f"Opening connection to {hostname}")
         if hostname in self.connections:
             return logger.warning(f"Connection to {hostname} already exists")
-        if (conf := ROBOT_CONFIGS.get(hostname)) is None:
+        if (conf := config.ROBOT_CONFIGS.get(hostname)) is None:
             return logger.error(
                 f"Connection hostname {hostname} not found in config, not opening connection"
             )
@@ -207,7 +208,7 @@ class App:
         """Gets the active connection's configuration"""
         if (connection := self.get_active_connection()) is None:
             return None
-        return ROBOT_CONFIGS.get(connection.host, None)
+        return config.ROBOT_CONFIGS.get(connection.host, None)
 
     def get_control_mode(self) -> ControlMode:
         """Gets the active connection's control mode"""
@@ -305,7 +306,7 @@ class App:
             def frame_getter(host=hostname):
                 return self.streamer.get_frame(host)
 
-            cfg = ROBOT_CONFIGS.get(hostname)
+            cfg = config.ROBOT_CONFIGS.get(hostname)
         if cfg is None:
             return logger.error("No active connection found for streaming")
         if fps is None:
