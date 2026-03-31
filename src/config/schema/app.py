@@ -11,7 +11,6 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-from src.arg_parser import ARG_PARSER
 from src.config.path import APP_SETTINGS_DEFAULT_PATH, APP_SETTINGS_PATH
 
 
@@ -57,6 +56,8 @@ class AppSettings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
+        from src.arg_parser import ARG_PARSER
+
         return (
             init_settings,
             CliSettingsSource(

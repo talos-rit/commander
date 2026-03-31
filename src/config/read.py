@@ -14,8 +14,7 @@ from src.config.path import (
     ROBOT_CONFIGS_PATH,
 )
 from src.config.schema.app import AppSettings
-
-from ..utils import get_file_path
+from src.path_utils import get_file_path
 
 
 def read_default_robot_config() -> dict[str, Any]:

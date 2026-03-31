@@ -11,7 +11,8 @@ from watchdog.events import (
     FileSystemEventHandler,
 )
 
-from ...utils import get_file_path
+from src.path_utils import get_file_path
+
 from ..path import APP_SETTINGS_PATH, BACKUP_DIR
 from ..schema.app import AppSettings
 
@@ -65,7 +66,7 @@ class AppSettingFileHandler(FileSystemEventHandler):
         logger.info(f"Backed up current app settings to {path}")
 
     def on_created(self, event: DirCreatedEvent | FileCreatedEvent):
-        self.on_modified(event)
+        self.on_modified(event)  # pyright: ignore[reportArgumentType]
 
     def on_moved(self, event: DirMovedEvent | FileMovedEvent):
-        self.on_modified(event)
+        self.on_modified(event)  # pyright: ignore[reportArgumentType]

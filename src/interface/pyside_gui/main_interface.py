@@ -25,7 +25,7 @@ from src.interface.pyside_gui.qtscheduler import QTScheduler
 from src.interface.pyside_gui.qtwidgets import Toggle
 from src.interface.pyside_gui.styles import get_main_stylesheet
 from src.talos_app import App, ControlMode
-from src.tracking import MODEL_OPTIONS
+from src.tracking.options import MODEL_OPTIONS
 from src.utils import (
     add_termination_handler,
     remove_termination_handler,
