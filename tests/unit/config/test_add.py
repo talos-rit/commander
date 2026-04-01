@@ -44,7 +44,7 @@ def test_validate_connection_config_invalid_inputs(socket_host, socket_port, cam
 def test_validate_connection_config_duplicate_host(monkeypatch):
     monkeypatch.setattr(add_module.global_config, "ROBOT_CONFIGS", {"host1": object()})
 
-    valid, cfg, errors = add_module.validate_connection_config("host1", 1234, 0)
+    valid, cfg, errors = add_module.validate_connection_config("host1", 1234, "0")
 
     assert not valid
     assert cfg is None
@@ -54,7 +54,7 @@ def test_validate_connection_config_duplicate_host(monkeypatch):
 def test_validate_connection_config_success(monkeypatch):
     monkeypatch.setattr(add_module.global_config, "ROBOT_CONFIGS", {})
 
-    valid, cfg, errors = add_module.validate_connection_config("host2", "5678", 0)
+    valid, cfg, errors = add_module.validate_connection_config("host2", "5678", "0")
 
     assert valid
     assert errors == []
