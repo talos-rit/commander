@@ -84,7 +84,7 @@ def test_open_connection_missing_config_logs_error(monkeypatch, app_under_test, 
 def test_open_connection_uses_config_and_creates_connection(monkeypatch, app_under_test, mocker):
     app = app_under_test
     config = mocker.Mock(socket_port=123, camera_index=0)
-    monkeypatch.setitem(talos_app.ROBOT_CONFIGS, "host", config)
+    monkeypatch.setitem(talos_app.config.ROBOT_CONFIGS, "host", config)
 
     # VideoConnection should be created; patch so it doesn't do real IO
     mock_video = mocker.Mock()
@@ -102,7 +102,7 @@ def test_open_connection_uses_config_and_creates_connection(monkeypatch, app_und
 def test_open_connection_falls_back_when_video_fails(monkeypatch, app_under_test, mocker):
     app = app_under_test
     config = mocker.Mock(socket_port=123, camera_index=0)
-    monkeypatch.setitem(talos_app.ROBOT_CONFIGS, "host", config)
+    monkeypatch.setitem(talos_app.config.ROBOT_CONFIGS, "host", config)
 
     # VideoConnection raising should be handled gracefully
     monkeypatch.setattr(talos_app, "VideoConnection", lambda src: (_ for _ in ()).throw(Exception("boom")))

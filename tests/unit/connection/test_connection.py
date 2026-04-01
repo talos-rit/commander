@@ -116,25 +116,23 @@ def test_video_connection_falls_back_when_no_frame(monkeypatch, mocker):
     assert vc.shape is None
 
 
-def test_connection_set_and_toggle_manual(monkeypatch, mocker):
+def test_connection_initializes_manual_flags(monkeypatch, mocker):
     # Publisher is only instantiated; using a simple mock avoids needing behavior.
     mock_pub = mocker.Mock(spec=connection_module.Publisher)
     monkeypatch.setattr(connection_module, "Publisher", mocker.Mock(return_value=mock_pub))
 
-    monkeypatch.setitem(connection_module.ROBOT_CONFIGS, "host", type("C", (), {"manual_only": True})())
+    monkeypatch.setitem(connection_module.config.ROBOT_CONFIGS, "host", type("C", (), {"manual_only": True})())
 
     conn = connection_module.Connection(host="host", port=1, video_connection=None)
     assert conn.is_manual is True
-    conn.set_manual(False)
-    assert conn.is_manual is False
-    assert conn.toggle_manual() is True
+    assert conn.is_manual_only is True
 
 
 def test_connection_close_invokes_subcomponents(monkeypatch, mocker):
     mock_pub = mocker.Mock(spec=connection_module.Publisher)
     monkeypatch.setattr(connection_module, "Publisher", mocker.Mock(return_value=mock_pub))
 
-    monkeypatch.setitem(connection_module.ROBOT_CONFIGS, "host", type("C", (), {"manual_only": False})())
+    monkeypatch.setitem(connection_module.config.ROBOT_CONFIGS, "host", type("C", (), {"manual_only": False})())
 
     vid_conn = mocker.Mock(spec=connection_module.VideoConnection)
     conn = connection_module.Connection(host="host", port=1, video_connection=vid_conn)

@@ -10,8 +10,12 @@ def test_read_default_robot_config_uses_local_if_present(tmp_path, monkeypatch):
     local_path.write_text(yaml.safe_dump({"test_key": "local"}))
 
     # Patch module constants so we don't touch repo config files
-    monkeypatch.setattr(read_module, "LOCAL_DEFAULT_PATH", str(local_path))
-    monkeypatch.setattr(read_module, "DEFAULT_PATH", str(tmp_path / "default_config.yaml"))
+    monkeypatch.setattr(read_module, "DEFAULT_ROBOT_CONFIG_PATH", str(local_path))
+    monkeypatch.setattr(
+        read_module,
+        "EXAMPLE_DEFAULT_ROBOT_CONFIG_PATH",
+        str(tmp_path / "default_config.yaml"),
+    )
 
     result = read_module.read_default_robot_config()
     assert result == {"test_key": "local"}
@@ -21,8 +25,10 @@ def test_read_default_robot_config_uses_default_when_local_missing(tmp_path, mon
     default_path = tmp_path / "default_config.yaml"
     default_path.write_text(yaml.safe_dump({"test_key": "default"}))
 
-    monkeypatch.setattr(read_module, "LOCAL_DEFAULT_PATH", str(tmp_path / "does_not_exist.yaml"))
-    monkeypatch.setattr(read_module, "DEFAULT_PATH", str(default_path))
+    monkeypatch.setattr(
+        read_module, "DEFAULT_ROBOT_CONFIG_PATH", str(tmp_path / "does_not_exist.yaml")
+    )
+    monkeypatch.setattr(read_module, "EXAMPLE_DEFAULT_ROBOT_CONFIG_PATH", str(default_path))
 
     result = read_module.read_default_robot_config()
     assert result == {"test_key": "default"}
@@ -52,6 +58,7 @@ def test_app_settings_recovery_creates_backup_and_writes_default(tmp_path, monke
 
     monkeypatch.setattr(read_module, "APP_SETTINGS_PATH", str(app_settings))
     monkeypatch.setattr(read_module, "APP_SETTINGS_DEFAULT_PATH", str(default_settings))
+    monkeypatch.setattr(read_module, "BACKUP_DIR", str(tmp_path))
 
     # Ensure backup file does not exist initially
     backup = tmp_path / "app_settings.local.yaml.backup"
@@ -80,6 +87,7 @@ def test_app_settings_recovery_raises_when_invalid_default(tmp_path, monkeypatch
 
     monkeypatch.setattr(read_module, "APP_SETTINGS_PATH", str(app_settings))
     monkeypatch.setattr(read_module, "APP_SETTINGS_DEFAULT_PATH", str(invalid_default))
+    monkeypatch.setattr(read_module, "BACKUP_DIR", str(tmp_path))
 
     with pytest.raises(Exception):
         read_module.app_settings_recovery()
