@@ -5,7 +5,7 @@ from src.utils import get_file_path
 _CONFIG_DIR = os.path.join(os.path.dirname(__file__), "../../config")
 ROBOT_CONFIG_FILENAME = "robot_configs.local.yaml"
 ROBOT_CONFIGS_PATH = get_file_path(os.path.join(_CONFIG_DIR, ROBOT_CONFIG_FILENAME))
-EXAMPLE_DEFAULT_ROBOT_CONFIG_FILENAME = "example_default_configs.yaml"
+EXAMPLE_DEFAULT_ROBOT_CONFIG_FILENAME = "example_default_config.yaml"
 EXAMPLE_DEFAULT_ROBOT_CONFIG_PATH = get_file_path(
     os.path.join(_CONFIG_DIR, EXAMPLE_DEFAULT_ROBOT_CONFIG_FILENAME)
 )
