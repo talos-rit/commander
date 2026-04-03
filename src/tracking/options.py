@@ -62,8 +62,8 @@ _register_optional_models(
     ".media_pipe",
     {
         # USABLE_MODELS[ModelOption.KEEPAWAY] = (KeepAwayModel, KeepAwayDirector)
-        # ModelOption.MEDIAPIPE: "MediaPipePoseModel",
-        ModelOption.MEDIAPIPEPOSE: "MediaPipeModel",
+        # ModelOption.MEDIAPIPEPOSE: "MediaPipePoseModel",
+        ModelOption.MEDIAPIPE: "MediaPipeModel",
     },
     feature_name="mediapipe",
     extra_name="mediapipe",
