@@ -3,7 +3,7 @@ import time
 from loguru import logger
 
 import src.config as config
-from src.connection.publisher import Publisher
+from src.connection.publisher import Direction, Publisher
 from src.directors.base_director import BaseDirector
 from src.utils import calculate_acceptable_box, calculate_center_bbox
 
@@ -83,27 +83,27 @@ class ContinuousDirector(BaseDirector):
             center_bottom = center + frame_buffer
 
             if average < center_top:
-                logger.info(f"Move camera up: Average:{average} Center:{center}")
+                logger.debug(f"Move camera up: Average:{average} Center:{center}")
                 change_in_y = average - center_top
             elif average > center_bottom:
-                logger.info(f"Move camera down: Average:{average} Center:{center}")
+                logger.debug(f"Move camera down: Average:{average} Center:{center}")
                 change_in_y = average - center_bottom
 
             if change_in_x > 0:
-                publisher.polar_pan_continuous_start(-1, 0)
-                # print("start")
+                publisher.polar_pan_continuous_direction_start(Direction.RIGHT)
+                logger.debug("start right")
                 self.last_command_stop = False
             elif change_in_x < 0:
-                publisher.polar_pan_continuous_start(1, 0)
-                # print("start")
+                publisher.polar_pan_continuous_direction_start(Direction.LEFT)
+                logger.debug("start left")
                 self.last_command_stop = False
             elif change_in_y < 0:
-                publisher.polar_pan_continuous_start(0, 1)
-                # print("start")
+                publisher.polar_pan_continuous_direction_start(Direction.UP)
+                logger.debug("start up")
                 self.last_command_stop = False
             elif change_in_y > 0:
-                publisher.polar_pan_continuous_start(0, -1)
-                # print("start")
+                publisher.polar_pan_continuous_direction_start(Direction.DOWN)
+                logger.debug("start down")
                 self.last_command_stop = False
             elif not self.last_command_stop:
                 publisher.polar_pan_continuous_stop()
