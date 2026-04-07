@@ -1,21 +1,30 @@
-import cv2
 import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
+from mediapipe.tasks.python import BaseOptions, vision
 
 from src.tracking.detector import ObjectModel
 from src.tracking.media_pipe.model_path import path_efficientdet_lite0
+from src.tracking.types import BBox
+
+
+def detection_result_to_xywh(detection_result) -> BBox:
+    bboxC = detection_result.bounding_box
+    return (
+        bboxC.origin_x,
+        bboxC.origin_y,
+        bboxC.width,
+        bboxC.height,
+    )
 
 
 class MediaPipeModel(ObjectModel):
     inHeight = 500
-    inWidth = 0
+    inWidth = None
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
     def __init__(
         self,
     ):
-        base_options = python.BaseOptions(model_asset_path=path_efficientdet_lite0)
+        base_options = BaseOptions(model_asset_path=path_efficientdet_lite0)
         options = vision.ObjectDetectorOptions(
             base_options=base_options,
             score_threshold=0.5,
@@ -23,40 +32,13 @@ class MediaPipeModel(ObjectModel):
         )
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
-    # Detect people in the frame
-    def detect_person(self, frame):
-        frameOpenCV = frame.copy()
-        frameHeight = frameOpenCV.shape[0]
-        frameWidth = frameOpenCV.shape[1]
-
-        if not self.inWidth:
-            self.inWidth = int((frameWidth / frameHeight) * self.inHeight)
-
-        scaleHeight = frameHeight / self.inHeight
-        scaleWidth = frameWidth / self.inWidth
-
-        frameSmall = cv2.resize(frameOpenCV, (self.inWidth, self.inHeight))
-        frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
-
+    def detect_person(self, frame) -> list[BBox]:
+        frameRGB, size = self.resize_frame(frame, self.inHeight, self.inWidth)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
         detection_result = self.object_detector.detect(mp_image)
         bboxes = []
         if detection_result:
             for detection in detection_result.detections:
-                # print(detection)
-                bboxC = detection.bounding_box
-
-                x1 = bboxC.origin_x
-                y1 = bboxC.origin_y
-                x2 = bboxC.origin_x + bboxC.width
-                y2 = bboxC.origin_y + bboxC.height
-
-                # Scale bounding box back to original frame size
-                cvRect = [
-                    int(x1 * scaleWidth),
-                    int(y1 * scaleHeight),
-                    int(x2 * scaleWidth),
-                    int(y2 * scaleHeight),
-                ]
-                bboxes.append(cvRect)
+                xywh = detection_result_to_xywh(detection)
+                bboxes.append(self.fix_bbox_scale(self.xywh_to_xyxy(xywh), size))
         return bboxes

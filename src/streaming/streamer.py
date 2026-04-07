@@ -41,10 +41,10 @@ def draw_visuals(bboxes, frame):  # -> Any:
 
     for box in bboxes:
         # Draw each bbox
-        x1, y1, x2, y2 = box
+        x1, y1, x2, y2 = map(int, box)
         cv2.rectangle(frame, (x1, y1), (x2, y2), BBOX_COLOR.GREEN.value, 2)
 
-        bbox_center_x, bbox_center_y = calculate_center_bbox(box)
+        bbox_center_x, bbox_center_y = map(int, calculate_center_bbox(box))
         # Draw center of bounding box dot, this the value the commander is using
         cv2.circle(
             frame,

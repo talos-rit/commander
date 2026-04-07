@@ -46,6 +46,7 @@ class Tracker:
     _bbox_success_count: int = 0
     _send_frame_success_count: int = 0
     _detector: Detector
+    disable_perf_warnings: bool = False
 
     def __init__(
         self,
@@ -66,6 +67,7 @@ class Tracker:
         self.frame_delay = 1000 / config.APP_SETTINGS.frame_process_fps
         self.bbox_delay = 1000 / self.max_fps
         self._detector = Detector(model, connections, smm)
+        self.disable_perf_warnings = config.APP_SETTINGS.disable_performance_warnings
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
     def on_connection_update(self, event: ConnectionCollectionEvent, *_: Any):
@@ -155,7 +157,7 @@ class Tracker:
         current_interval = self.bbox_delay
         new_interval = max(current_interval * 0.9, 1000.0 / self.max_fps)
         self.reschedule_bbox_task(new_interval)
-        if new_interval <= 1000.0 / self.max_fps:
+        if new_interval <= 1000.0 / self.max_fps and not self.disable_perf_warnings:
             logger.warning(
                 f"Bbox polling rate is at maximum (max_fps={self.max_fps}). Consider upgrading your model or increasing max_fps in settings."
             )
@@ -166,7 +168,7 @@ class Tracker:
             return
         new_interval = min(self.bbox_delay * 1.1, 1000.0)  # Maximum 1 FPS
         self.reschedule_bbox_task(new_interval)
-        if new_interval >= 900.0:
+        if new_interval >= 900.0 and not self.disable_perf_warnings:
             logger.warning(
                 "Resource seems to be struggling. Consider using a smaller model."
             )
@@ -197,7 +199,7 @@ class Tracker:
         current_interval = self.frame_delay
         new_interval = max(current_interval * 0.9, 1000.0 / self.max_fps)
         self.reschedule_send_frame_task(new_interval)
-        if new_interval <= 1000.0 / self.max_fps:
+        if new_interval <= 1000.0 / self.max_fps and not self.disable_perf_warnings:
             logger.warning(
                 f"Frame sending rate is at maximum (max_fps={self.max_fps}). Consider upgrading your model or increasing max_fps in config."
             )
@@ -208,7 +210,7 @@ class Tracker:
             return
         new_interval = min(self.frame_delay * 1.1, 1000.0)  # Maximum 1 FPS
         self.reschedule_send_frame_task(new_interval)
-        if new_interval >= 900.0:
+        if new_interval >= 900.0 and not self.disable_perf_warnings:
             logger.warning(
                 "Resource seems to be struggling. Consider using a smaller model."
             )

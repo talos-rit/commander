@@ -1,20 +1,26 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from multiprocessing import Event, Process, Queue, shared_memory, synchronize
 from multiprocessing.managers import SharedMemoryManager
 from queue import Empty, Full
+from typing import TYPE_CHECKING, Callable
 
+import cv2
 import numpy as np
 from loguru import logger
 
-from ..connection.connection import (
-    Connection,
-    ConnectionCollection,
-    ConnectionCollectionEvent,
-)
-from ..logger import configure_logger
-from ..utils import add_termination_handler, remove_termination_handler
+from src.logger import configure_logger
+from src.tracking.types import BBox, BBoxMapping, Frame
+from src.utils import add_termination_handler, remove_termination_handler
 
-type BBoxMapping = dict[str, list[tuple[int, int, int, int]]]
+if TYPE_CHECKING:
+    from src.connection.connection import (
+        Connection,
+        ConnectionCollection,
+        ConnectionCollectionEvent,
+    )
 
 
 class DetectionWaitingForModel(Exception):
@@ -25,6 +31,19 @@ class SendingFrameTooFast(Exception):
     pass
 
 
+@dataclass
+class FrameSizeData:
+    original_size: Frame
+    """original pixel size of the frame before resizing, used to calculate scale factor for bounding boxes"""
+    size: Frame
+    """pixel size of the frame after resizing"""
+    scale_size: Frame
+    """scale factor to convert bounding boxes from resized frame back to original frame size."""
+
+
+type FrameSizeDeterminer = Callable[[np.ndarray, int, int | None], Frame]
+
+
 class ObjectModel(ABC):
     """
     This is a model class where it can handle turning image frame into bounding box
@@ -33,8 +52,60 @@ class ObjectModel(ABC):
 
     # Capture a frame from the source
     @abstractmethod
-    def detect_person(self, frame) -> list:  # bboxes
+    def detect_person(self, frame) -> list[BBox]:
         raise NotImplementedError()
+
+    @classmethod
+    def determine_frame_size(
+        cls, frame, inHeight: int | float, inWidth: int | float | None = None
+    ) -> Frame:
+        """
+        Returns height by width tuple for resizing the frame before feeding it into the model.
+        The default implementation maintains the aspect ratio of the original frame, and ensures that the dimensions are divisible by 32 to be compatible with YOLO models.
+        The inHeight and inWidth parameters can be either absolute pixel values (int) or relative scale factors (float) compared to the original frame size.
+        """
+        frameHeight, frameWidth = frame.shape[:2]
+        if inWidth is None:
+            return int(inHeight), int((frameWidth / frameHeight) * inHeight)
+        return int(inHeight), int(inWidth)
+
+    @classmethod
+    def resize_frame(
+        cls,
+        frame,
+        inHeight,
+        inWidth=None,
+        frame_size_determiner: FrameSizeDeterminer | None = None,
+        cvtColorCode=cv2.COLOR_BGR2RGB,
+    ) -> tuple[np.ndarray, FrameSizeData]:
+        frame_size_determiner = frame_size_determiner or cls.determine_frame_size
+        frameOpenCV = frame.copy()
+        original_size = frameOpenCV.shape[:2]
+        frameHeight, frameWidth = original_size
+        size = frame_size_determiner(frame, inHeight, inWidth)
+        if any(s == 0 for s in size):
+            raise ValueError(f"Invalid frame size determined: {size}")
+        scale_size = (frameHeight / size[0], frameWidth / size[1])
+        frameSmall = cv2.resize(frameOpenCV, size[::-1])
+        return cv2.cvtColor(frameSmall, cvtColorCode), FrameSizeData(
+            original_size=original_size, size=size, scale_size=scale_size
+        )
+
+    @classmethod
+    def fix_bbox_scale(cls, bbox: BBox, frame_size_data: FrameSizeData) -> BBox:
+        scaleHeight, scaleWidth = frame_size_data.scale_size
+        x1, y1, x2, y2 = bbox
+        return (
+            x1 * scaleWidth,
+            y1 * scaleHeight,
+            x2 * scaleWidth,
+            y2 * scaleHeight,
+        )
+
+    @classmethod
+    def xywh_to_xyxy(cls, bbox: BBox) -> BBox:
+        x, y, w, h = bbox
+        return (x, y, x + w, y + h)
 
 
 class DetectorInterface(ABC):
@@ -67,7 +138,7 @@ class Detector(DetectorInterface):
     model: ObjectModel.__class__ | None
     _smm: SharedMemoryManager
     _detection_process: Process | None = None
-    _bbox_queue: Queue
+    _bbox_queue: Queue[list[BBox] | None]
     _model_stopper: synchronize.Event
     _frame_ready_event: synchronize.Event
     _frame_memory: shared_memory.SharedMemory | None = None
@@ -164,7 +235,11 @@ class Detector(DetectorInterface):
         shape = self.total_frame_shape(self.connections)
         return shape[0] * shape[1] * shape[2] * np.dtype(np.uint8).itemsize
 
-    def on_connections_update(self, event: ConnectionCollectionEvent, *args):
+    def on_connections_update(self, event: ConnectionCollectionEvent, *_):  # pyright: ignore[reportIncompatibleMethodOverride]
+        from src.connection.connection import (
+            ConnectionCollectionEvent,
+        )
+
         if event in (
             ConnectionCollectionEvent.ADDED,
             ConnectionCollectionEvent.REMOVED,
@@ -174,9 +249,6 @@ class Detector(DetectorInterface):
     def send_input(self):
         if self._frame_ready_event.is_set():
             if not self.waiting_startup:
-                logger.warning(
-                    "Previous frame is still being processed, skipping sending new frame to detector."
-                )
                 raise SendingFrameTooFast(
                     "Previous frame is still being processed, skipping sending new frame to detector."
                 )
@@ -228,9 +300,7 @@ class Detector(DetectorInterface):
         Throws ValueError if the bbox queue is closed.
         """
         try:
-            raw_bboxes: None | list[tuple[int, int, int, int]] = self._bbox_queue.get(
-                block=False
-            )
+            raw_bboxes: None | list[BBox] = self._bbox_queue.get(block=False)
         except (ValueError, Empty) as e:
             if self.waiting_startup:
                 raise DetectionWaitingForModel(
@@ -351,7 +421,11 @@ class Detector(DetectorInterface):
                 # Not clear immediately to make a copy here safely
                 raw_frame = np.copy(frame)
                 frame_ready_event.clear()
-                bboxes = model.detect_person(frame=raw_frame)
+                try:
+                    bboxes = model.detect_person(frame=raw_frame)
+                except Exception as e:
+                    logger.error(f"Error during detection: {e}")
+                    continue
                 if bbox_queue.full():
                     logger.warning("bbox_queue is full, deleting oldest output")
                     try:

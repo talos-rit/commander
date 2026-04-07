@@ -4,7 +4,7 @@ from typing import Literal
 
 import darkdetect
 
-from src.utils import get_file_path
+from src.path_utils import get_file_path
 
 ASSET_DIRPATH = path.dirname(path.abspath(__file__))
 
@@ -20,7 +20,7 @@ def get_icon(
     sys_platform = platform.system()
     if sys_platform == "Linux":
         # Do this since linux doesn't support icons like windows and mac
-        return None, None 
+        return None, None
     is_dark_mode = (
         override_is_dark_mode or darkdetect.isDark()
         if darkdetect.isDark() is not None
