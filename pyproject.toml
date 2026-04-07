@@ -25,6 +25,7 @@ dependencies = [
     "pyobjc-framework-Cocoa; sys_platform == 'darwin'",
     "pyvirtualcam",
     "lapx>=0.9.4",
+    "watchdog>=6.0.0",
 ]
 name = "commander"
 requires-python = "==3.12.*"

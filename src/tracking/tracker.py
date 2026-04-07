@@ -5,6 +5,7 @@ from typing import Any
 
 from loguru import logger
 
+from src import config
 from src.scheduler import IterativeTask, Scheduler
 from src.talos_app import ConnectionCollection
 from src.tracking.detector import (
@@ -18,7 +19,6 @@ from src.utils import (
     remove_termination_handler,
 )
 
-from ..config.load import APP_SETTINGS
 from ..connection.connection import ConnectionCollectionEvent
 from ..thread_scheduler import ThreadScheduler
 
@@ -63,8 +63,8 @@ class Tracker:
         """
         self._scheduler = scheduler
         self.connections = connections
-        self.max_fps = APP_SETTINGS.bbox_max_fps
-        self.frame_delay = 1000 / APP_SETTINGS.frame_process_fps
+        self.max_fps = config.APP_SETTINGS.bbox_max_fps
+        self.frame_delay = 1000 / config.APP_SETTINGS.frame_process_fps
         self.bbox_delay = 1000 / self.max_fps
         self._detector = Detector(model, connections, smm)
         self.disable_perf_warnings = APP_SETTINGS.disable_performance_warnings
