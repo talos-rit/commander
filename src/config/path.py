@@ -1,6 +1,6 @@
 import os
 
-from src.utils import get_file_path
+from src.path_utils import get_file_path
 
 _CONFIG_DIR = os.path.join(os.path.dirname(__file__), "../../config")
 ROBOT_CONFIG_FILENAME = "robot_configs.local.yaml"

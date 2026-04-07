@@ -233,9 +233,6 @@ class App:
         if option is not None and len(self.connections) == 0:
             logger.warning("No connections available, skipping model initialization")
             return False
-        if self.director is not None and self.director.is_active():
-            self.director.stop_auto_control()
-            logger.info("Director stopped")
         if option is None:
             self.tracker.swap_model(None)
             self.model_selection = None
@@ -267,6 +264,7 @@ class App:
         """Sets the active connection's manual/automatic control mode"""
         if self.director is None:
             return logger.error("No active director")
+        logger.debug("Setting manual control to {}", manual)
         self.director.set_manual_control(manual=manual)
 
     def set_control_mode(self, ctrl_mode: ControlMode) -> ControlMode:

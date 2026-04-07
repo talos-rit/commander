@@ -1,11 +1,11 @@
 import sys
 
+from src.path_utils import get_file_path
 from src.utils import (
     add_termination_handler,
     calculate_acceptable_box,
-    calculate_center_box,
     calculate_center_bbox,
-    get_file_path,
+    calculate_center_box,
     id_generator,
     remove_termination_handler,
     start_termination_guard,
@@ -30,6 +30,7 @@ def test_get_file_path_uses_meipass_when_frozen(monkeypatch, tmp_path):
 def test_calculate_center_box_and_bbox():
     assert calculate_center_box(0, 0, 10, 10) == (5, 5)
     assert calculate_center_bbox((0, 0, 10, 10)) == (5, 5)
+
 
 def test_calculate_acceptable_box_default_percent(monkeypatch):
     # Using a predictable default percent from DEFAULT_ROBOT_CONFIG (likely 0.5)

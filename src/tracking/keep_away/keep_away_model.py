@@ -12,6 +12,7 @@ from src.tracking.media_pipe.model_path import (
     path_efficientdet_lite0,
     path_pose_landmarker_lite,
 )
+from src.tracking.types import BBox
 from src.utils import calculate_acceptable_box
 
 
@@ -23,7 +24,7 @@ class KeepAwayModel(ObjectModel):
     keep_away_mode = False
     countdown_start = None
     game_over = True
-    speaker_bbox: tuple[int, int, int, int] | None = None
+    speaker_bbox: BBox | None = None
 
     # The tracker class is responsible for capturing frames from the source and detecting people in the frames
     def __init__(self):
@@ -34,7 +35,6 @@ class KeepAwayModel(ObjectModel):
             category_allowlist=["person"],
         )
         self.object_detector = vision.ObjectDetector.create_from_options(options)
-
         pose_base_options = python.BaseOptions(
             model_asset_path=path_pose_landmarker_lite
         )
@@ -45,45 +45,20 @@ class KeepAwayModel(ObjectModel):
         self.pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
 
     # Detect people in the frame
-    def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
+    def detectPerson(self, object_detector, frame, inHeight=500, inWidth=None):
         """
         Uses mediapipe to find all people in the frame and returns the bounding boxes of those people.
         """
-        frameOpenCV = frame.copy()
-        frameHeight = frameOpenCV.shape[0]
-        frameWidth = frameOpenCV.shape[1]
-
-        if not inWidth:
-            inWidth = int((frameWidth / frameHeight) * inHeight)
-
-        scaleHeight = frameHeight / inHeight
-        scaleWidth = frameWidth / inWidth
-
-        frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
-        frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
-
+        frameRGB, meta = self.resize_frame(frame, inWidth, inHeight)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
         detection_result = object_detector.detect(mp_image)
         if not detection_result:
             return []
         bboxes = []
         for detection in detection_result.detections:
-            # print(detection)
             bboxC = detection.bounding_box
-            # print(bboxC)
-
-            x1 = bboxC.origin_x
-            y1 = bboxC.origin_y
-            x2 = bboxC.origin_x + bboxC.width
-            y2 = bboxC.origin_y + bboxC.height
-
-            # Scale bounding box back to original frame size
-            cvRect = [
-                int(x1 * scaleWidth),
-                int(y1 * scaleHeight),
-                int(x2 * scaleWidth),
-                int(y2 * scaleHeight),
-            ]
+            xywh = bboxC.origin_x, bboxC.origin_y, bboxC.width, bboxC.height
+            cvRect = self.fix_bbox_scale(self.xywh_to_xyxy(xywh), meta)
             bboxes.append(cvRect)
         return bboxes
 

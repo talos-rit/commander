@@ -10,6 +10,9 @@ from src.tracking.media_pipe.model_path import (
     path_efficientdet_lite0,
     path_pose_landmarker_lite,
 )
+from src.tracking.types import BBox
+
+from .media_pipe_model import detection_result_to_xywh
 
 
 class MediaPipePoseModel(ObjectModel):
@@ -19,7 +22,7 @@ class MediaPipePoseModel(ObjectModel):
     lost_threshold = 100
     speaker_color = None
     color_threshold = 15
-    speaker_bbox: tuple[int, int, int, int] | None = None
+    speaker_bbox: BBox | None = None
 
     def __init__(
         self,
@@ -42,23 +45,11 @@ class MediaPipePoseModel(ObjectModel):
         self.pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
 
     # Detect people in the frame
-    def detectPerson(self, object_detector, frame, inHeight=500, inWidth=0):
+    def detect_person(self, object_detector, frame, inHeight=500, inWidth=None):
         """
         Uses mediapipe to find all people in the frame and returns the bounding boxes of those people.
         """
-        frameOpenCV = frame.copy()
-        frameHeight = frameOpenCV.shape[0]
-        frameWidth = frameOpenCV.shape[1]
-
-        if not inWidth:
-            inWidth = int((frameWidth / frameHeight) * inHeight)
-
-        scaleHeight = frameHeight / inHeight
-        scaleWidth = frameWidth / inWidth
-
-        frameSmall = cv2.resize(frameOpenCV, (inWidth, inHeight))
-        frameRGB = cv2.cvtColor(frameSmall, cv2.COLOR_BGR2RGB)
-
+        frameRGB, size = self.resize_frame(frame, inHeight, inWidth)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
         detection_result = object_detector.detect(mp_image)
         if not detection_result:
@@ -66,23 +57,8 @@ class MediaPipePoseModel(ObjectModel):
 
         bboxes = []
         for detection in detection_result.detections:
-            # print(detection)
-            bboxC = detection.bounding_box
-            # print(bboxC)
-
-            x1 = bboxC.origin_x
-            y1 = bboxC.origin_y
-            x2 = bboxC.origin_x + bboxC.width
-            y2 = bboxC.origin_y + bboxC.height
-
-            # Scale bounding box back to original frame size
-            cvRect = [
-                int(x1 * scaleWidth),
-                int(y1 * scaleHeight),
-                int(x2 * scaleWidth),
-                int(y2 * scaleHeight),
-            ]
-            bboxes.append(cvRect)
+            xywh = detection_result_to_xywh(detection)
+            bboxes.append(self.fix_bbox_scale(self.xywh_to_xyxy(xywh), size))
         return bboxes
 
     def is_x_pose(self, pose_landmarks):
@@ -117,78 +93,6 @@ class MediaPipePoseModel(ObjectModel):
                 return True
 
         return False
-
-    def detect_person(self, frame):
-        """
-        Finds all the people in the frame, and then decides what to send to the director.
-        Looks for x pose to determine primary speaker.
-        Uses color matching to maintain that primary speaker.
-        Sends primary speaker box to the director.
-        """
-        bboxes = self.detectPerson(self.object_detector, frame)
-
-        if self.speaker_bbox is None:
-            # If no speaker is locked in yet, look for the X pose.
-            for box in bboxes:
-                bbox = box
-                x1, y1, x2, y2 = bbox
-                cropped = frame[y1:y2, x1:x2]
-                if cropped.size == 0:
-                    continue
-
-                cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cropped_rgb)
-                # Run pose detection on the cropped image.
-                pose_result = self.pose_detector.detect(mp_image)
-                if not pose_result or not pose_result.pose_landmarks:
-                    continue
-
-                # Check for the X formation.
-                if not self.is_x_pose(pose_result.pose_landmarks[0]):
-                    continue
-
-                self.speaker_bbox = bbox
-
-                smaller_box = self.get_cropped_box(box, frame)
-                color = self.get_dominant_color(smaller_box)
-                self.speaker_color = color
-                logger.info(f"Speaker detected with X pose: {self.speaker_bbox}")
-                return self.speaker_bbox
-
-            # While speaker not yet locked, return all detected bounding boxes.
-            # This will just have the director track whichever it sees first. If there is only one person in frame this is fine
-            return bboxes
-
-        # If frame is empty after detecting a speaker, increment the lost speaker counter
-        self.lost_counter += 1
-        if len(bboxes) != 0:
-            # Speaker is already locked. Find the current detection that is closest to the stored speaker bbox. Based solely on color.
-            best_bbox = None
-            best_candidate_color = None
-
-            for bbox in bboxes:
-                x1, y1, x2, y2 = bbox
-                smaller_box = self.get_cropped_box(bbox, frame)
-                color = self.get_dominant_color(smaller_box)
-                # Compute the Euclidean distance between the candidate color and the stored speaker color.
-                color_diff = abs((self.speaker_color or 0) - color)
-
-                if color_diff < self.color_threshold:
-                    best_bbox = bbox
-                    best_candidate_color = color
-
-            if best_bbox is not None:
-                # Found a candidate that has similar color reset the counter
-                self.speaker_bbox = best_bbox
-                self.speaker_color = best_candidate_color
-                self.lost_counter = 0
-
-        if self.lost_counter >= self.lost_threshold:
-            logger.info("Speaker lost for too many frames. Resetting single speaker.")
-            self.speaker_bbox = None
-            self.speaker_color = None
-            self.lost_counter = 0
-        return self.speaker_bbox
 
     def get_cropped_box(self, bbox, frame):
         """

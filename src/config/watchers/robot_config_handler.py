@@ -13,9 +13,9 @@ from watchdog.events import (
     FileSystemEventHandler,
 )
 
-from ...utils import get_file_path
-from ..path import BACKUP_DIR, ROBOT_CONFIGS_PATH
-from ..schema.robot import RobotConfigs
+from src.config.path import BACKUP_DIR, ROBOT_CONFIGS_PATH
+from src.config.schema.robot import RobotConfigs
+from src.path_utils import get_file_path
 
 
 def take_backup() -> str:
