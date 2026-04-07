@@ -14,7 +14,7 @@ class BasicModel(ObjectModel):
         self.faceCascade = cv2.CascadeClassifier(MODEL_FILE)
 
     # Detect faces in the frame
-    def detect_person(self, frame, inHeight=500, inWidth=0):
+    def detect_person(self, frame, inHeight=500, inWidth=None):
         frameGray, meta = self.resize_frame(
             frame, inHeight, inWidth, cvtColorCode=cv2.COLOR_BGR2GRAY
         )

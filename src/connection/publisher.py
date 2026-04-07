@@ -22,13 +22,13 @@ class Direction(IntEnum):
     """Directional Enum for interface controls
 
     The values can be summed to get combined directions(from -4 to 4)
-    -4: DL, -3: L, -2: UL, -1: D, 0: None, 1: U, 2: DR, 3: R, 4: UR
+    -4: DR, -3: R, -2: UR, -1: D, 0: None, 1: U, 2: DL, 3: L, 4: UL
     """
 
     UP = 1
     DOWN = -1
-    RIGHT = 3
-    LEFT = -3
+    LEFT = 3
+    RIGHT = -3
 
     @staticmethod
     def toDirectionTuple(sum_direction: int) -> tuple[int, int]:

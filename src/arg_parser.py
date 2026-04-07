@@ -1,5 +1,6 @@
 import argparse
-from src.model_options import MODEL_OPTIONS
+
+from src.tracking import MODEL_OPTIONS
 
 
 def _create_arg_parser():

@@ -24,8 +24,8 @@ dependencies = [
     "uvicorn>=0.40.0",
     "pyobjc-framework-Cocoa; sys_platform == 'darwin'",
     "pyvirtualcam",
-    "lapx>=0.9.4",
     "watchdog>=6.0.0",
+    "lapx>=0.9.4",
 ]
 name = "commander"
 requires-python = "==3.12.*"
@@ -42,7 +42,13 @@ commander-tk = "talos:tk_interface"
 commander-pyside = "talos:pyside_interface"
 
 [dependency-groups]
-dev = ["pyinstaller>=6.16.0", "textual-dev>=1.8.0", "pytest", "pytest-cov", "pytest-mock"]
+dev = [
+    "pyinstaller>=6.16.0",
+    "textual-dev>=1.8.0",
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+]
 
 [project.optional-dependencies]
 mediapipe = [
@@ -75,7 +81,5 @@ include = ["src*", "assets*", "config*"]
 addopts = ["--cov=src", "--cov-report=html"]
 
 [tool.coverage.run]
-omit =[
-    "tests/*"
-]
+omit = ["tests/*"]
 relative_files = true

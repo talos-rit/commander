@@ -5,20 +5,22 @@ from dataclasses import dataclass
 from multiprocessing import Event, Process, Queue, shared_memory, synchronize
 from multiprocessing.managers import SharedMemoryManager
 from queue import Empty, Full
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import cv2
 import numpy as np
 from loguru import logger
 
-from src.connection.connection import (
-    Connection,
-    ConnectionCollection,
-    ConnectionCollectionEvent,
-)
 from src.logger import configure_logger
 from src.tracking.types import BBox, BBoxMapping, Frame
 from src.utils import add_termination_handler, remove_termination_handler
+
+if TYPE_CHECKING:
+    from src.connection.connection import (
+        Connection,
+        ConnectionCollection,
+        ConnectionCollectionEvent,
+    )
 
 
 class DetectionWaitingForModel(Exception):
@@ -233,7 +235,11 @@ class Detector(DetectorInterface):
         shape = self.total_frame_shape(self.connections)
         return shape[0] * shape[1] * shape[2] * np.dtype(np.uint8).itemsize
 
-    def on_connections_update(self, event: ConnectionCollectionEvent, *args):
+    def on_connections_update(self, event: ConnectionCollectionEvent, *_):  # pyright: ignore[reportIncompatibleMethodOverride]
+        from src.connection.connection import (
+            ConnectionCollectionEvent,
+        )
+
         if event in (
             ConnectionCollectionEvent.ADDED,
             ConnectionCollectionEvent.REMOVED,

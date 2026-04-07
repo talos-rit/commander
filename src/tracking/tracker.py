@@ -67,7 +67,7 @@ class Tracker:
         self.frame_delay = 1000 / config.APP_SETTINGS.frame_process_fps
         self.bbox_delay = 1000 / self.max_fps
         self._detector = Detector(model, connections, smm)
-        self.disable_perf_warnings = APP_SETTINGS.disable_performance_warnings
+        self.disable_perf_warnings = config.APP_SETTINGS.disable_performance_warnings
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
     def on_connection_update(self, event: ConnectionCollectionEvent, *_: Any):
