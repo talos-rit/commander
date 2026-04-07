@@ -2,7 +2,7 @@ import pytest
 
 from src.arg_parser import _create_arg_parser
 from src.config.schema.app import _parse_args
-from src.model_options import MODEL_OPTIONS
+from src.tracking import MODEL_OPTIONS
 
 
 def test_parse_args_debug_applies_overrides():
