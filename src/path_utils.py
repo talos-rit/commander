@@ -13,6 +13,7 @@ def get_file_path(relative_path: str) -> str:
     Returns:
         str: The absolute file path if the program is compiled with PyInstaller, otherwise the relative path.
     """
+    relative_path = path.normpath(relative_path)
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         return path.join(sys._MEIPASS, relative_path)  # pyright: ignore[reportAttributeAccessIssue]
     return relative_path
