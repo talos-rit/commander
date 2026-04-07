@@ -6,15 +6,15 @@ from src.connection.operator_connections import OperatorConnection
 from src.icd_config import Command, CTypesInt, toBytes
 
 DIRECTION_OFFSET_MAPPING: dict[int, tuple[int, int]] = {
+    -4: (-1, 1),
+    -3: (-1, 0),
+    -2: (-1, -1),
+    -1: (0, -1),
     0: (0, 0),
     1: (0, 1),
-    -1: (0, -1),
     2: (1, 1),
-    -2: (-1, -1),
     3: (1, 0),
-    -3: (-1, 0),
     4: (1, -1),
-    -4: (-1, 1),
 }
 
 
@@ -22,13 +22,21 @@ class Direction(IntEnum):
     """Directional Enum for interface controls
 
     The values can be summed to get combined directions(from -4 to 4)
-    -4: DR, -3: R, -2: UR, -1: D, 0: None, 1: U, 2: DL, 3: L, 4: UL
+    -4: DR,
+    -3: R,
+    -2: UR,
+    -1: D,
+    0: None,
+    1: U,
+    2: DL,
+    3: L,
+    4: UL
     """
 
     UP = 1
     DOWN = -1
-    LEFT = 3
-    RIGHT = -3
+    RIGHT = 3
+    LEFT = -3
 
     @staticmethod
     def toDirectionTuple(sum_direction: int) -> tuple[int, int]:
@@ -92,12 +100,13 @@ class Publisher:
         """
         Starts/maintains a continuous polar pan rotation.
 
-        Args:
-        Direction   INT8    -4 to 4 (see Direction enum for mapping)
-
         The values in the body describe whether or not the arm is rotating in a given direction.
         1 rotates counter-clockwise along the axis of movement, -1 rotates clockwise along the axis of
         movement and 0 means no rotation.
+
+        Args:
+            Direction   INT8    -4 to 4 (see Direction enum for mapping)
+
         """
         assert dir_sum in range(-4, 5), "Direction sum must be between -4 and 4"
         x_dir, y_dir = Direction.toDirectionTuple(dir_sum)
@@ -109,13 +118,14 @@ class Publisher:
         """
         Starts/maintains a continuous polar pan rotation.
 
-        Args:
-        Moving Azimuth     INT8    -1, 0, or 1
-        Moving Altitude    INT8    -1, 0, or 1
-
         The values in the body describe whether or not the arm is rotating in a given direction.
         1 rotates counter-clockwise along the axis of movement, -1 rotates clockwise along the axis of
         movement and 0 means no rotation.
+
+        Args:
+            Moving Azimuth     INT8    -1, 0, or 1
+            Moving Altitude    INT8    -1, 0, or 1
+
         """
         assert assert_normalized(moving_azimuth_int, moving_altitude_int)
 
@@ -161,9 +171,10 @@ class Publisher:
         If the reference string is empty,
         the Anchor value is ignored and the position is always treated as if anchor is set to false.
 
-        Name    CHAR[]      Name descriptor for the position (non null terminated)
-        Anchor  BOOLEAN     Whether the position will move relative to the parent position (0x01 for True, 0x00 for False)
-        Parent  CHAR[]      Another previously saved position to act as a parent (or refernce) position
+        Args:
+            Name    CHAR[]      Name descriptor for the position (non null terminated)
+            Anchor  BOOLEAN     Whether the position will move relative to the parent position (0x01 for True, 0x00 for False)
+            Parent  CHAR[]      Another previously saved position to act as a parent (or refernce) position
         """
 
         name_len_bytes = toBytes(len(name), CTypesInt.UINT8)
