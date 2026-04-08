@@ -6,15 +6,15 @@ from src.connection.operator_connections import OperatorConnection
 from src.icd_config import Command, CTypesInt, toBytes
 
 DIRECTION_OFFSET_MAPPING: dict[int, tuple[int, int]] = {
-    0: (0, 0),
-    1: (0, 1),
-    -1: (0, -1),
-    2: (1, 1),
-    -2: (-1, -1),
-    3: (1, 0),
+    -4: (-1, -1),
     -3: (-1, 0),
-    4: (1, -1),
-    -4: (-1, 1),
+    -2: (-1, 1),
+    -1: (0, 1),
+    0: (0, 0),
+    1: (0, -1),
+    2: (1, -1),
+    3: (1, 0),
+    4: (1, 1),
 }
 
 
@@ -22,7 +22,15 @@ class Direction(IntEnum):
     """Directional Enum for interface controls
 
     The values can be summed to get combined directions(from -4 to 4)
-    -4: DR, -3: R, -2: UR, -1: D, 0: None, 1: U, 2: DL, 3: L, 4: UL
+    -4: DL,
+    -3: L,
+    -2: UL,
+    -1: D,
+    0: None,
+    1: U,
+    2: DR,
+    3: R,
+    4: UR
     """
 
     UP = 1
