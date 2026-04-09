@@ -25,6 +25,7 @@ dependencies = [
     "pyvirtualcam",
     "watchdog>=6.0.0",
     "lapx>=0.9.4",
+    "pyqt6>=6.11.0",
 ]
 name = "commander"
 requires-python = "==3.12.*"
