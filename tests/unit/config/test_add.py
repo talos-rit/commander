@@ -7,15 +7,15 @@ from src.config.schema.robot import ConnectionConfig
 
 def test_add_config_writes_to_file_and_updates_global(monkeypatch, tmp_path):
     # Set up a clean global map and temp file
-    monkeypatch.setattr(add_module, "ROBOT_CONFIGS", {})
+    monkeypatch.setattr(add_module.global_config, "ROBOT_CONFIGS", {})
     temp_file = tmp_path / "robot_configs.yaml"
     monkeypatch.setattr(add_module, "ROBOT_CONFIGS_PATH", str(temp_file))
 
     config = ConnectionConfig(socket_host="host1", socket_port=1234, camera_index=0)
     add_module.add_config(config)
 
-    assert "host1" in add_module.ROBOT_CONFIGS
-    assert add_module.ROBOT_CONFIGS["host1"].socket_port == 1234
+    assert "host1" in add_module.global_config.ROBOT_CONFIGS
+    assert add_module.global_config.ROBOT_CONFIGS["host1"].socket_port == 1234
 
     # File should contain a YAML mapping for the new host
     loaded = yaml.safe_load(temp_file.read_text())
@@ -32,7 +32,7 @@ def test_add_config_writes_to_file_and_updates_global(monkeypatch, tmp_path):
 )
 def test_validate_connection_config_invalid_inputs(socket_host, socket_port, camera_index, expected_error, monkeypatch):
     # Ensure no existing entries to avoid "already exists" error
-    monkeypatch.setattr(add_module, "ROBOT_CONFIGS", {})
+    monkeypatch.setattr(add_module.global_config, "ROBOT_CONFIGS", {})
 
     valid, cfg, errors = add_module.validate_connection_config(socket_host, socket_port, camera_index)
 
@@ -42,9 +42,9 @@ def test_validate_connection_config_invalid_inputs(socket_host, socket_port, cam
 
 
 def test_validate_connection_config_duplicate_host(monkeypatch):
-    monkeypatch.setattr(add_module, "ROBOT_CONFIGS", {"host1": object()})
+    monkeypatch.setattr(add_module.global_config, "ROBOT_CONFIGS", {"host1": object()})
 
-    valid, cfg, errors = add_module.validate_connection_config("host1", 1234, 0)
+    valid, cfg, errors = add_module.validate_connection_config("host1", 1234, "0")
 
     assert not valid
     assert cfg is None
@@ -52,9 +52,9 @@ def test_validate_connection_config_duplicate_host(monkeypatch):
 
 
 def test_validate_connection_config_success(monkeypatch):
-    monkeypatch.setattr(add_module, "ROBOT_CONFIGS", {})
+    monkeypatch.setattr(add_module.global_config, "ROBOT_CONFIGS", {})
 
-    valid, cfg, errors = add_module.validate_connection_config("host2", "5678", 0)
+    valid, cfg, errors = add_module.validate_connection_config("host2", "5678", "0")
 
     assert valid
     assert errors == []

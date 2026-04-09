@@ -48,6 +48,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-mock",
+    "httpx",
 ]
 
 [project.optional-dependencies]

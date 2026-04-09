@@ -1,0 +1,60 @@
+name: Pytest
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras --group dev
+
+      - name: Run pytest and generate reports
+        id: pytest_run
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          uv run pytest \
+            --junitxml=pytest-report.xml \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html
+
+      - name: Build readable test report
+        if: always()
+        run: python create_pytest_report.py
+
+      - name: Publish GitHub summary
+        if: always()
+        run: cat reports/pytest-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-reports
+          retention-days: 14
+          path: |
+            reports/pytest-report.md
+            pytest-report.xml
+            coverage.xml
+            htmlcov/
+
+      - name: Fail job if tests failed
+        if: steps.pytest_run.outcome == 'failure'
+        run: |
+          echo "Pytest failed. See summary and artifacts for details."
+          exit 1
