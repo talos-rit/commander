@@ -199,3 +199,7 @@ screen /dev/ttyUSB0 9600
 ```
 Hit enter a few times to see if `>` shows up on each line. If it does, then the arm is connected properly. If not, try restarting the robot arm and running the command again.
 After testing, exit the screen session by typing `Ctrl+A` then `K` then `Y`.
+
+## Known issues
+Some devices have trouble using pySide interface due to pyQT. 
+Currently we don't have a fix for resolving Qt but we suggest switching to other interfaces.
