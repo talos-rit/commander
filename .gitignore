@@ -170,3 +170,6 @@ cython_debug/
 # Config
 config/**/*.local.yaml
 config/**/*.backup*
+
+# VSCODE
+.vscode/mcp.json
