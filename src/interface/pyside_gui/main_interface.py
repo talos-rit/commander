@@ -109,9 +109,6 @@ class PySide6Interface(QMainWindow):
         # Setup keyboard controls
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        # Initial UI state
-        self.set_manual_control_btn_state(False)
-
     def setup_ui(self):
         """Setup the main UI layout"""
         central_widget = QWidget()
@@ -408,7 +405,7 @@ class PySide6Interface(QMainWindow):
             self.automatic_slider.setEnabled(True)
 
         # Update control mode
-        if connection.is_manual:
+        if connection.is_manual or self.app.get_manual_control():
             self.set_manual_control_btn_state(True)
             self.automatic_slider.setChecked(False)
         else:
