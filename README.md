@@ -201,5 +201,5 @@ Hit enter a few times to see if `>` shows up on each line. If it does, then the 
 After testing, exit the screen session by typing `Ctrl+A` then `K` then `Y`.
 
 ## Known issues
-Some devices have trouble using pySide interface due to pyQT. 
+Some devices have trouble using PySide interface due to QT installation issues. 
 Currently we don't have a fix for resolving Qt but we suggest switching to other interfaces.
