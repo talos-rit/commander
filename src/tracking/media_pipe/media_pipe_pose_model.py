@@ -45,13 +45,13 @@ class MediaPipePoseModel(ObjectModel):
         self.pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
 
     # Detect people in the frame
-    def detect_person(self, object_detector, frame, inHeight=500, inWidth=None):
+    def detect_person(self, frame, inHeight=500, inWidth=None):
         """
         Uses mediapipe to find all people in the frame and returns the bounding boxes of those people.
         """
         frameRGB, size = self.resize_frame(frame, inHeight, inWidth)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
-        detection_result = object_detector.detect(mp_image)
+        detection_result = self.object_detector.detect(mp_image)
         if not detection_result:
             return []
 

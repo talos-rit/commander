@@ -10,9 +10,6 @@ if sys.platform == "darwin" or sys.platform == "linux":
     multiprocessing.set_start_method("spawn", force=True)
 
 from src.arg_parser import ARG_PARSER
-from src.interface.pyside_gui.main_interface import PySide6Interface
-from src.interface.textual_tui.main_interface import TextualInterface
-from src.interface.tk_gui.main_interface import TKInterface
 from src.logger import configure_logger
 from src.talos_app import App
 from src.talos_endpoint import TalosEndpoint
@@ -29,8 +26,6 @@ if sys.platform == "win32":
     )
     if pyside_dir.exists():
         os.add_dll_directory(str(pyside_dir))
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication
 
 
 def create_args():
@@ -47,6 +42,8 @@ def run_server(app: App):
 
 
 def terminal_interface(args=create_args()):
+    from src.interface.textual_tui.main_interface import TextualInterface
+
     configure_logger(True)
     smm = multiprocessing.managers.SharedMemoryManager()
     interface = TextualInterface(args=args)
@@ -58,6 +55,8 @@ def terminal_interface(args=create_args()):
 
 
 def tk_interface(args=create_args()):
+    from src.interface.tk_gui.main_interface import TKInterface
+
     configure_logger()
     interface = TKInterface(args)
     # TODO: TKinter is incapable of running this much resource intensive tasks
@@ -68,6 +67,11 @@ def tk_interface(args=create_args()):
 
 
 def pyside_interface(args=create_args()):
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QApplication
+
+    from src.interface.pyside_gui.main_interface import PySide6Interface
+
     configure_logger()
     app = QApplication(sys.argv)
 
