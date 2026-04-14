@@ -2,6 +2,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/talos-rit/commander)
 
 Allows robot arms to be repurposed as camera arms.
+Python application that tracks a subject using a camera feed, interprets the subject's position, and sends commands to a robot arm to move a camera accordingly.
 
 ## Installation
 
