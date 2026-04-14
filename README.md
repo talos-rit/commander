@@ -109,15 +109,34 @@ uv run pytest tests/integration/
 ```
 
 ## Setting up the virtual camera
-In order to stream video out of commander, you will need to set up a virtual camera on your computer. This will allow you to select the commander video stream as a camera input in other applications (e.g. zoom, obs, etc.). Please refer to the pyvirtualcam documentation for instructions on how to set up a virtual camera on your operating system: https://github.com/letmaik/pyvirtualcam.
-**Note: If you are on MacOS or Windows the default backend for pyvirtualcam is obs while v4l2 is the default for Linux. If you want to use the obs backend on MacOS or Windows, you will need to have obs installed and running. Refer to pyvirtualcam's documentation for additional setup instructions. If you want to use the v4l2 backend on Linux, you will need to have v4l2loopback installed and set up.**
+In order to stream video out of commander, you will need to set up a virtual camera on your computer. This will allow you to select the commander video stream as a camera input in other applications (e.g. zoom, obs, etc.). 
+
+
+![image](docs-assets/OBS-Sources-SS.png)
+
+1. find sources window
+2. click "+"
+3. select "Media Source"
+4. unselect "Local File"
+5. Add video feed endpoint into "input" textbox (for example: "rtsp://unctalos.student.rit.edu:8554/camera", "rtsp://localhost:8554/camera")
+
+![image](docs-assets/OBS-SS.png)
+
+6. find "Controls" window
+7. click "Start Virtual Camera"
+
+This should add virtual camera as an option for camera input in zoom for example.
+
+Please refer to the pyvirtualcam documentation for instructions on how to set up a virtual camera on your operating system: https://github.com/letmaik/pyvirtualcam.
+
+> [!NOTE] If you are on MacOS or Windows the default backend for pyvirtualcam is obs while v4l2 is the default for Linux. If you want to use the obs backend on MacOS or Windows, you will need to have obs installed and running. Refer to pyvirtualcam's documentation for additional setup instructions. If you want to use the v4l2 backend on Linux, you will need to have v4l2loopback installed and set up.**
 
 ## Static Analysis
 To run static analysis using sonarqube locally, you can use the provided docker-compose file to set up a SonarQube instance. The following steps outline how to setup your environment so that you can run SonarQube properly.
 
 1. Make sure you have docker and docker-compose installed on your machine.
 
-2. Setup the .env file
+2. Copy the .env.example file to .env
 ```bash
 cp .env.example .env
 ```
