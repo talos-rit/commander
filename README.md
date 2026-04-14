@@ -30,38 +30,6 @@ You can also opt in to install several other object detection models.
     * Run `uv sync --all-extras`
     * This will add all of the extra model options in the dropdown menu
 
-## Setting up the virtual camera
-In order to stream video out of commander, you will need to set up a virtual camera on your computer. This will allow you to select the commander video stream as a camera input in other applications (e.g. zoom, obs, etc.). Please refer to the pyvirtualcam documentation for instructions on how to set up a virtual camera on your operating system: https://github.com/letmaik/pyvirtualcam.
-**Note: If you are on MacOS or Windows the default backend for pyvirtualcam is obs while v4l2 is the default for Linux. If you want to use the obs backend on MacOS or Windows, you will need to have obs installed and running. Refer to pyvirtualcam's documentation for additional setup instructions. If you want to use the v4l2 backend on Linux, you will need to have v4l2loopback installed and set up.**
-
-### Creating an executable
-[Pyinstaller](https://pyinstaller.org/en/stable/) can be used to create an executable (on any OS) for easier launching/distribution of the application. Follow the steps below to create an executable:
-
->*This is especially recommended if you want to use the talos executable on a Linux machine since the executable can be upwards of 3.9 GB, making it hard for us to easily create and distribute while using the free tier of GitHub Actions.*
-
-1. Install pyinstaller:
-    
-    If using uv, then the dev dependencies should be installed by default by running:
-    ```bash
-    uv sync --group dev
-    ```
-    If not using uv:
-    ```bash
-    pip install pyinstaller
-    ```
-
-2. Run the pyinstaller command to create an executable. This will create a `dist` folder with the executable `talos` inside.
-
-    Using uv:
-    ```bash
-    uv run pyinstaller_runner.py
-    ```
-    Otherwise:
-    ```bash
-    python pyinstaller_runner.py
-    ```
-
-
 ## Known bugs with arm based macs
 1. **Installation fails to build pybullet**
 If pybullet build fails set a flag during installation:
@@ -79,13 +47,6 @@ Fix: `brew install tcl-tk`
 if this doesn't work, reinstall python for uv
 `uv python uninstall 3.12 && uv python install 3.12`
 
-## Setup
-
-Activate your virtual environment (update 2025: no longer needed with uv)
-
-```bash
-source venv/py3.12/bin/activate
-```
 
 ## Running
 
@@ -146,6 +107,10 @@ To run only integration tests:
 ```bash
 uv run pytest tests/integration/
 ```
+
+## Setting up the virtual camera
+In order to stream video out of commander, you will need to set up a virtual camera on your computer. This will allow you to select the commander video stream as a camera input in other applications (e.g. zoom, obs, etc.). Please refer to the pyvirtualcam documentation for instructions on how to set up a virtual camera on your operating system: https://github.com/letmaik/pyvirtualcam.
+**Note: If you are on MacOS or Windows the default backend for pyvirtualcam is obs while v4l2 is the default for Linux. If you want to use the obs backend on MacOS or Windows, you will need to have obs installed and running. Refer to pyvirtualcam's documentation for additional setup instructions. If you want to use the v4l2 backend on Linux, you will need to have v4l2loopback installed and set up.**
 
 ## Static Analysis
 To run static analysis using sonarqube locally, you can use the provided docker-compose file to set up a SonarQube instance. The following steps outline how to setup your environment so that you can run SonarQube properly.
