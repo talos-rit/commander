@@ -2,11 +2,7 @@
 # correct dependencies based on hardware our users are likely to have
 name: PyInstaller Build
 
-# on:
-#   push:
-#     branches:
-#       - main
-  # pull_request: # Uncomment this to test the action in your PR if you change this file
+on: workflow_dispatch
 
 jobs:
   build:
