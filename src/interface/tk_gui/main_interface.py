@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageTk
 import assets
 from src.connection.publisher import Direction
 from src.interface.tk_gui.connection_manager import TKConnectionManager
+from src.interface.tk_gui.photo_sender import TKPhotoSender
 from src.interface.tk_gui.styles import (
     BORDER_STYLE,
     BTN_STYLE,
@@ -238,14 +239,32 @@ class TKInterface(tk.Tk):
             **OPTIONS_MENU_STYLE,  # pyright: ignore[reportArgumentType]
         )
         self.connectionMenu.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
+        
+        self.stream_group = ctk.CTkFrame(
+            container,
+            corner_radius=10,
+            **BORDER_STYLE,
+        )
+        self.stream_group.grid(row=1, column=2, padx=2, pady=2, sticky="nsew")
+        self.stream_group.columnconfigure([0, 2], weight=1)
+        self.stream_group.rowconfigure([0, 3], weight=1)
 
         self.stream_btn = ctk.CTkButton(
-            container,
+            self.stream_group,
             text="Start PyVcam Stream",
             command=self._on_stream_toggled,
             **BTN_STYLE,
         )
-        self.stream_btn.grid(row=1, column=2, padx=10, pady=10, sticky="ew")
+        self.stream_btn.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+
+        self.photo_btn = ctk.CTkButton(
+            self.stream_group,
+            text="Take Photo",
+            command=self._on_photo_capture,
+            **BTN_STYLE,
+        )
+        self.photo_btn.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+
         self.update_ui()
 
     def _on_stream_toggled(self) -> None:
@@ -255,6 +274,18 @@ class TKInterface(tk.Tk):
         else:
             self.app.stop_stream()
             self.stream_btn.configure(text="Start PyVcam Stream")
+
+    def _on_photo_capture(self) -> None:
+        self._set_modal_lock(True)
+        frame = self.app.get_active_frame()
+        img = self.convert_frame_to_tkimage(frame)
+        if img is None:
+            return
+        dialog = TKPhotoSender(
+            self, self.app, img, self.update_ui
+        )
+        self.wait_window(dialog)
+        self._set_modal_lock(False)
 
     def setup_keyboard_controls(self) -> None:
         """Does the tedious work of binding the keyboard arrow keys to the button controls."""
