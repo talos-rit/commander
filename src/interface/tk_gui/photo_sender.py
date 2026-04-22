@@ -71,26 +71,24 @@ class TKPhotoSender(tkinter.Toplevel):
             logger.warning("Email is required")
         self.send_photo(name, email)
 
-    def send_photo(self, name: str, email: str):
-        SERVER_URL = "192.168.0.51:8080/send_imageroute"
 
-        # Convert PhotoImage back to bytes
+    def send_photo(self, name: str, email: str):
+        SERVER_URL = "http://192.168.0.51:8080/send_image"
         img_bytes = io.BytesIO()
         ImageTk.getimage(self.photo).save(img_bytes, format="PNG")
         img_bytes.seek(0)
-
         try:
             response = requests.post(
                 SERVER_URL,
                 data={"name": name, "email": email},
-                files={"photo": ("photo.png", img_bytes, "image/png")},
+                files={"image": ("photo.png", img_bytes, "image/png")},
             )
             response.raise_for_status()
             self.on_close()
         except requests.exceptions.RequestException as e:
             logger.warning(f"Send Failed: {e}")
             self.on_close()
-
+ 
     def on_close(self):
         self.grab_release()
         self.update_gui_callback()
