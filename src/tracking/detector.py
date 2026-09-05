@@ -5,14 +5,25 @@ from dataclasses import dataclass
 from multiprocessing import Event, Process, Queue, shared_memory, synchronize
 from multiprocessing.managers import SharedMemoryManager
 from queue import Empty, Full
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Mapping
 
 import cv2
 import numpy as np
 from loguru import logger
 
 from src.logger import configure_logger
-from src.tracking.types import BBox, BBoxMapping, Frame
+from src.observations.types import (
+    FramePacket,
+    LocalDetection,
+    ObservationFrame,
+    PersonObservation,
+)
+from src.tracking.types import (
+    BBox,
+    BBoxMapping,
+    Frame,
+    ObservationMapping,
+)
 from src.utils import add_termination_handler, remove_termination_handler
 
 if TYPE_CHECKING:
@@ -21,6 +32,7 @@ if TYPE_CHECKING:
         ConnectionCollection,
         ConnectionCollectionEvent,
     )
+    from src.observations.replay import ObservationRecorder
 
 
 class DetectionWaitingForModel(Exception):
@@ -44,6 +56,22 @@ class FrameSizeData:
 type FrameSizeDeterminer = Callable[[np.ndarray, int, int | None], Frame]
 
 
+@dataclass(frozen=True)
+class SourceFrameMetadata:
+    connection_id: str
+    camera_id: str
+    frame_sequence: int
+    capture_timestamp: float
+    x_offset: int
+    width: int
+
+
+@dataclass(frozen=True)
+class DetectionBatch:
+    sources: tuple[SourceFrameMetadata, ...]
+    detections: tuple[LocalDetection, ...]
+
+
 class ObjectModel(ABC):
     """
     This is a model class where it can handle turning image frame into bounding box
@@ -52,7 +80,7 @@ class ObjectModel(ABC):
 
     # Capture a frame from the source
     @abstractmethod
-    def detect_person(self, frame) -> list[BBox]:
+    def detect_person(self, frame) -> list[LocalDetection | BBox]:
         raise NotImplementedError()
 
     @classmethod
@@ -138,7 +166,8 @@ class Detector(DetectorInterface):
     model: ObjectModel.__class__ | None
     _smm: SharedMemoryManager
     _detection_process: Process | None = None
-    _bbox_queue: Queue[list[BBox] | None]
+    _bbox_queue: Queue[DetectionBatch | None]
+    _frame_metadata_queue: Queue[tuple[SourceFrameMetadata, ...]]
     _model_stopper: synchronize.Event
     _frame_ready_event: synchronize.Event
     _frame_memory: shared_memory.SharedMemory | None = None
@@ -148,12 +177,16 @@ class Detector(DetectorInterface):
         model: ObjectModel.__class__ | None,
         connections: ConnectionCollection,
         smm: SharedMemoryManager = SharedMemoryManager(),
+        observation_recorder: ObservationRecorder | None = None,
     ):
         self.model = model
         self.connections = connections
         self.connections.add_listener(self.on_connections_update)
         self.frame_order = self._create_frame_order(connections)
+        self._latest_observations: ObservationMapping = {}
+        self._last_sent_sequences: dict[str, int] = {}
         self._smm = smm
+        self.observation_recorder = observation_recorder
         self._smm.start()
 
     def start(self):
@@ -161,7 +194,9 @@ class Detector(DetectorInterface):
             logger.error("Model was not found please pass a model into Tracker to run.")
             return
         self.waiting_startup = True
+        self._last_sent_sequences = {}
         self._bbox_queue = Queue(maxsize=2)
+        self._frame_metadata_queue = Queue(maxsize=1)
         self._model_stopper = Event()
         self._frame_ready_event = Event()
         total_shape = self.total_frame_shape(self.connections)
@@ -180,6 +215,7 @@ class Detector(DetectorInterface):
             args=(
                 self.model,
                 self._bbox_queue,
+                self._frame_metadata_queue,
                 self._model_stopper,
                 self._frame_ready_event,
                 self._frame_memory,
@@ -202,8 +238,10 @@ class Detector(DetectorInterface):
             self._frame_ready_event.clear()
             self._model_stopper.set()
             self._bbox_queue.close()
+            self._frame_metadata_queue.close()
             self._detection_process.join()
             self._bbox_queue.join_thread()
+            self._frame_metadata_queue.join_thread()
         except Exception as e:
             logger.error(f"Exception occured: {e}")
             return False
@@ -246,7 +284,7 @@ class Detector(DetectorInterface):
         ):
             self.reset_frame_order()
 
-    def send_input(self):
+    def send_input(self, packets: Mapping[str, FramePacket] | None = None):
         if self._frame_ready_event.is_set():
             if not self.waiting_startup:
                 raise SendingFrameTooFast(
@@ -255,42 +293,53 @@ class Detector(DetectorInterface):
             raise DetectionWaitingForModel(
                 "Detection process is still starting up, please wait and try again."
             )
-        if 1 == len(self.frame_order):
-            (host, _) = self.frame_order[0]
-            conn = self.connections[host]
-            video_conn = conn.video_connection
-            self.new_frame = video_conn.get_frame() if video_conn is not None else None
-            if self.new_frame is not None and not self._frame_ready_event.is_set():
-                np.copyto(self._frame_buf, self.new_frame)
-                self._frame_ready_event.set()
-            return
+        self._frame_buf.fill(0)
+        sources: list[SourceFrameMetadata] = []
+        for index, (host, x_offset) in enumerate(self.frame_order):
+            video_conn = self.connections[host].video_connection
+            packet = (
+                packets.get(host)
+                if packets is not None
+                else video_conn.get_latest_packet()
+                if video_conn is not None
+                else None
+            )
+            if (
+                packet is None
+                or self._last_sent_sequences.get(host) == packet.frame_sequence
+            ):
+                continue
+            expected_width = (
+                self.frame_order[index + 1][1] - x_offset
+                if index + 1 < len(self.frame_order)
+                else self._frame_buf.shape[1] - x_offset
+            )
+            copy_height = min(packet.image.shape[0], self._frame_buf.shape[0])
+            copy_width = min(packet.image.shape[1], expected_width)
+            np.copyto(
+                self._frame_buf[:copy_height, x_offset : x_offset + copy_width],
+                packet.image[:copy_height, :copy_width],
+            )
+            sources.append(
+                SourceFrameMetadata(
+                    connection_id=host,
+                    camera_id=packet.camera_id,
+                    frame_sequence=packet.frame_sequence,
+                    capture_timestamp=packet.capture_timestamp,
+                    x_offset=x_offset,
+                    width=expected_width,
+                )
+            )
 
-        frames = [
-            video_conn.get_frame()
-            for host, _ in self.frame_order
-            if (video_conn := self.connections[host].video_connection) is not None
-        ]
-        frames = [f for f in frames if f is not None]
-        if len(frames) == 0:
+        if not sources:
             logger.warning(
-                f"No frames available to update frame buffer. {frames=} {self.frame_order=}"
+                f"No frames available to update frame buffer. {self.frame_order=}"
             )
             raise SendingFrameTooFast("No frames available to update frame buffer.")
-        # Compare heights of frames and padd the bottom to the smaller ones to match the largest height
-        max_height = max(frame.shape[0] for frame in frames)
-        resized_frames = [
-            frame
-            if frame.shape[0] == max_height
-            else np.pad(
-                frame,
-                ((0, max_height - frame.shape[0]), (0, 0), (0, 0)),
-                mode="constant",
-                constant_values=0,
-            )
-            for frame in frames
-        ]
-        hstack = np.hstack(resized_frames)
-        np.copyto(self._frame_buf, hstack)
+        self._frame_metadata_queue.put_nowait(tuple(sources))
+        self._last_sent_sequences.update(
+            {source.connection_id: source.frame_sequence for source in sources}
+        )
         self._frame_ready_event.set()
 
     def get_bboxes(self) -> BBoxMapping:
@@ -300,14 +349,14 @@ class Detector(DetectorInterface):
         Throws ValueError if the bbox queue is closed.
         """
         try:
-            raw_bboxes: None | list[BBox] = self._bbox_queue.get(block=False)
+            batch: DetectionBatch | None = self._bbox_queue.get(block=False)
         except (ValueError, Empty) as e:
             if self.waiting_startup:
                 raise DetectionWaitingForModel(
                     "Detection process is still starting up, please wait and try again."
                 )
             raise e
-        if raw_bboxes is None:
+        if batch is None:
             if self.waiting_startup:
                 raise DetectionWaitingForModel(
                     "Detection process is still starting up, please wait and try again."
@@ -317,30 +366,68 @@ class Detector(DetectorInterface):
             self.waiting_startup = False
             logger.info("Model loaded, starting to poll bounding boxes.")
 
-        if 1 == len(self.frame_order):
-            (host, _) = self.frame_order[0]
-            self.connections[host].set_bboxes(raw_bboxes)
-            return {host: raw_bboxes}
-
-        bboxes_by_host: BBoxMapping = {host: [] for host, _ in self.frame_order}
-        for x1, y1, x2, y2 in raw_bboxes:
+        observations_by_host: ObservationMapping = {
+            host: [] for host, _ in self.frame_order
+        }
+        for detection in batch.detections:
+            x1, y1, x2, y2 = detection.bounding_box
             cx = (x1 + x2) // 2
+            source = next(
+                (
+                    source
+                    for source in batch.sources
+                    if source.x_offset <= cx < source.x_offset + source.width
+                ),
+                None,
+            )
+            if source is None:
+                continue
+            source_bbox = (
+                max(0, x1 - source.x_offset),
+                y1,
+                max(0, x2 - source.x_offset),
+                y2,
+            )
+            observations_by_host[source.connection_id].append(
+                PersonObservation(
+                    camera_id=source.camera_id,
+                    frame_sequence=source.frame_sequence,
+                    capture_timestamp=source.capture_timestamp,
+                    bounding_box=source_bbox,
+                    detection_confidence=detection.confidence,
+                    local_track_id=detection.local_track_id,
+                )
+            )
 
-            for index, (host, dx) in enumerate(self.frame_order):
-                if index == len(self.frame_order) - 1:
-                    bboxes_by_host[host].append(
-                        (max(0, x1 - dx), y1, max(0, x2 - dx), y2)
+        bboxes_by_host: BBoxMapping = {
+            host: [] for host, _ in self.frame_order
+        }
+        for host, observations in observations_by_host.items():
+            self.connections[host].set_observations(observations)
+        for source in batch.sources:
+            observations = observations_by_host[source.connection_id]
+            bboxes_by_host[source.connection_id] = [
+                observation.bounding_box for observation in observations
+            ]
+            if self.observation_recorder is not None:
+                self.observation_recorder.record(
+                    ObservationFrame(
+                        camera_id=source.camera_id,
+                        frame_sequence=source.frame_sequence,
+                        capture_timestamp=source.capture_timestamp,
+                        observations=tuple(observations),
                     )
-                    continue
-                (_, dx_next) = self.frame_order[index + 1]
-                if cx >= dx and cx < dx_next:
-                    bboxes_by_host[host].append(
-                        (max(0, x1 - dx), y1, max(0, x2 - dx), y2)
-                    )
-
-        for host, bboxes in bboxes_by_host.items():
-            self.connections[host].set_bboxes(bboxes)
+                )
+        self._latest_observations = observations_by_host
         return bboxes_by_host
+
+    def get_observations(self) -> ObservationMapping:
+        """Return the latest rich observations without consuming detector output."""
+
+        return {
+            host: list(observations)
+            for host, observations in self._latest_observations.items()
+        }
 
     def is_running(self):
         return (
@@ -400,6 +487,7 @@ class Detector(DetectorInterface):
     def _detect_person_worker(
         model_class,
         bbox_queue: Queue,
+        frame_metadata_queue: Queue,
         stopper,
         frame_ready_event: synchronize.Event,
         frame_mem: shared_memory.SharedMemory,
@@ -418,11 +506,19 @@ class Detector(DetectorInterface):
                 if not frame_ready_event.wait(0.1):
                     logger.debug("No new frame received, continuing to wait...")
                     continue
-                # Not clear immediately to make a copy here safely
+                # Consume metadata before clearing the event so the producer cannot
+                # overwrite the single shared frame slot first.
                 raw_frame = np.copy(frame)
+                sources = frame_metadata_queue.get()
                 frame_ready_event.clear()
                 try:
-                    bboxes = model.detect_person(frame=raw_frame)
+                    raw_detections = model.detect_person(frame=raw_frame)
+                    detections = tuple(
+                        detection
+                        if isinstance(detection, LocalDetection)
+                        else LocalDetection(bounding_box=tuple(detection))
+                        for detection in raw_detections
+                    )
                 except Exception as e:
                     logger.error(f"Error during detection: {e}")
                     continue
@@ -433,7 +529,9 @@ class Detector(DetectorInterface):
                     except Empty:
                         pass  # This sometimes happens just ignore it since we just wanted to make space in the queue
                 try:
-                    bbox_queue.put_nowait(bboxes)
+                    bbox_queue.put_nowait(
+                        DetectionBatch(sources=sources, detections=detections)
+                    )
                 except Full:
                     logger.warning("bbox_queue is full, skipping frame")
             else:

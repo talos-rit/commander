@@ -1,3 +1,4 @@
+import threading
 from enum import Enum
 from multiprocessing.managers import SharedMemoryManager
 from queue import Empty
@@ -6,6 +7,7 @@ from typing import Any
 from loguru import logger
 
 from src import config
+from src.observations.types import FramePacket
 from src.scheduler import IterativeTask, Scheduler
 from src.talos_app import ConnectionCollection
 from src.tracking.detector import (
@@ -43,6 +45,7 @@ class Tracker:
     _term_handler_id: int | None = None
     _send_frame_task: IterativeTask | None = None
     _poll_bbox_task: IterativeTask | None = None
+    _capture_frame_task: IterativeTask | None = None
     _bbox_success_count: int = 0
     _send_frame_success_count: int = 0
     _detector: Detector
@@ -54,6 +57,7 @@ class Tracker:
         scheduler: Scheduler = ThreadScheduler(),
         smm: SharedMemoryManager = SharedMemoryManager(),
         model=None,
+        observation_recorder=None,
     ):
         """
         Args:
@@ -66,14 +70,26 @@ class Tracker:
         self.max_fps = config.APP_SETTINGS.bbox_max_fps
         self.frame_delay = 1000 / config.APP_SETTINGS.frame_process_fps
         self.bbox_delay = 1000 / self.max_fps
-        self._detector = Detector(model, connections, smm)
+        self._detector = Detector(
+            model, connections, smm, observation_recorder=observation_recorder
+        )
+        self._frame_batch_lock = threading.Lock()
+        self._latest_frame_batch: dict[str, FramePacket] = {}
+        self.connections.add_listener(self.on_connection_update)
+        self._cache_current_packets()
+        if self.connections:
+            self.start_frame_capture()
         self.disable_perf_warnings = config.APP_SETTINGS.disable_performance_warnings
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
     def on_connection_update(self, event: ConnectionCollectionEvent, *_: Any):
+        if event == ConnectionCollectionEvent.ADDED:
+            self._cache_current_packets()
+            self.start_frame_capture()
         if event == ConnectionCollectionEvent.REMOVED and len(self.connections) == 0:
             logger.debug("No more connections available, stopping detection process...")
             self.stop()
+            self.stop_frame_capture()
 
     def start_detection_process(self) -> None:
         if self._detector.is_running():
@@ -111,7 +127,7 @@ class Tracker:
 
     def send_latest_frame(self) -> None:
         try:
-            self._detector.send_input()
+            self._detector.send_input(self.get_latest_frame_batch())
         except DetectionWaitingForModel:
             return
         except SendingFrameTooFast:
@@ -122,6 +138,57 @@ class Tracker:
         self._send_frame_success_count += 1
         if self._send_frame_success_count > 10:
             self.increase_send_frame_rate()
+
+    def get_observations(self):
+        """Return the latest timestamped observations without consuming output."""
+
+        return self._detector.get_observations()
+
+    def capture_frames(self) -> dict[str, FramePacket]:
+        """Acquire one frame per source and atomically publish that capture cycle."""
+
+        batch = {}
+        for host, connection in self.connections.items():
+            video_connection = connection.video_connection
+            packet = (
+                video_connection.capture_packet()
+                if video_connection is not None
+                else None
+            )
+            if packet is not None:
+                batch[host] = packet
+        with self._frame_batch_lock:
+            self._latest_frame_batch = batch
+        return dict(batch)
+
+    def get_latest_frame_batch(self) -> dict[str, FramePacket]:
+        with self._frame_batch_lock:
+            return dict(self._latest_frame_batch)
+
+    def _cache_current_packets(self) -> None:
+        batch = {}
+        for host, connection in self.connections.items():
+            video_connection = connection.video_connection
+            packet = (
+                video_connection.get_latest_packet()
+                if video_connection is not None
+                else None
+            )
+            if packet is not None:
+                batch[host] = packet
+        with self._frame_batch_lock:
+            self._latest_frame_batch = batch
+
+    def start_frame_capture(self) -> None:
+        if self._capture_frame_task is None:
+            self._capture_frame_task = self._scheduler.set_interval(
+                int(self.frame_delay), self.capture_frames
+            )
+
+    def stop_frame_capture(self) -> None:
+        if self._capture_frame_task is not None:
+            self._capture_frame_task.cancel()
+            self._capture_frame_task = None
 
     def is_pipeline_running(self) -> bool:
         return self._send_frame_task is not None and self._poll_bbox_task is not None

@@ -62,6 +62,9 @@ mediapipe = [
     "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 yolo = ["ultralytics"]
+simulation = [
+    "pybullet>=3.2.7",
+]
 
 [tool.uv]
 package = true

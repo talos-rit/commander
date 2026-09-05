@@ -71,6 +71,9 @@ class Publisher:
     def handshake(self):
         self.operator_connection.publish(command=Command.HANDSHAKE, payload=b"")
 
+    def is_connected(self) -> bool:
+        return self.operator_connection.is_connected()
+
     def polar_pan_discrete(
         self,
         delta_azimuth_int: int,

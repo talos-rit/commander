@@ -9,7 +9,8 @@ from ultralytics.engine.model import Model  # pyright: ignore[reportPrivateImpor
 
 from assets import join_paths
 from src.tracking.detector import ObjectModel
-from src.tracking.types import BBox
+from src.tracking.types import LocalDetection
+from src.tracking.yolo.results import local_detections_from_arrays
 
 HUMAN_DETECTION_CLASS_ID = 0
 
@@ -69,7 +70,7 @@ class YOLOBaseModel(ObjectModel):
             path.join(_yolo_pt_dir, _pt_file or self.model_size.pt_file), verbose=False
         )
 
-    def detect_person(self, frame, *_) -> list[BBox]:
+    def detect_person(self, frame, *_) -> list[LocalDetection]:
         (detection_result,) = self.object_detector.track(
             frame,
             classes=HUMAN_DETECTION_CLASS_ID,
@@ -79,13 +80,14 @@ class YOLOBaseModel(ObjectModel):
         )
         if detection_result is None or detection_result.boxes is None:
             return []
-        ids = detection_result.boxes.id  # ndarray
         xyxy = detection_result.boxes.xyxy  # ndarray
-        if ids is None or xyxy is None:
-            return self.to_numpy(xyxy).astype(int).tolist() if xyxy is not None else []
-        sorted_idx = np.argsort(ids.flatten())
-        sorted_xyxy = self.to_numpy(xyxy[sorted_idx]).astype(int).tolist()
-        return sorted_xyxy
+        if xyxy is None:
+            return []
+        boxes = self.to_numpy(xyxy)
+        confidences = self.to_numpy(detection_result.boxes.conf)
+        raw_ids = detection_result.boxes.id
+        ids = self.to_numpy(raw_ids) if raw_ids is not None else None
+        return local_detections_from_arrays(boxes, confidences, ids)
 
     def to_numpy(self, tensor_or_array):
         if hasattr(tensor_or_array, "numpy"):

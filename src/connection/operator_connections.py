@@ -82,6 +82,15 @@ class OperatorConnection:
         self.socket.close()
         logger.debug(f"Socket closed cleanly {self.host}:{self.port}")
 
+    def is_connected(self) -> bool:
+        """Return whether the non-blocking socket has an established peer."""
+
+        try:
+            self.socket.getpeername()
+        except OSError:
+            return False
+        return True
+
     def xor_checksum(self, data: bytes) -> int:
         result = 0
         for byte in data:
