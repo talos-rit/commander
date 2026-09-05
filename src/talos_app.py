@@ -10,6 +10,7 @@ from .config.schema.robot import ConnectionConfig
 from .connection.connection import Connection, ConnectionCollection, VideoConnection
 from .connection.publisher import Direction
 from .directors import BaseDirector, ContinuousDirector
+from .observations.replay import ObservationRecorder
 from .scheduler import IterativeTask, Scheduler
 from .streaming.streamer import Streamer
 from .thread_scheduler import ThreadScheduler
@@ -50,10 +51,18 @@ class App:
         scheduler: Scheduler = ThreadScheduler(),
         smm: SharedMemoryManager = SharedMemoryManager(),
         args=None,
+        observation_recorder: ObservationRecorder | None = None,
     ) -> None:
         self.scheduler = scheduler
         self.connections = ConnectionCollection()
-        self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
+        tracker_options = (
+            {"observation_recorder": observation_recorder}
+            if observation_recorder is not None
+            else {}
+        )
+        self.tracker = Tracker(
+            self.connections, scheduler=scheduler, smm=smm, **tracker_options
+        )
         self.streamer = Streamer(
             self.connections, draw_bboxes=args.draw_bboxes if args else False
         )

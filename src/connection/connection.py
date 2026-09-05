@@ -2,6 +2,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable
 
 import av
@@ -12,6 +13,7 @@ from loguru import logger
 
 import src.config as config
 from src.connection.publisher import Publisher
+from src.observations.types import BBox, FramePacket, PersonObservation
 from src.utils import (
     add_termination_handler,
     remove_termination_handler,
@@ -79,11 +81,18 @@ class PyAVCapture:
 class VideoConnection:
     src: str | int
     video_buffer_size: int = field(default=1)
+    camera_id: str | None = None
+    timestamp_provider: Callable[[], float] = field(
+        default=time.time, repr=False, compare=False
+    )
     cap: cv2.VideoCapture | PyAVCapture = field(init=False)
     shape: tuple | None = field(init=False, default=None)
     dtype: np.dtype | None = field(init=False, default=None)
     _term: int | None = field(init=False)
     _read_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
+    _frame_sequence: int = field(init=False, default=-1)
+    _latest_packet: FramePacket | None = field(init=False, default=None)
+    _is_prerecorded: bool = field(init=False, default=False)
 
     def __post_init__(self):
         source = None
@@ -91,6 +100,9 @@ class VideoConnection:
             source = int(self.src)
         except ValueError:
             source = self.src
+        if self.camera_id is None:
+            self.camera_id = str(self.src)
+        self._is_prerecorded = isinstance(source, str) and Path(source).is_file()
         if isinstance(source, str) and source.startswith("rtsp://"):
             self.cap = PyAVCapture(
                 source, rtsp_transport="tcp", use_wallclock_as_timestamps="1"
@@ -98,26 +110,70 @@ class VideoConnection:
         else:
             self.cap = cv2.VideoCapture(source)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
-        frame = None
         for _ in range(6):
-            ret, frame, *rest = self.cap.read()
-            if len(rest) > 0:
-                logger.debug(f"{rest=}")
-            if ret and frame is not None:
-                self.shape = frame.shape
-                self.dtype = frame.dtype
+            if (packet := self.capture_packet()) is not None:
+                self.shape = packet.image.shape
+                self.dtype = packet.image.dtype
                 return
         logger.warning("Unable to pull frame from camera")
 
-    def get_frame(self) -> np.ndarray | None:
-        if self.cap is not None:
-            with self._read_lock:
-                r, frame, *rest = (
-                    self.cap.read()
-                )  # rest sometimes have timestamp info from PyAVCapture
-            if not r:
+    def capture_packet(self) -> FramePacket | None:
+        """Advance the underlying source once and cache the resulting packet."""
+
+        if self.cap is None:
+            return None
+        with self._read_lock:
+            ret, frame, *rest = self.cap.read()
+            if not ret or frame is None:
                 return None
-            return frame
+            timestamp = self._capture_timestamp(rest)
+            self._frame_sequence += 1
+            packet = FramePacket(
+                camera_id=self.camera_id or str(self.src),
+                frame_sequence=self._frame_sequence,
+                capture_timestamp=timestamp,
+                image=frame,
+            )
+            self._latest_packet = packet
+            return packet
+
+    def get_latest_packet(self) -> FramePacket | None:
+        """Return the cached packet without advancing the video source."""
+
+        with self._read_lock:
+            return self._latest_packet
+
+    def get_latest_frame(self) -> np.ndarray | None:
+        packet = self.get_latest_packet()
+        return packet.image if packet is not None else None
+
+    def set_camera_id(self, camera_id: str) -> None:
+        """Associate this source with a Connection while preserving its frame."""
+
+        with self._read_lock:
+            self.camera_id = camera_id
+            if self._latest_packet is not None:
+                self._latest_packet = FramePacket(
+                    camera_id=camera_id,
+                    frame_sequence=self._latest_packet.frame_sequence,
+                    capture_timestamp=self._latest_packet.capture_timestamp,
+                    image=self._latest_packet.image,
+                )
+
+    def get_frame(self) -> np.ndarray | None:
+        """Legacy advancing API. New consumers should use packet methods explicitly."""
+
+        packet = self.capture_packet()
+        return packet.image if packet is not None else None
+
+    def _capture_timestamp(self, read_metadata: list[Any]) -> float:
+        if read_metadata and read_metadata[0] is not None:
+            return float(read_metadata[0])
+        if self._is_prerecorded and hasattr(self.cap, "get"):
+            position_ms = self.cap.get(cv2.CAP_PROP_POS_MSEC)
+            if isinstance(position_ms, (int, float)) and np.isfinite(position_ms):
+                return float(position_ms) / 1000.0
+        return float(self.timestamp_provider())
 
     def close(self):
         if self.cap is not None:
@@ -131,12 +187,18 @@ class Connection:
     port: int
     video_connection: VideoConnection | None
     is_manual: bool = True
+    publisher_factory: Callable[[str, int], Publisher] = field(
+        default=lambda host, port: Publisher(host, port), repr=False, compare=False
+    )
     publisher: Publisher = field(init=False)
-    _bboxes: list[tuple[int, int, int, int]] | None = field(init=False, default=None)
+    _bboxes: list[BBox] | None = field(init=False, default=None)
+    _observations: list[PersonObservation] | None = field(init=False, default=None)
     _bboxes_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
 
     def __post_init__(self):
-        self.publisher = Publisher(self.host, self.port)
+        self.publisher = self.publisher_factory(self.host, self.port)
+        if self.video_connection is not None:
+            self.video_connection.set_camera_id(self.host)
         self.is_manual_only = config.ROBOT_CONFIGS[self.host].manual_only
 
     def close(self) -> None:
@@ -144,13 +206,31 @@ class Connection:
             self.video_connection.close()
         self.publisher.close()
 
-    def get_bboxes(self) -> list[tuple[int, int, int, int]] | None:
+    def get_bboxes(self) -> list[BBox] | None:
         with self._bboxes_lock:
             return self._bboxes
 
-    def set_bboxes(self, bboxes: list[tuple[int, int, int, int]] | None) -> None:
+    def set_bboxes(self, bboxes: list[BBox] | None) -> None:
         with self._bboxes_lock:
             self._bboxes = bboxes
+            self._observations = None
+
+    def get_observations(self) -> list[PersonObservation] | None:
+        with self._bboxes_lock:
+            return self._observations
+
+    def set_observations(
+        self, observations: list[PersonObservation] | None
+    ) -> None:
+        """Store rich observations and maintain the legacy bounding-box view."""
+
+        with self._bboxes_lock:
+            self._observations = observations
+            self._bboxes = (
+                [observation.bounding_box for observation in observations]
+                if observations is not None
+                else None
+            )
 
 
 class ConnectionCollectionEvent(Enum):
@@ -247,4 +327,4 @@ class ConnectionCollection(dict[str, Connection]):
 
     def clear_bboxes(self) -> None:
         for connection in self.values():
-            connection.set_bboxes(None)
+            connection.set_observations(None)
