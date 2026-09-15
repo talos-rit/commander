@@ -54,6 +54,10 @@ class RobotCommandTarget(Protocol):
 
     def cartesian_move_continuous_stop(self): ...
 
+    def erv_joint_jog_start(self, axis: int, direction: int): ...
+
+    def erv_joint_jog_stop(self): ...
+
     def polar_pan_discrete(
         self, azimuth: int, altitude: int, delay_ms: int, duration_ms: int
     ): ...
@@ -220,6 +224,8 @@ class InteractiveSimulationController:
     def select_robot(self, robot_id: str) -> None:
         if robot_id not in self.publishers:
             raise KeyError(f"unknown robot: {robot_id}")
+        if self.joint_jog_available():
+            self.stop_joint_jog()
         self._stop_continuous()
         self.selected_index = self.robot_ids.index(robot_id)
         print(f"Selected robot: {self.selected_robot_id}")
@@ -233,8 +239,28 @@ class InteractiveSimulationController:
     def stop_selected(self) -> None:
         self._invoke("polar_pan_continuous_stop")
         self._invoke("cartesian_move_continuous_stop")
+        self.stop_joint_jog()
         self._clear_continuous_state()
         print(f"{self.selected_robot_id}: stop")
+
+    def joint_jog_available(self) -> bool:
+        return (
+            self.selected_backend == "real"
+            and self.real_backend_connected()
+            and hasattr(self.real_publishers[self.selected_robot_id], "erv_joint_jog_start")
+        )
+
+    def start_joint_jog(self, axis: int, direction: int) -> bool:
+        if not self.joint_jog_available():
+            return False
+        self.real_publishers[self.selected_robot_id].erv_joint_jog_start(axis, direction)
+        return True
+
+    def stop_joint_jog(self) -> bool:
+        if not self.joint_jog_available():
+            return False
+        self.real_publishers[self.selected_robot_id].erv_joint_jog_stop()
+        return True
 
     def clear_selected_simulation_fault(self) -> None:
         robot_id = self.selected_robot_id
@@ -332,9 +358,12 @@ class InteractiveSimulationController:
             for method_name in (
                 "polar_pan_continuous_stop",
                 "cartesian_move_continuous_stop",
+                "erv_joint_jog_stop",
             ):
                 try:
-                    getattr(publisher, method_name)()
+                    method = getattr(publisher, method_name, None)
+                    if method is not None:
+                        method()
                 except OSError as error:
                     print(f"{robot_id}: real stop failed: {error}")
 

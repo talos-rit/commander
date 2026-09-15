@@ -151,6 +151,33 @@ class TkSimulationControlPanel:
             )
             button.pack(side="left", fill="x", expand=True, padx=1)
 
+        ttk.Label(container, text="Real joint jog (no visual estimate; press and hold)").pack(
+            anchor="w", pady=(12, 4)
+        )
+        joint_jog = ttk.Frame(container)
+        joint_jog.pack(fill="x")
+        self.joint_jog_buttons = []
+        for label, axis, direction in (
+            ("Shoulder -", 2, -1),
+            ("Shoulder +", 2, 1),
+            ("Elbow -", 3, -1),
+            ("Elbow +", 3, 1),
+        ):
+            button = ttk.Button(joint_jog, text=label)
+            self._bind_hold_button(
+                button,
+                lambda joint_axis=axis, joint_direction=direction: controller.start_joint_jog(
+                    joint_axis, joint_direction
+                ),
+                controller.stop_joint_jog,
+            )
+            button.pack(side="left", fill="x", expand=True, padx=1)
+            self.joint_jog_buttons.append(button)
+        self.joint_jog_stop_button = ttk.Button(
+            container, text="Stop Joint Jog", command=controller.stop_joint_jog
+        )
+        self.joint_jog_stop_button.pack(fill="x", pady=(4, 0))
+
         self.mapping_status = tk.StringVar(value="Mapping: unknown")
         ttk.Label(container, textvariable=self.mapping_status).pack(
             anchor="w", pady=(8, 10)
@@ -194,6 +221,10 @@ class TkSimulationControlPanel:
         )
         for button in self.preset_buttons:
             button.configure(state=preset_state)
+        joint_jog_state = "normal" if self.controller.joint_jog_available() else "disabled"
+        for button in self.joint_jog_buttons:
+            button.configure(state=joint_jog_state)
+        self.joint_jog_stop_button.configure(state=joint_jog_state)
         state = next(
             snapshot for snapshot in snapshots if snapshot.robot_id == selected
         )

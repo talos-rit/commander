@@ -389,3 +389,14 @@ class Publisher:
         self.operator_connection.publish(
             command=Command.EXECUTE_HARDWARE_OPERATION, payload=payload
         )
+
+    def erv_joint_jog_start(self, axis: int, direction: int):
+        """Start a supervised ER-V shoulder or elbow manual jog."""
+        assert axis in (2, 3), "ER-V joint jog axis must be shoulder (2) or elbow (3)"
+        assert direction in (-1, 1), "ER-V joint jog direction must be -1 or 1"
+        payload = toBytes(axis, CTypesInt.UINT8) + toBytes(direction, CTypesInt.INT8)
+        self.execute_hardware_operation(0x01, payload)
+
+    def erv_joint_jog_stop(self):
+        """Stop the current supervised ER-V manual joint jog."""
+        self.execute_hardware_operation(0x02, b"")

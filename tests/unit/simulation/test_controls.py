@@ -66,6 +66,12 @@ class RecordingRealPublisher:
     def set_speed(self, speed):
         self._record("set_speed", speed)
 
+    def erv_joint_jog_start(self, axis, direction):
+        self._record("joint_jog_start", axis, direction)
+
+    def erv_joint_jog_stop(self):
+        self._record("joint_jog_stop")
+
 
 def make_controller():
     robots = {
@@ -229,6 +235,39 @@ def test_real_backend_is_unavailable_until_registered() -> None:
     assert controller.available_backends() == ("virtual",)
     with pytest.raises(ValueError, match="unavailable"):
         controller.set_selected_backend("real")
+
+
+def test_joint_jog_only_routes_to_real_publisher_without_simulated_pose_change() -> None:
+    controller, robots, _viewer = make_controller()
+    real = RecordingRealPublisher()
+    controller.real_publishers["bluey"] = real
+
+    assert controller.start_joint_jog(2, 1) is False
+    controller.set_selected_backend("real")
+    before = robots["bluey"].get_state().pose
+
+    assert controller.start_joint_jog(2, 1) is True
+    assert controller.stop_joint_jog() is True
+
+    assert ("joint_jog_start", (2, 1)) in real.calls
+    assert ("joint_jog_stop", ()) in real.calls
+    assert robots["bluey"].get_state().pose == before
+
+
+def test_selecting_another_robot_stops_the_old_real_joint_jog() -> None:
+    controller, _robots, _viewer = make_controller()
+    bluey_real = RecordingRealPublisher()
+    controller.real_publishers["bluey"] = bluey_real
+    controller.set_selected_backend("real")
+
+    assert controller.start_joint_jog(3, -1) is True
+    controller.select_robot("erv")
+
+    assert controller.selected_robot_id == "erv"
+    assert bluey_real.calls == [
+        ("joint_jog_start", (3, -1)),
+        ("joint_jog_stop", ()),
+    ]
 
 
 def test_panel_hold_directions_are_normalized_for_continuous_commands() -> None:
