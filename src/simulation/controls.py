@@ -402,6 +402,7 @@ class InteractiveSimulationController:
             while self.viewer.is_connected():
                 started = time.perf_counter()
                 self.process_keyboard(self.viewer.get_keyboard_events())
+                self._process_joint_drag_events()
                 snapshots = self.advance_once()
                 if control_panel is not None and not control_panel.poll(snapshots):
                     break
@@ -460,6 +461,19 @@ class InteractiveSimulationController:
     def _change_speed(self, delta: int) -> None:
         speed = min(255, max(0, self.get_selected_speed() + delta))
         self.set_selected_speed(speed)
+
+    def _process_joint_drag_events(self) -> None:
+        get_events = getattr(self.viewer, "get_joint_drag_events", None)
+        if get_events is None or self.selected_backend != "real":
+            return
+        for robot_id, joint, amount in get_events():
+            if robot_id != self.selected_robot_id:
+                continue
+            target = {"shoulder_joint": 0, "elbow_joint": 0, "pitch_joint": 0}
+            if joint not in target:
+                continue
+            target[joint] = amount
+            self.move_real_joints(target["shoulder_joint"], target["elbow_joint"], target["pitch_joint"])
 
     def _stop_continuous(self) -> None:
         if self._continuous_kind == "polar":

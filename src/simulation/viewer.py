@@ -88,6 +88,8 @@ class PyBulletRobotViewer:
         self.gui = gui
         self._robots: dict[str, _VisualRobot] = {}
         self._temporary_urdfs: list[tempfile.TemporaryDirectory] = []
+        self._joint_drag: tuple[str, str, int] | None = None
+        self._joint_drag_events: list[tuple[str, str, int]] = []
         self._p.setTimeStep(timestep, physicsClientId=self.client_id)
         self._p.setGravity(0, 0, 0, physicsClientId=self.client_id)
         if gui:
@@ -190,6 +192,15 @@ class PyBulletRobotViewer:
             self._update_status_text(snapshot, robot)
 
     def step(self, seconds: float | None = None) -> None:
+        if self.gui:
+            try:
+                self._capture_joint_drag()
+            except Exception as error:
+                # A platform-specific GUI/picking failure must not close the
+                # viewer or affect the real-robot connection.
+                print(f"Joint mouse drag disabled: {error}")
+                self._joint_drag = None
+                self.gui = False
         steps = 1 if seconds is None else max(1, round(seconds / self.timestep))
         for _ in range(steps):
             self._p.stepSimulation(physicsClientId=self.client_id)
@@ -216,6 +227,48 @@ class PyBulletRobotViewer:
             )[0]
             for name, index in robot.joint_indices.items()
         }
+
+    def get_joint_drag_events(self) -> tuple[tuple[str, str, int], ...]:
+        events = tuple(self._joint_drag_events)
+        self._joint_drag_events.clear()
+        return events
+
+    def _capture_joint_drag(self) -> None:
+        for event in self._p.getMouseEvents(physicsClientId=self.client_id):
+            # Some PyBullet Windows wheels omit MOUSE_BUTTON_EVENT, although
+            # the documented event type value is consistently 2.
+            if event[0] != 2 or event[3] != 0:
+                continue
+            if event[4] & self._p.KEY_WAS_TRIGGERED:
+                self._joint_drag = self._pick_joint(int(event[1]), int(event[2]))
+                print(
+                    "Joint drag: selected "
+                    + (self._joint_drag[1] if self._joint_drag else "no movable joint")
+                )
+            elif event[4] & self._p.KEY_WAS_RELEASED and self._joint_drag:
+                robot_id, joint, start_y = self._joint_drag
+                amount = max(-100, min(100, int((start_y - event[2]) / 4)))
+                if amount:
+                    self._joint_drag_events.append((robot_id, joint, amount))
+                    print(f"Joint drag: {joint} {amount:+d} counts")
+                self._joint_drag = None
+
+    def _pick_joint(self, x: int, y: int) -> tuple[str, str, int] | None:
+        camera = self._p.getDebugVisualizerCamera(physicsClientId=self.client_id)
+        width, height = int(camera[0]), int(camera[1])
+        if not 0 <= x < width or not 0 <= y < height:
+            return None
+        image = self._p.getCameraImage(width, height, viewMatrix=camera[2], projectionMatrix=camera[3], flags=self._p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX, physicsClientId=self.client_id)
+        value = image[4][(height - 1 - y) * width + x]
+        if value < 0:
+            return None
+        body, link = value & ((1 << 24) - 1), (value >> 24) - 1
+        for robot_id, robot in self._robots.items():
+            if robot.body_id == body:
+                for name, index in robot.joint_indices.items():
+                    if index == link and name in {"shoulder_joint", "elbow_joint", "pitch_joint"}:
+                        return robot_id, name, y
+        return None
 
     def close(self) -> None:
         if self.client_id >= 0 and self._p.isConnected(self.client_id):
