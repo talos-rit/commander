@@ -1,8 +1,11 @@
+import math
+
 import pytest
 
 from src.simulation.control_panel import (
     CARTESIAN_HOLD_DIRECTIONS,
     POLAR_HOLD_DIRECTIONS,
+    TkSimulationControlPanel,
 )
 from src.simulation import (
     AxisLimits,
@@ -71,6 +74,17 @@ class RecordingRealPublisher:
 
     def erv_joint_jog_stop(self):
         self._record("joint_jog_stop")
+
+    def get_erv_encoder_counts(self):
+        return self.encoder_counts
+
+
+class BoundButton:
+    def __init__(self) -> None:
+        self.handlers = {}
+
+    def bind(self, event, callback) -> None:
+        self.handlers[event] = callback
 
 
 def make_controller():
@@ -213,9 +227,24 @@ def test_empty_keyboard_poll_does_not_cancel_mouse_held_movement() -> None:
     assert robots["bluey"].get_state().movement_state.value == "idle"
 
 
-def test_real_backend_routes_commands_and_labels_simulation_as_estimate() -> None:
+def test_hold_button_stops_once_on_leave_then_release() -> None:
+    button = BoundButton()
+    calls = []
+    TkSimulationControlPanel._bind_hold_button(
+        button, lambda: calls.append("start"), lambda: calls.append("stop")
+    )
+
+    button.handlers["<ButtonPress-1>"](None)
+    button.handlers["<Leave>"](None)
+    button.handlers["<ButtonRelease-1>"](None)
+
+    assert calls == ["start", "stop"]
+
+
+def test_real_backend_routes_commands_without_a_fake_pose() -> None:
     controller, robots, viewer = make_controller()
     real = RecordingRealPublisher()
+    real.encoder_counts = None
     controller.real_publishers["bluey"] = real
 
     controller.set_selected_backend("real")
@@ -223,10 +252,39 @@ def test_real_backend_routes_commands_and_labels_simulation_as_estimate() -> Non
     snapshots = controller.advance_once()
 
     assert ("cartesian_start", (0, 1, 0)) in real.calls
-    assert robots["bluey"].get_state().pose.y > 0
+    assert robots["bluey"].get_state().pose.y == 0
     bluey = next(snapshot for snapshot in snapshots if snapshot.robot_id == "bluey")
-    assert bluey.source_type.value == "command_estimate"
+    assert bluey.source_type.value == "real"
+    assert bluey.logical_pose is None
     assert viewer.snapshots[-2].robot_id == "bluey"
+
+
+def test_real_encoder_frames_drive_relative_joint_positions() -> None:
+    controller, _robots, _viewer = make_controller()
+    real = RecordingRealPublisher()
+    real.encoder_counts = (10, 100, 200, 300)
+    controller.real_publishers["bluey"] = real
+    controller.set_selected_backend("real")
+
+    controller.advance_once()
+    real.encoder_counts = (43, 16484, -16184, 1136)
+    snapshots = controller.advance_once()
+
+    bluey = next(snapshot for snapshot in snapshots if snapshot.robot_id == "bluey")
+    assert bluey.source_type.value == "real"
+    assert bluey.logical_pose is None
+    assert bluey.joint_positions == pytest.approx(
+        {
+            "base_joint": (43 - 10) * math.pi / (180 * 42.5666),
+            "shoulder_joint": -2.09925
+            + (16484 - 100) * math.pi / (180 * 33.2121),
+            "elbow_joint": 1.65843
+            - (-16184 - 200) * math.pi / (180 * 33.2121),
+            "pitch_joint": 0.41547
+            - (1136 - 300) * math.pi / (180 * 8.3555),
+            "roll_joint": -math.pi / 4,
+        }
+    )
 
 
 def test_real_backend_is_unavailable_until_registered() -> None:
@@ -235,6 +293,15 @@ def test_real_backend_is_unavailable_until_registered() -> None:
     assert controller.available_backends() == ("virtual",)
     with pytest.raises(ValueError, match="unavailable"):
         controller.set_selected_backend("real")
+
+
+def test_real_backend_cannot_clear_a_simulation_fault() -> None:
+    controller, robots, _viewer = make_controller()
+    controller.real_publishers["bluey"] = RecordingRealPublisher()
+    controller.set_selected_backend("real")
+    controller.clear_selected_simulation_fault()
+
+    assert robots["bluey"].get_state().fault is None
 
 
 def test_joint_jog_only_routes_to_real_publisher_without_simulated_pose_change() -> None:

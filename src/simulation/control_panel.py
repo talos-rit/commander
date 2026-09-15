@@ -89,14 +89,16 @@ class TkSimulationControlPanel:
         ttk.Button(
             action_row, text="STOP", command=controller.stop_selected
         ).pack(side="left", fill="x", expand=True, padx=(8, 0))
-        ttk.Button(
-            container,
+        self.virtual_controls = ttk.LabelFrame(container, text="Simulation controls")
+        self.clear_fault_button = ttk.Button(
+            self.virtual_controls,
             text="CLEAR SIM FAULT",
             command=controller.clear_selected_simulation_fault,
-        ).pack(fill="x", pady=(0, 6))
+        )
+        self.clear_fault_button.pack(fill="x", pady=(0, 6))
 
-        ttk.Label(container, text="Target presets").pack(anchor="w", pady=(12, 4))
-        preset_row = ttk.Frame(container)
+        ttk.Label(self.virtual_controls, text="Target presets").pack(anchor="w", pady=(8, 4))
+        preset_row = ttk.Frame(self.virtual_controls)
         preset_row.pack(fill="x")
         self.preset_buttons = []
         for preset in (1, 2, 3):
@@ -108,20 +110,20 @@ class TkSimulationControlPanel:
             button.pack(side="left", fill="x", expand=True, padx=2)
             self.preset_buttons.append(button)
 
-        ttk.Label(container, text="Speed (0-255)").pack(anchor="w", pady=(12, 0))
+        ttk.Label(self.virtual_controls, text="Speed (0-255)").pack(anchor="w", pady=(12, 0))
         self.speed = tk.IntVar(
             value=controller.get_selected_speed()
         )
-        speed_scale = ttk.Scale(
-            container,
+        self.speed_scale = ttk.Scale(
+            self.virtual_controls,
             from_=0,
             to=255,
             variable=self.speed,
             command=self._show_speed,
         )
-        speed_scale.pack(fill="x")
-        speed_scale.bind("<ButtonRelease-1>", self._commit_speed)
-        self.speed_label = ttk.Label(container, text=str(self.speed.get()))
+        self.speed_scale.pack(fill="x")
+        self.speed_scale.bind("<ButtonRelease-1>", self._commit_speed)
+        self.speed_label = ttk.Label(self.virtual_controls, text=str(self.speed.get()))
         self.speed_label.pack(anchor="e")
 
         ttk.Label(container, text="Polar movement (press and hold)").pack(
@@ -137,11 +139,12 @@ class TkSimulationControlPanel:
         )
 
         ttk.Label(
-            container,
+            self.virtual_controls,
             text="Cartesian movement (press and hold)",
         ).pack(anchor="w", pady=(12, 4))
-        cartesian = ttk.Frame(container)
+        cartesian = ttk.Frame(self.virtual_controls)
         cartesian.pack(fill="x")
+        self.cartesian_buttons = []
         for label, values in CARTESIAN_HOLD_DIRECTIONS:
             button = ttk.Button(cartesian, text=label)
             self._bind_hold_button(
@@ -150,11 +153,15 @@ class TkSimulationControlPanel:
                 controller.stop_continuous,
             )
             button.pack(side="left", fill="x", expand=True, padx=1)
+            self.cartesian_buttons.append(button)
 
-        ttk.Label(container, text="Real joint jog (no visual estimate; press and hold)").pack(
+        self.virtual_controls.pack(fill="x", pady=(10, 0))
+
+        self.real_controls = ttk.LabelFrame(container, text="Real hardware")
+        ttk.Label(self.real_controls, text="Joint jog — no visual estimate (hold)").pack(
             anchor="w", pady=(12, 4)
         )
-        joint_jog = ttk.Frame(container)
+        joint_jog = ttk.Frame(self.real_controls)
         joint_jog.pack(fill="x")
         self.joint_jog_buttons = []
         for label, axis, direction in (
@@ -174,12 +181,27 @@ class TkSimulationControlPanel:
             button.pack(side="left", fill="x", expand=True, padx=1)
             self.joint_jog_buttons.append(button)
         self.joint_jog_stop_button = ttk.Button(
-            container, text="Stop Joint Jog", command=controller.stop_joint_jog
+            self.real_controls, text="Stop Joint Jog", command=controller.stop_joint_jog
         )
         self.joint_jog_stop_button.pack(fill="x", pady=(4, 0))
+        ttk.Label(self.real_controls, text="Coordinated joint target (counts; drag, then Move)").pack(anchor="w", pady=(10, 2))
+        self.real_joint_target = []
+        for label in ("Shoulder", "Elbow", "Wrist pitch"):
+            row = ttk.Frame(self.real_controls)
+            row.pack(fill="x")
+            ttk.Label(row, text=label, width=12).pack(side="left")
+            value = tk.IntVar(value=0)
+            ttk.Scale(row, from_=-500, to=500, variable=value).pack(side="left", fill="x", expand=True)
+            self.real_joint_target.append(value)
+        self.real_joint_move_button = ttk.Button(
+            self.real_controls, text="Move Real Robot (supervised)", command=self._move_real_joints
+        )
+        self.real_joint_move_button.pack(fill="x", pady=(4, 0))
+        self.real_controls.pack(fill="x", pady=(10, 0))
 
         self.mapping_status = tk.StringVar(value="Mapping: unknown")
-        ttk.Label(container, textvariable=self.mapping_status).pack(
+        self.mapping_status_label = ttk.Label(container, textvariable=self.mapping_status)
+        self.mapping_status_label.pack(
             anchor="w", pady=(8, 10)
         )
 
@@ -216,22 +238,58 @@ class TkSimulationControlPanel:
         self.backend_menu.configure(
             values=self.controller.available_backends()
         )
-        preset_state = (
-            "disabled" if self.controller.selected_backend == "real" else "normal"
-        )
+        is_real = self.controller.selected_backend == "real"
+        if is_real:
+            self.virtual_controls.pack_forget()
+            self.real_controls.pack(fill="x", pady=(10, 0), before=self.mapping_status_label)
+        else:
+            self.real_controls.pack_forget()
+            self.virtual_controls.pack(fill="x", pady=(10, 0), before=self.mapping_status_label)
+        preset_state = "disabled" if is_real else "normal"
         for button in self.preset_buttons:
             button.configure(state=preset_state)
+        virtual_state = "disabled" if is_real else "normal"
+        self.clear_fault_button.configure(state=virtual_state)
+        self.speed_scale.configure(state=virtual_state)
+        for button in self.cartesian_buttons:
+            button.configure(state=virtual_state)
         joint_jog_state = "normal" if self.controller.joint_jog_available() else "disabled"
         for button in self.joint_jog_buttons:
             button.configure(state=joint_jog_state)
         self.joint_jog_stop_button.configure(state=joint_jog_state)
+        self.real_joint_move_button.configure(state=joint_jog_state)
         state = next(
             snapshot for snapshot in snapshots if snapshot.robot_id == selected
         )
         self.mapping_status.set(
             f"Mapping: {state.joint_mapping_quality.value.replace('_', ' ')}"
         )
-        pose = state.logical_pose
+        if is_real:
+            publisher = self.controller.real_publishers.get(selected)
+            counts = (
+                publisher.get_erv_encoder_counts()
+                if publisher is not None
+                and hasattr(publisher, "get_erv_encoder_counts")
+                else None
+            )
+            encoder_text = (
+                "waiting for controller encoder telemetry"
+                if counts is None
+                else (
+                    "encoder counts: "
+                    f"base={counts[0]}  shoulder={counts[1]}  elbow={counts[2]}  "
+                    f"gripper={counts[5]}"
+                )
+            )
+            self.telemetry.set(
+                f"backend=REAL   source=controller encoder telemetry\n"
+                f"{encoder_text}\n"
+                "visual pose: homed encoder reference (post-home offset)\n"
+                f"command_error={self.controller.last_error[selected] or 'none'}"
+            )
+            pose = None
+        else:
+            pose = state.logical_pose
         if pose is not None:
             self.telemetry.set(
                 f"backend={self.controller.selected_backend.upper()}   "
@@ -281,6 +339,16 @@ class TkSimulationControlPanel:
             return
         self.controller.set_selected_backend(requested)
 
+    def _move_real_joints(self) -> None:
+        values = tuple(int(value.get()) for value in self.real_joint_target)
+        if not self._messagebox.askyesno(
+            "Move real robot",
+            f"Execute one coordinated joint move (counts):\nshoulder={values[0]}, elbow={values[1]}, pitch={values[2]}?",
+            icon="warning",
+        ):
+            return
+        self.controller.move_real_joints(*values)
+
     def _refresh_backend_menu(self) -> None:
         values = self.controller.available_backends()
         self.backend_menu.configure(values=values)
@@ -315,5 +383,21 @@ class TkSimulationControlPanel:
 
     @staticmethod
     def _bind_hold_button(button, start_callback, stop_callback) -> None:
-        button.bind("<ButtonPress-1>", lambda _event: start_callback())
-        button.bind("<ButtonRelease-1>", lambda _event: stop_callback())
+        active = False
+
+        def start(_event) -> None:
+            nonlocal active
+            if not active:
+                active = True
+                start_callback()
+
+        def stop(_event) -> None:
+            nonlocal active
+            if active:
+                active = False
+                stop_callback()
+
+        button.bind("<ButtonPress-1>", start)
+        button.bind("<ButtonRelease-1>", stop)
+        button.bind("<Leave>", stop)
+        button.bind("<FocusOut>", stop)

@@ -263,6 +263,22 @@ def test_erv_joint_jog_start_and_stop(mockOperatorConnection):
     )
 
 
+def test_erv_encoder_telemetry_is_parsed(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+
+    publisher._on_operator_message("TEL 1 2 3 4 5 6 7 8 9 10 11")
+
+    assert publisher.get_erv_encoder_counts() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+
+
+def test_erv_malformed_telemetry_is_ignored(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+
+    publisher._on_operator_message("TEL 1 no 3")
+
+    assert publisher.get_erv_encoder_counts() is None
+
+
 @pytest.mark.parametrize("axis,direction", [(1, 1), (4, -1), (2, 0), (3, 2)])
 def test_erv_joint_jog_rejects_invalid_axis_or_direction(
     mockOperatorConnection, axis, direction

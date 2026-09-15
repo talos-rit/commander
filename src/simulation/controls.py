@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import math
 from collections.abc import Mapping
 from dataclasses import replace
 from dataclasses import dataclass
@@ -57,6 +58,8 @@ class RobotCommandTarget(Protocol):
     def erv_joint_jog_start(self, axis: int, direction: int): ...
 
     def erv_joint_jog_stop(self): ...
+
+    def erv_joint_move_relative(self, shoulder: int, elbow: int, wrist_pitch: int): ...
 
     def polar_pan_discrete(
         self, azimuth: int, altitude: int, delay_ms: int, duration_ms: int
@@ -119,6 +122,8 @@ class InteractiveSimulationController:
         self.last_error: dict[str, str | None] = {
             robot_id: None for robot_id in self.robot_ids
         }
+        self._encoder_reference: dict[str, tuple[int, int, int, int]] = {}
+        self._joint_coordinate_reference: dict[str, tuple[int, int, int]] = {}
 
     @property
     def selected_robot_id(self) -> str:
@@ -210,16 +215,60 @@ class InteractiveSimulationController:
     def advance_once(self) -> tuple[RobotStateSnapshot, ...]:
         snapshots = []
         for robot_id, publisher in self.publishers.items():
-            publisher.advance(self.timestep)
+            if self._backend_modes[robot_id] != "real":
+                publisher.advance(self.timestep)
             snapshot = self.state_sources[robot_id].get_snapshot()
             if self._backend_modes[robot_id] == "real":
-                snapshot = replace(
-                    snapshot, source_type=StateSourceType.COMMAND_ESTIMATE
-                )
+                snapshot = self._real_encoder_snapshot(robot_id, snapshot)
             self.viewer.update(snapshot)
             snapshots.append(snapshot)
         self.viewer.step(self.timestep)
         return tuple(snapshots)
+
+    def _real_encoder_snapshot(
+        self, robot_id: str, snapshot: RobotStateSnapshot
+    ) -> RobotStateSnapshot:
+        publisher = self.real_publishers[robot_id]
+        get_counts = getattr(publisher, "get_erv_encoder_counts", None)
+        counts = get_counts() if get_counts else None
+        if counts is None or len(counts) < 3:
+            return replace(
+                snapshot, source_type=StateSourceType.REAL, logical_pose=None
+            )
+        base, shoulder, elbow, wrist_pitch = counts[0], counts[1], counts[2], counts[3]
+        get_joint_counts = getattr(publisher, "get_erv_joint_counts", None)
+        joint_counts = get_joint_counts() if get_joint_counts else None
+        if joint_counts is not None:
+            shoulder, elbow, wrist_pitch, _wrist_roll = joint_counts
+        raw_reference = self._encoder_reference.setdefault(
+            robot_id, (base, shoulder, elbow, wrist_pitch)
+        )
+        reference = (
+            (raw_reference[0],)
+            + self._joint_coordinate_reference.setdefault(
+                robot_id, (shoulder, elbow, wrist_pitch)
+            )
+            if joint_counts is not None
+            else raw_reference
+        )
+        shoulder_radians_per_count = math.pi / (180 * 33.2121)
+        base_radians_per_count = math.pi / (180 * 42.5666)
+        wrist_radians_per_count = math.pi / (180 * 8.3555)
+        return replace(
+            snapshot,
+            source_type=StateSourceType.REAL,
+            logical_pose=None,
+            joint_positions={
+                "base_joint": (base - reference[0]) * base_radians_per_count,
+                "shoulder_joint": -2.09925
+                + (shoulder - reference[1]) * shoulder_radians_per_count,
+                "elbow_joint": 1.65843
+                - (elbow - reference[2]) * shoulder_radians_per_count,
+                "pitch_joint": 0.41547
+                - (wrist_pitch - reference[3]) * wrist_radians_per_count,
+                "roll_joint": -math.pi / 4,
+            },
+        )
 
     def select_robot(self, robot_id: str) -> None:
         if robot_id not in self.publishers:
@@ -262,8 +311,23 @@ class InteractiveSimulationController:
         self.real_publishers[self.selected_robot_id].erv_joint_jog_stop()
         return True
 
+    def move_real_joints(self, shoulder: int, elbow: int, wrist_pitch: int) -> bool:
+        if not self.joint_jog_available():
+            return False
+        if not all(-500 <= value <= 500 for value in (shoulder, elbow, wrist_pitch)):
+            raise ValueError("ER-V joint target increment must be within +/-500 counts")
+        publisher = self.real_publishers[self.selected_robot_id]
+        move = getattr(publisher, "erv_joint_move_relative", None)
+        if move is None:
+            return False
+        move(shoulder, elbow, wrist_pitch)
+        return True
+
     def clear_selected_simulation_fault(self) -> None:
         robot_id = self.selected_robot_id
+        if self.selected_backend == "real":
+            print(f"{robot_id}: simulation fault clear unavailable in REAL mode")
+            return
         self.publishers[robot_id].clear_fault()
         self.last_error[robot_id] = None
         self._clear_continuous_state()

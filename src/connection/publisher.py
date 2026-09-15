@@ -1,4 +1,5 @@
 from enum import IntEnum
+import threading
 
 from loguru import logger
 
@@ -63,6 +64,10 @@ class Publisher:
         self.operator_connection = OperatorConnection(
             host=socket_host, port=socket_port, connect_on_init=start_connection
         )
+        self._erv_encoder_counts: tuple[int, ...] | None = None
+        self._erv_joint_counts: tuple[int, int, int, int] | None = None
+        self._telemetry_lock = threading.Lock()
+        self.operator_connection.add_message_listener(self._on_operator_message)
 
     def close(self):
         logger.debug("Closing publisher connection")
@@ -73,6 +78,44 @@ class Publisher:
 
     def is_connected(self) -> bool:
         return self.operator_connection.is_connected()
+
+    def get_erv_encoder_counts(self) -> tuple[int, ...] | None:
+        with self._telemetry_lock:
+            return self._erv_encoder_counts
+
+    def get_erv_joint_counts(self) -> tuple[int, int, int, int] | None:
+        """Latest controller joint coordinates: shoulder, elbow, pitch, roll."""
+        with self._telemetry_lock:
+            return self._erv_joint_counts
+
+    def _on_operator_message(self, message: str) -> None:
+        fields = message.split()
+        if not fields:
+            return
+        if fields[0] == "TELP":
+            if len(fields) != 5:
+                logger.warning(f"Ignoring malformed joint telemetry: {message}")
+                return
+            try:
+                counts = tuple(int(value) for value in fields[1:])
+            except ValueError:
+                logger.warning(f"Ignoring malformed joint telemetry: {message}")
+                return
+            with self._telemetry_lock:
+                self._erv_joint_counts = counts
+            return
+        if fields[0] != "TEL":
+            return
+        if len(fields) != 12:
+            logger.warning(f"Ignoring malformed telemetry: {message}")
+            return
+        try:
+            counts = tuple(int(value) for value in fields[1:])
+        except ValueError:
+            logger.warning(f"Ignoring malformed telemetry: {message}")
+            return
+        with self._telemetry_lock:
+            self._erv_encoder_counts = counts
 
     def polar_pan_discrete(
         self,
@@ -400,3 +443,9 @@ class Publisher:
     def erv_joint_jog_stop(self):
         """Stop the current supervised ER-V manual joint jog."""
         self.execute_hardware_operation(0x02, b"")
+
+    def erv_joint_move_relative(self, shoulder: int, elbow: int, wrist_pitch: int):
+        """Execute one bounded coordinated ER-V joint-space increment."""
+        assert all(-500 <= value <= 500 for value in (shoulder, elbow, wrist_pitch))
+        payload = b"".join(toBytes(value, CTypesInt.INT32) for value in (shoulder, elbow, wrist_pitch))
+        self.execute_hardware_operation(0x03, payload)

@@ -21,6 +21,8 @@ class OperatorConnection:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setblocking(False)  # Set socket to non-blocking mode
+        self._message_buffer = b""
+        self._message_listeners = []
         if connect_on_init:
             # Start connection on a separate thread so it doesn't block
             self.connect_on_thread()
@@ -162,5 +164,14 @@ class OperatorConnection:
                 break
 
     def _on_message(self, message: bytes):
-        logger.info(f"RECEIVED MESSAGE: {message.decode(errors='replace')}")
-        logger.info("subclass must implement on_message method")
+        self._message_buffer += message
+        while b"\n" in self._message_buffer:
+            line, self._message_buffer = self._message_buffer.split(b"\n", 1)
+            decoded = line.decode(errors="replace").rstrip("\0")
+            for listener in tuple(self._message_listeners):
+                listener(decoded)
+            if decoded:
+                logger.info(f"RECEIVED MESSAGE: {decoded}")
+
+    def add_message_listener(self, listener) -> None:
+        self._message_listeners.append(listener)
