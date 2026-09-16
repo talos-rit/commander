@@ -271,6 +271,15 @@ def test_erv_encoder_telemetry_is_parsed(mockOperatorConnection):
     assert publisher.get_erv_encoder_counts() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
 
 
+def test_erv_joint_telemetry_accepts_new_base_inclusive_frame(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+
+    publisher._on_operator_message("TELP 10 20 30 40 50")
+
+    assert publisher.get_erv_joint_counts() == (10, 20, 30, 40, 50)
+    assert publisher.get_erv_telemetry_received_monotonic() is not None
+
+
 def test_erv_malformed_telemetry_is_ignored(mockOperatorConnection):
     publisher = Publisher("localhost", 12345, True)
 

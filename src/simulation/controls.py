@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import time
-import math
 from collections.abc import Mapping
-from dataclasses import replace
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
-from src.robot_state import RobotStateSnapshot, RobotStateSource, StateSourceType
+from src.robot_state import RobotStateSnapshot, RobotStateSource
 
 from .publisher import SimulatedPublisher
+from .joint_limit_calibration import capture_soft_endpoint
+from .real_state import MeasuredERVStateSource
 from .robot import RobotPose
 
 
@@ -94,6 +95,9 @@ class InteractiveSimulationController:
         *,
         timestep: float = 1 / 60,
         real_publishers: Mapping[str, RobotCommandTarget] | None = None,
+        manual_jog_timeout_seconds: float = 0.5,
+        manual_jog_refresh_fraction: float = 0.4,
+        clock=time.monotonic,
     ) -> None:
         if not publishers or set(publishers) != set(state_sources):
             raise ValueError(
@@ -101,6 +105,8 @@ class InteractiveSimulationController:
             )
         if timestep <= 0:
             raise ValueError("timestep must be positive")
+        if manual_jog_timeout_seconds <= 0 or not 0 < manual_jog_refresh_fraction < 1:
+            raise ValueError("manual jog refresh must be strictly below its timeout")
         self.publishers = dict(publishers)
         self.real_publishers = dict(real_publishers or {})
         unknown_real_ids = set(self.real_publishers) - set(self.publishers)
@@ -113,6 +119,13 @@ class InteractiveSimulationController:
         self.viewer = viewer
         self.flags = keyboard_flags
         self.timestep = timestep
+        self._clock = clock
+        self.manual_jog_timeout_seconds = manual_jog_timeout_seconds
+        self.manual_jog_refresh_seconds = manual_jog_timeout_seconds * manual_jog_refresh_fraction
+        self._active_joint_jog: tuple[str, int, int] | None = None
+        self._last_joint_jog_refresh: float | None = None
+        self._active_real_polar_hold: tuple[str, int, int] | None = None
+        self._last_real_polar_refresh: float | None = None
         self.robot_ids = tuple(self.publishers)
         self.selected_index = 0
         self._backend_modes = {robot_id: "virtual" for robot_id in self.robot_ids}
@@ -122,8 +135,6 @@ class InteractiveSimulationController:
         self.last_error: dict[str, str | None] = {
             robot_id: None for robot_id in self.robot_ids
         }
-        self._encoder_reference: dict[str, tuple[int, int, int, int]] = {}
-        self._joint_coordinate_reference: dict[str, tuple[int, int, int]] = {}
 
     @property
     def selected_robot_id(self) -> str:
@@ -158,6 +169,14 @@ class InteractiveSimulationController:
             return
         self.stop_selected()
         self._backend_modes[self.selected_robot_id] = backend
+        if backend == "real":
+            publisher = self.real_publishers[self.selected_robot_id]
+            if hasattr(publisher, "get_erv_telemetry_received_monotonic"):
+                # Starting/restarting real mode is a fresh telemetry epoch.  Do
+                # not retain the simulated source or cached pre-connect frames.
+                self.state_sources[self.selected_robot_id] = MeasuredERVStateSource(
+                    self.selected_robot_id, publisher
+                )
         print(f"{self.selected_robot_id}: backend={backend.upper()}")
 
     def process_keyboard(self, events: Mapping[int, int]) -> None:
@@ -213,68 +232,22 @@ class InteractiveSimulationController:
             self._stop_continuous()
 
     def advance_once(self) -> tuple[RobotStateSnapshot, ...]:
+        self.service_joint_jog_heartbeat()
+        self.service_real_polar_heartbeat()
         snapshots = []
         for robot_id, publisher in self.publishers.items():
             if self._backend_modes[robot_id] != "real":
                 publisher.advance(self.timestep)
             snapshot = self.state_sources[robot_id].get_snapshot()
-            if self._backend_modes[robot_id] == "real":
-                snapshot = self._real_encoder_snapshot(robot_id, snapshot)
             self.viewer.update(snapshot)
             snapshots.append(snapshot)
         self.viewer.step(self.timestep)
         return tuple(snapshots)
 
-    def _real_encoder_snapshot(
-        self, robot_id: str, snapshot: RobotStateSnapshot
-    ) -> RobotStateSnapshot:
-        publisher = self.real_publishers[robot_id]
-        get_counts = getattr(publisher, "get_erv_encoder_counts", None)
-        counts = get_counts() if get_counts else None
-        if counts is None or len(counts) < 3:
-            return replace(
-                snapshot, source_type=StateSourceType.REAL, logical_pose=None
-            )
-        base, shoulder, elbow, wrist_pitch = counts[0], counts[1], counts[2], counts[3]
-        get_joint_counts = getattr(publisher, "get_erv_joint_counts", None)
-        joint_counts = get_joint_counts() if get_joint_counts else None
-        if joint_counts is not None:
-            shoulder, elbow, wrist_pitch, _wrist_roll = joint_counts
-        raw_reference = self._encoder_reference.setdefault(
-            robot_id, (base, shoulder, elbow, wrist_pitch)
-        )
-        reference = (
-            (raw_reference[0],)
-            + self._joint_coordinate_reference.setdefault(
-                robot_id, (shoulder, elbow, wrist_pitch)
-            )
-            if joint_counts is not None
-            else raw_reference
-        )
-        shoulder_radians_per_count = math.pi / (180 * 33.2121)
-        base_radians_per_count = math.pi / (180 * 42.5666)
-        wrist_radians_per_count = math.pi / (180 * 8.3555)
-        return replace(
-            snapshot,
-            source_type=StateSourceType.REAL,
-            logical_pose=None,
-            joint_positions={
-                "base_joint": (base - reference[0]) * base_radians_per_count,
-                "shoulder_joint": -2.09925
-                + (shoulder - reference[1]) * shoulder_radians_per_count,
-                "elbow_joint": 1.65843
-                - (elbow - reference[2]) * shoulder_radians_per_count,
-                "pitch_joint": 0.41547
-                - (wrist_pitch - reference[3]) * wrist_radians_per_count,
-                "roll_joint": -math.pi / 4,
-            },
-        )
-
     def select_robot(self, robot_id: str) -> None:
         if robot_id not in self.publishers:
             raise KeyError(f"unknown robot: {robot_id}")
-        if self.joint_jog_available():
-            self.stop_joint_jog()
+        self.stop_joint_jog()
         self._stop_continuous()
         self.selected_index = self.robot_ids.index(robot_id)
         print(f"Selected robot: {self.selected_robot_id}")
@@ -302,13 +275,49 @@ class InteractiveSimulationController:
     def start_joint_jog(self, axis: int, direction: int) -> bool:
         if not self.joint_jog_available():
             return False
-        self.real_publishers[self.selected_robot_id].erv_joint_jog_start(axis, direction)
+        requested = (self.selected_robot_id, axis, direction)
+        if self._active_joint_jog == requested:
+            return True
+        self.stop_joint_jog()
+        self.real_publishers[requested[0]].erv_joint_jog_start(axis, direction)
+        self._active_joint_jog = requested
+        self._last_joint_jog_refresh = self._clock()
         return True
 
     def stop_joint_jog(self) -> bool:
-        if not self.joint_jog_available():
+        if self._active_joint_jog is None:
             return False
-        self.real_publishers[self.selected_robot_id].erv_joint_jog_stop()
+        robot_id, _axis, _direction = self._active_joint_jog
+        publisher = self.real_publishers.get(robot_id)
+        self._active_joint_jog = None
+        self._last_joint_jog_refresh = None
+        if publisher is None:
+            return False
+        try:
+            publisher.erv_joint_jog_stop()
+        except OSError:
+            return False
+        return True
+
+    def service_joint_jog_heartbeat(self) -> bool:
+        """Refresh a held real jog below Operator's independent 500 ms watchdog."""
+        if self._active_joint_jog is None:
+            return False
+        robot_id, axis, direction = self._active_joint_jog
+        if self._backend_modes.get(robot_id) != "real" or not self.real_backend_connected(robot_id):
+            self._active_joint_jog = None
+            self._last_joint_jog_refresh = None
+            return False
+        now = self._clock()
+        if self._last_joint_jog_refresh is None or now - self._last_joint_jog_refresh < self.manual_jog_refresh_seconds:
+            return False
+        try:
+            self.real_publishers[robot_id].erv_joint_jog_start(axis, direction)
+        except OSError:
+            self._active_joint_jog = None
+            self._last_joint_jog_refresh = None
+            return False
+        self._last_joint_jog_refresh = now
         return True
 
     def move_real_joints(self, shoulder: int, elbow: int, wrist_pitch: int) -> bool:
@@ -322,6 +331,34 @@ class InteractiveSimulationController:
             return False
         move(shoulder, elbow, wrist_pitch)
         return True
+
+    def capture_real_joint_soft_endpoint(self, axis: str, bound: str) -> Path:
+        """Persist the current fresh TELP coordinate after a human-supervised jog.
+
+        This is intentionally a recorder, not a limit-seeking motion command.
+        """
+        if self.selected_backend != "real":
+            raise RuntimeError("soft endpoints can only be captured in REAL mode")
+        source = self.state_sources[self.selected_robot_id]
+        health_getter = getattr(source, "telemetry_health", None)
+        health = health_getter() if health_getter else None
+        if health is None or not health.has_state:
+            raise RuntimeError("wait for a fresh TELP sample before capturing an endpoint")
+        publisher = self.real_publishers[self.selected_robot_id]
+        get_counts = getattr(publisher, "get_erv_joint_counts", None)
+        counts = get_counts() if get_counts else None
+        if counts is None:
+            raise RuntimeError("TELP joint coordinates are unavailable")
+        destination = Path(__file__).resolve().parents[2] / "calibration" / "bluey_joint_limits.local.json"
+        saved = capture_soft_endpoint(
+            destination,
+            robot_id=self.selected_robot_id,
+            joint_counts=counts,
+            axis=axis,
+            bound=bound,
+        )
+        print(f"{self.selected_robot_id}: captured {axis} {bound} soft endpoint in {saved}")
+        return saved
 
     def clear_selected_simulation_fault(self) -> None:
         robot_id = self.selected_robot_id
@@ -355,7 +392,34 @@ class InteractiveSimulationController:
         if command_id is not None:
             self._continuous_kind = "polar"
             self._continuous_direction = (azimuth, altitude)
+            if self.selected_backend == "real":
+                self._active_real_polar_hold = (self.selected_robot_id, azimuth, altitude)
+                self._last_real_polar_refresh = self._clock()
         return command_id
+
+    def service_real_polar_heartbeat(self) -> bool:
+        """Refresh a held real polar command below Operator's 500 ms watchdog."""
+        if self._active_real_polar_hold is None:
+            return False
+        robot_id, azimuth, altitude = self._active_real_polar_hold
+        if self._backend_modes.get(robot_id) != "real" or not self.real_backend_connected(robot_id):
+            self._active_real_polar_hold = None
+            self._last_real_polar_refresh = None
+            return False
+        now = self._clock()
+        if (
+            self._last_real_polar_refresh is not None
+            and now - self._last_real_polar_refresh < self.manual_jog_refresh_seconds
+        ):
+            return False
+        try:
+            self.real_publishers[robot_id].polar_pan_continuous_start(azimuth, altitude)
+        except OSError:
+            self._active_real_polar_hold = None
+            self._last_real_polar_refresh = None
+            return False
+        self._last_real_polar_refresh = now
+        return True
 
     def start_cartesian_continuous(
         self, x: int, y: int, z: int
@@ -480,6 +544,8 @@ class InteractiveSimulationController:
             self._invoke("polar_pan_continuous_stop")
         elif self._continuous_kind == "cartesian":
             self._invoke("cartesian_move_continuous_stop")
+        self._active_real_polar_hold = None
+        self._last_real_polar_refresh = None
         self._clear_continuous_state()
 
     def _invoke(self, method_name: str, *args):

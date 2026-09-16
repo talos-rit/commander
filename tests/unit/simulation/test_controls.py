@@ -1,4 +1,5 @@
 import math
+import time
 
 import pytest
 
@@ -18,6 +19,7 @@ from src.simulation import (
     SimulatedRobot,
     SimulatedRobotStateSource,
 )
+from src.simulation.real_state import _ELBOW_STRAIGHT_OFFSET, _SHOULDER_VERTICAL_OFFSET
 
 
 class FakeViewer:
@@ -41,6 +43,9 @@ class FakeViewer:
 class RecordingRealPublisher:
     def __init__(self) -> None:
         self.calls = []
+        self.connected = True
+        self.telemetry_received = None
+        self.joint_counts = None
 
     def _record(self, name, *args):
         self.calls.append((name, args))
@@ -78,6 +83,26 @@ class RecordingRealPublisher:
     def get_erv_encoder_counts(self):
         return self.encoder_counts
 
+    def get_erv_joint_counts(self):
+        return self.joint_counts
+
+    def get_erv_telemetry_received_monotonic(self):
+        return self.telemetry_received
+
+    def emit_telemetry(self, counts, joint_counts=None):
+        self.encoder_counts = counts
+        self.joint_counts = joint_counts
+        self.telemetry_received = time.monotonic()
+
+    def is_connected(self):
+        return self.connected
+
+
+class FakeClock:
+    def __init__(self): self.value = 0.0
+    def __call__(self): return self.value
+    def advance(self, seconds): self.value += seconds
+
 
 class BoundButton:
     def __init__(self) -> None:
@@ -85,6 +110,25 @@ class BoundButton:
 
     def bind(self, event, callback) -> None:
         self.handlers[event] = callback
+
+
+class FocusRoot:
+    def __init__(self, focused) -> None:
+        self.focused = focused
+
+    def after_idle(self, callback) -> None:
+        callback()
+
+    def focus_displayof(self):
+        return self.focused
+
+
+class FocusedWidget:
+    def __init__(self, toplevel) -> None:
+        self._toplevel = toplevel
+
+    def winfo_toplevel(self):
+        return self._toplevel
 
 
 def make_controller():
@@ -241,6 +285,29 @@ def test_hold_button_stops_once_on_leave_then_release() -> None:
     assert calls == ["start", "stop"]
 
 
+def test_hold_button_does_not_stop_from_its_own_focus_transition() -> None:
+    button = BoundButton()
+    TkSimulationControlPanel._bind_hold_button(button, lambda: None, lambda: None)
+
+    assert "<FocusOut>" not in button.handlers
+
+
+def test_window_focus_loss_stops_jog_but_child_focus_does_not() -> None:
+    panel = object.__new__(TkSimulationControlPanel)
+    calls = []
+    panel.controller = type("Controller", (), {"stop_joint_jog": lambda self: calls.append("stop")})()
+    panel.root = FocusRoot(None)
+
+    panel._stop_jog_if_window_loses_focus(None)
+    assert calls == ["stop"]
+
+    calls.clear()
+    panel.root = FocusRoot(None)
+    panel.root.focused = FocusedWidget(panel.root)
+    panel._stop_jog_if_window_loses_focus(None)
+    assert calls == []
+
+
 def test_real_backend_routes_commands_without_a_fake_pose() -> None:
     controller, robots, viewer = make_controller()
     real = RecordingRealPublisher()
@@ -255,19 +322,20 @@ def test_real_backend_routes_commands_without_a_fake_pose() -> None:
     assert robots["bluey"].get_state().pose.y == 0
     bluey = next(snapshot for snapshot in snapshots if snapshot.robot_id == "bluey")
     assert bluey.source_type.value == "real"
+    assert bluey.movement_state == "unknown"
     assert bluey.logical_pose is None
     assert viewer.snapshots[-2].robot_id == "bluey"
 
 
-def test_real_encoder_frames_drive_relative_joint_positions() -> None:
+def test_real_joint_coordinate_frames_drive_joint_positions() -> None:
     controller, _robots, _viewer = make_controller()
     real = RecordingRealPublisher()
-    real.encoder_counts = (10, 100, 200, 300)
+    real.emit_telemetry((10, 100, 200, 300), (10, 100, 200, 300, 400))
     controller.real_publishers["bluey"] = real
     controller.set_selected_backend("real")
 
     controller.advance_once()
-    real.encoder_counts = (43, 16484, -16184, 1136)
+    real.emit_telemetry((43, 16484, -16184, 1136), (43, 16484, -16184, 1136, 0))
     snapshots = controller.advance_once()
 
     bluey = next(snapshot for snapshot in snapshots if snapshot.robot_id == "bluey")
@@ -275,14 +343,10 @@ def test_real_encoder_frames_drive_relative_joint_positions() -> None:
     assert bluey.logical_pose is None
     assert bluey.joint_positions == pytest.approx(
         {
-            "base_joint": (43 - 10) * math.pi / (180 * 42.5666),
-            "shoulder_joint": -2.09925
-            + (16484 - 100) * math.pi / (180 * 33.2121),
-            "elbow_joint": 1.65843
-            - (-16184 - 200) * math.pi / (180 * 33.2121),
-            "pitch_joint": 0.41547
-            - (1136 - 300) * math.pi / (180 * 8.3555),
-            "roll_joint": -math.pi / 4,
+            "base_joint": 43 * math.pi / (180 * 42.5666),
+            "shoulder_joint": _SHOULDER_VERTICAL_OFFSET + 16484 * math.pi / (180 * 33.2121),
+            "elbow_joint": _ELBOW_STRAIGHT_OFFSET - (-16184) * math.pi / (180 * 33.2121),
+            "pitch_joint": 0.41547 - 1136 * math.pi / (180 * 8.3555),
         }
     )
 
@@ -335,6 +399,88 @@ def test_selecting_another_robot_stops_the_old_real_joint_jog() -> None:
         ("joint_jog_start", (3, -1)),
         ("joint_jog_stop", ()),
     ]
+
+
+def test_joint_jog_heartbeat_refreshes_while_held_and_stops_on_release():
+    controller, _robots, _viewer = make_controller()
+    real, clock = RecordingRealPublisher(), FakeClock()
+    controller.real_publishers["bluey"] = real
+    controller._clock = clock
+    controller.set_selected_backend("real")
+
+    assert controller.start_joint_jog(2, 1)
+    clock.advance(controller.manual_jog_refresh_seconds - 0.01)
+    assert not controller.service_joint_jog_heartbeat()
+    clock.advance(0.02)
+    assert controller.service_joint_jog_heartbeat()
+    assert real.calls == [("joint_jog_start", (2, 1)), ("joint_jog_start", (2, 1))]
+    assert controller.manual_jog_refresh_seconds < controller.manual_jog_timeout_seconds
+
+    assert controller.stop_joint_jog()
+    clock.advance(10)
+    assert not controller.service_joint_jog_heartbeat()
+    assert real.calls[-1] == ("joint_jog_stop", ())
+
+
+def test_real_polar_hold_heartbeats_and_stops_on_release():
+    controller, _robots, _viewer = make_controller()
+    real, clock = RecordingRealPublisher(), FakeClock()
+    controller.real_publishers["bluey"] = real
+    controller._clock = clock
+    controller.set_selected_backend("real")
+
+    assert controller.start_polar_continuous(1, 0) is not None
+    clock.advance(controller.manual_jog_refresh_seconds - 0.01)
+    assert not controller.service_real_polar_heartbeat()
+    clock.advance(0.02)
+    assert controller.service_real_polar_heartbeat()
+    assert real.calls == [("polar_start", (1, 0)), ("polar_start", (1, 0))]
+
+    controller.stop_continuous()
+    clock.advance(10)
+    assert not controller.service_real_polar_heartbeat()
+    assert real.calls[-1] == ("polar_stop", ())
+
+
+def test_real_polar_stops_refreshing_when_connection_is_lost():
+    controller, _robots, _viewer = make_controller()
+    real, clock = RecordingRealPublisher(), FakeClock()
+    controller.real_publishers["bluey"] = real
+    controller._clock = clock
+    controller.set_selected_backend("real")
+    controller.start_polar_continuous(0, -1)
+
+    real.connected = False
+    clock.advance(1)
+    assert not controller.service_real_polar_heartbeat()
+    assert real.calls == [("polar_start", (0, -1))]
+
+
+def test_joint_jog_stops_refreshing_when_connection_or_backend_is_lost():
+    controller, _robots, _viewer = make_controller()
+    real, clock = RecordingRealPublisher(), FakeClock()
+    controller.real_publishers["bluey"] = real
+    controller._clock = clock
+    controller.set_selected_backend("real")
+    controller.start_joint_jog(3, -1)
+    real.connected = False
+    clock.advance(1)
+    assert not controller.service_joint_jog_heartbeat()
+    assert real.calls == [("joint_jog_start", (3, -1))]
+
+    # A virtual backend never owns a held real jog or sends refresh traffic.
+    controller._backend_modes["bluey"] = "virtual"
+    assert not controller.service_joint_jog_heartbeat()
+
+
+def test_backend_switch_cancels_active_jog_immediately():
+    controller, _robots, _viewer = make_controller()
+    real = RecordingRealPublisher()
+    controller.real_publishers["bluey"] = real
+    controller.set_selected_backend("real")
+    controller.start_joint_jog(2, -1)
+    controller.set_selected_backend("virtual")
+    assert real.calls[-1] == ("joint_jog_stop", ())
 
 
 def test_panel_hold_directions_are_normalized_for_continuous_commands() -> None:

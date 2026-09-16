@@ -68,6 +68,23 @@ def test_unknown_state_does_not_become_fake_joint_state() -> None:
         assert viewer.get_joint_positions("bluey")["base_joint"] == pytest.approx(0.4)
 
 
+def test_real_measurement_outside_legacy_urdf_limit_renders_without_clipping() -> None:
+    measured_elbow = 2.512909350520678
+    state = RobotStateSnapshot(
+        robot_id="bluey",
+        timestamp=1.0,
+        source_type=StateSourceType.REAL,
+        joint_positions={"elbow_joint": measured_elbow},
+        joint_mapping_quality=MappingQuality.UNKNOWN,
+    )
+
+    with PyBulletRobotViewer(gui=False) as viewer:
+        viewer.add_robot(RobotVisualConfig("bluey"))
+        viewer.update(state)
+
+        assert viewer.get_joint_positions("bluey")["elbow_joint"] == pytest.approx(measured_elbow)
+
+
 def test_viewer_has_no_publisher_or_command_dependency() -> None:
     constructor = inspect.signature(PyBulletRobotViewer)
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from src.connection.publisher import Publisher
-from src.robot_state import MappingQuality, RobotStateSnapshot
+from src.robot_state import MappingQuality, RobotStateSnapshot, StateSourceType
 
 from .control_panel import TkSimulationControlPanel
 from .controls import InteractiveSimulationController, KeyboardFlags
@@ -23,6 +23,7 @@ from .publisher import SimulatedPublisher
 from .robot import RobotPose, SimulationConfig, SimulatedRobot
 from .scenario import ScenarioRunner, demo_scenario
 from .state_source import LegacyPyBulletIKMapper, SimulatedRobotStateSource
+from .real_state import MeasuredERVStateSource
 from .trajectory import TrajectoryRecorder, TrajectoryReplay
 
 
@@ -71,6 +72,7 @@ class _VisualRobot:
     last_snapshot: RobotStateSnapshot | None = None
     status_text_id: int | None = None
     status_text: str | None = None
+    measured_outside_urdf_limits: tuple[str, ...] = ()
 
 
 class PyBulletRobotViewer:
@@ -173,13 +175,20 @@ class PyBulletRobotViewer:
         unknown_names = set(positions) - set(robot.joint_indices)
         if unknown_names:
             raise KeyError(f"URDF does not contain joints: {sorted(unknown_names)}")
+        measured_outside_limits: list[str] = []
         for name, position in positions.items():
             limits = robot.joint_limits.get(name)
             if limits is not None and not limits[0] <= position <= limits[1]:
-                raise ValueError(
-                    f"{snapshot.robot_id}.{name}={position} is outside URDF limits "
-                    f"[{limits[0]}, {limits[1]}]"
-                )
+                if snapshot.source_type is not StateSourceType.REAL:
+                    raise ValueError(
+                        f"{snapshot.robot_id}.{name}={position} is outside URDF limits "
+                        f"[{limits[0]}, {limits[1]}]"
+                    )
+                # The legacy URDF limits are visual-model metadata, not
+                # calibrated ER-V hardware limits.  Never discard, clip, or
+                # crash on a controller measurement merely because the model
+                # is narrower than the physical robot's verified envelope.
+                measured_outside_limits.append(name)
             self._p.resetJointState(
                 robot.body_id,
                 robot.joint_indices[name],
@@ -188,6 +197,7 @@ class PyBulletRobotViewer:
                 physicsClientId=self.client_id,
             )
         robot.last_snapshot = snapshot
+        robot.measured_outside_urdf_limits = tuple(measured_outside_limits)
         if self.gui:
             self._update_status_text(snapshot, robot)
 
@@ -364,6 +374,8 @@ class PyBulletRobotViewer:
         }[snapshot.source_type.value]
         movement = snapshot.movement_state or "unknown"
         message = f"{snapshot.robot_id}: {movement} [{source}/{quality}]"
+        if robot.measured_outside_urdf_limits:
+            message += " | MODEL LIMIT: " + ", ".join(robot.measured_outside_urdf_limits)
         if message == robot.status_text:
             return
         if robot.status_text_id is not None:
@@ -400,6 +412,7 @@ def _run_demo(args: argparse.Namespace) -> None:
     robot = SimulatedRobot(config)
     publisher = SimulatedPublisher(robot)
     publishers = {"bluey": publisher}
+    configured_real_ids = {robot_id for robot_id, _host, _port in args.real_robot}
     with ExitStack() as stack:
         bluey_mapper = stack.enter_context(LegacyPyBulletIKMapper())
         source = SimulatedRobotStateSource("bluey", robot, bluey_mapper)
@@ -408,7 +421,8 @@ def _run_demo(args: argparse.Namespace) -> None:
         if not args.headless:
             _print_camera_help()
         viewer.add_robot(RobotVisualConfig("bluey", base_position=(-0.4, 0, 0)))
-        viewer.update(source.get_snapshot())
+        if "bluey" not in configured_real_ids:
+            viewer.update(source.get_snapshot())
         if args.two_robots:
             erv_robot = SimulatedRobot(config)
             erv_publisher = SimulatedPublisher(erv_robot)
@@ -425,7 +439,8 @@ def _run_demo(args: argparse.Namespace) -> None:
                     base_orientation_rpy=(0, 0, 3.14159),
                 )
             )
-            viewer.update(erv_source.get_snapshot())
+            if "erv" not in configured_real_ids:
+                viewer.update(erv_source.get_snapshot())
         real_publishers: dict[str, Publisher] = {}
         for robot_id, host, port in args.real_robot:
             if robot_id not in publishers:
@@ -435,6 +450,9 @@ def _run_demo(args: argparse.Namespace) -> None:
             real_publisher = Publisher(host, port)
             stack.callback(real_publisher.close)
             real_publishers[robot_id] = real_publisher
+            # A real source begins unknown and only becomes renderable after a
+            # current-connection telemetry frame; it never inherits sim/home state.
+            sources[robot_id] = MeasuredERVStateSource(robot_id, real_publisher)
         recorder = TrajectoryRecorder(args.record) if args.record else None
 
         def consume(snapshot: RobotStateSnapshot) -> None:

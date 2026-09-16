@@ -44,6 +44,7 @@ class TkSimulationControlPanel:
         self.root.title("Commander Simulation Controls")
         self.root.geometry("430x790")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.bind("<FocusOut>", self._stop_jog_if_window_loses_focus)
         self.root.attributes("-topmost", True)
 
         container = ttk.Frame(self.root, padding=12)
@@ -184,6 +185,27 @@ class TkSimulationControlPanel:
             self.real_controls, text="Stop Joint Jog", command=controller.stop_joint_jog
         )
         self.joint_jog_stop_button.pack(fill="x", pady=(4, 0))
+        endpoint_capture = ttk.LabelFrame(
+            self.real_controls, text="Observed soft endpoints (TELP counts)"
+        )
+        endpoint_capture.pack(fill="x", pady=(10, 0))
+        ttk.Label(
+            endpoint_capture,
+            text="Jog manually, release before contact, then capture. Does not move or clear faults.",
+            wraplength=380,
+        ).pack(anchor="w", padx=4, pady=(3, 5))
+        for axis in ("shoulder", "elbow"):
+            row = ttk.Frame(endpoint_capture)
+            row.pack(fill="x", padx=4, pady=1)
+            ttk.Label(row, text=axis.title(), width=12).pack(side="left")
+            ttk.Button(
+                row, text="Capture min",
+                command=lambda joint=axis: self._capture_soft_endpoint(joint, "min"),
+            ).pack(side="left", fill="x", expand=True, padx=(0, 3))
+            ttk.Button(
+                row, text="Capture max",
+                command=lambda joint=axis: self._capture_soft_endpoint(joint, "max"),
+            ).pack(side="left", fill="x", expand=True)
         ttk.Label(self.real_controls, text="Coordinated joint target (counts; drag, then Move)").pack(anchor="w", pady=(10, 2))
         self.real_joint_target = []
         for label in ("Shoulder", "Elbow", "Wrist pitch"):
@@ -266,25 +288,42 @@ class TkSimulationControlPanel:
         )
         if is_real:
             publisher = self.controller.real_publishers.get(selected)
-            counts = (
-                publisher.get_erv_encoder_counts()
-                if publisher is not None
-                and hasattr(publisher, "get_erv_encoder_counts")
+            health_getter = getattr(self.controller.state_sources[selected], "telemetry_health", None)
+            health = health_getter() if health_getter else None
+            joint_counts = (
+                publisher.get_erv_joint_counts()
+                if publisher is not None and hasattr(publisher, "get_erv_joint_counts")
                 else None
             )
-            encoder_text = (
-                "waiting for controller encoder telemetry"
-                if counts is None
-                else (
-                    "encoder counts: "
-                    f"base={counts[0]}  shoulder={counts[1]}  elbow={counts[2]}  "
-                    f"gripper={counts[5]}"
-                )
+            encoder_counts = (
+                publisher.get_erv_encoder_counts()
+                if publisher is not None and hasattr(publisher, "get_erv_encoder_counts")
+                else None
             )
+            if joint_counts is not None:
+                names = ("base", "shoulder", "elbow", "pitch", "roll")
+                joint_text = "  ".join(
+                    f"{name}={value}" for name, value in zip(names[-len(joint_counts):], joint_counts)
+                )
+                source_text = "controller joint coordinates (TELP)"
+            elif encoder_counts is not None:
+                joint_text = "raw encoder counts (TEL); visual pose waiting for TELP"
+                source_text = "controller raw encoders (TEL)"
+            else:
+                joint_text = "waiting for controller joint telemetry (TELP)"
+                source_text = "controller telemetry"
+            health_text = health.health.value.upper() if health is not None else "UNKNOWN"
             self.telemetry.set(
-                f"backend=REAL   source=controller encoder telemetry\n"
-                f"{encoder_text}\n"
-                "visual pose: homed encoder reference (post-home offset)\n"
+                f"backend=REAL   source={source_text}\n"
+                f"{joint_text}\n"
+                f"telemetry={health_text}"
+                + (
+                    f"   age={health.age_seconds:.2f}s"
+                    f"   rate={health.estimated_rate_hz:.2f} Hz"
+                    if health is not None and health.age_seconds is not None and health.estimated_rate_hz is not None
+                    else ""
+                )
+                + "\nvisual pose: measured telemetry only; unknown while waiting\n"
                 f"command_error={self.controller.last_error[selected] or 'none'}"
             )
             pose = None
@@ -309,6 +348,7 @@ class TkSimulationControlPanel:
         return self._open
 
     def close(self) -> None:
+        self.controller.stop_joint_jog()
         if self._open:
             try:
                 self.root.destroy()
@@ -317,10 +357,23 @@ class TkSimulationControlPanel:
         self._open = False
 
     def _on_close(self) -> None:
+        self.controller.stop_joint_jog()
         try:
             self.root.destroy()
         finally:
             self._open = False
+
+    def _stop_jog_if_window_loses_focus(self, _event) -> None:
+        # A button press can legitimately move focus among Tk child widgets.
+        # Check after Tk finishes that transition, and stop only if focus left
+        # this window entirely.  This preserves focus-loss safety without
+        # racing a hold button's ButtonPress handler.
+        self.root.after_idle(self._stop_jog_if_focus_is_external)
+
+    def _stop_jog_if_focus_is_external(self) -> None:
+        focused = self.root.focus_displayof()
+        if focused is None or focused.winfo_toplevel() != self.root:
+            self.controller.stop_joint_jog()
 
     def _select_robot(self, robot_id: str) -> None:
         self.controller.select_robot(robot_id)
@@ -348,6 +401,13 @@ class TkSimulationControlPanel:
         ):
             return
         self.controller.move_real_joints(*values)
+
+    def _capture_soft_endpoint(self, axis: str, bound: str) -> None:
+        try:
+            self.controller.capture_real_joint_soft_endpoint(axis, bound)
+        except (RuntimeError, ValueError) as error:
+            self.controller.last_error[self.controller.selected_robot_id] = str(error)
+            print(f"Endpoint capture failed: {error}")
 
     def _refresh_backend_menu(self) -> None:
         values = self.controller.available_backends()
@@ -400,4 +460,3 @@ class TkSimulationControlPanel:
         button.bind("<ButtonPress-1>", start)
         button.bind("<ButtonRelease-1>", stop)
         button.bind("<Leave>", stop)
-        button.bind("<FocusOut>", stop)

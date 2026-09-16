@@ -1,0 +1,44 @@
+{
+  "alignment_references": {
+    "vertical_straight": {
+      "controller_counts": {
+        "base": 516,
+        "elbow": 2113,
+        "pitch": 1151,
+        "roll": -1432,
+        "shoulder": 1088
+      },
+      "observation": "Shoulder and elbow links ramrod straight up; claw points up.",
+      "recorded_at_utc": "2026-09-16T21:17:00+00:00"
+    }
+  },
+  "coordinate_source": "Operator TELP / controller LISTPV POSITION",
+  "limits": {
+    "elbow": {
+      "max": {
+        "controller_count": -2287,
+        "kind": "human-supervised soft endpoint",
+        "recorded_at_utc": "2026-09-16T20:42:32.678649+00:00"
+      },
+      "min": {
+        "controller_count": 2973,
+        "kind": "human-supervised soft endpoint",
+        "recorded_at_utc": "2026-09-16T20:42:15.661223+00:00"
+      }
+    },
+    "shoulder": {
+      "max": {
+        "controller_count": 444,
+        "kind": "human-supervised soft endpoint",
+        "recorded_at_utc": "2026-09-16T20:43:27.728614+00:00"
+      },
+      "min": {
+        "controller_count": 1452,
+        "kind": "human-supervised soft endpoint",
+        "recorded_at_utc": "2026-09-16T21:15:35.573612+00:00"
+      }
+    }
+  },
+  "robot_id": "bluey",
+  "schema_version": 1
+}

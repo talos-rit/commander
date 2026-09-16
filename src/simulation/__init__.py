@@ -31,6 +31,7 @@ from .state_source import (
     legacy_visual_mapping,
 )
 from .trajectory import TrajectoryRecorder, TrajectoryReplay
+from .real_state import FakeERVTelemetryPublisher, MeasuredERVStateSource, TelemetryHealth, TelemetryHealthSnapshot
 
 __all__ = [
     "AxisLimits",
@@ -63,4 +64,8 @@ __all__ = [
     "TrajectoryRecorder",
     "TrajectoryReplay",
     "legacy_visual_mapping",
+    "FakeERVTelemetryPublisher",
+    "MeasuredERVStateSource",
+    "TelemetryHealth",
+    "TelemetryHealthSnapshot",
 ]

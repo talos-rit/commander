@@ -1,5 +1,7 @@
+from dataclasses import dataclass
 from enum import IntEnum
 import threading
+import time
 
 from loguru import logger
 
@@ -17,6 +19,13 @@ DIRECTION_OFFSET_MAPPING: dict[int, tuple[int, int]] = {
     3: (1, 0),
     4: (1, -1),
 }
+
+@dataclass(frozen=True)
+class ERVTelemetrySnapshot:
+    encoder_counts: tuple[int, ...] | None
+    encoder_received_monotonic: float | None
+    joint_counts: tuple[int, ...] | None
+    joint_received_monotonic: float | None
 
 
 class Direction(IntEnum):
@@ -65,7 +74,9 @@ class Publisher:
             host=socket_host, port=socket_port, connect_on_init=start_connection
         )
         self._erv_encoder_counts: tuple[int, ...] | None = None
-        self._erv_joint_counts: tuple[int, int, int, int] | None = None
+        self._erv_joint_counts: tuple[int, ...] | None = None
+        self._erv_encoder_received_monotonic: float | None = None
+        self._erv_joint_received_monotonic: float | None = None
         self._telemetry_lock = threading.Lock()
         self.operator_connection.add_message_listener(self._on_operator_message)
 
@@ -83,17 +94,26 @@ class Publisher:
         with self._telemetry_lock:
             return self._erv_encoder_counts
 
-    def get_erv_joint_counts(self) -> tuple[int, int, int, int] | None:
-        """Latest controller joint coordinates: shoulder, elbow, pitch, roll."""
+    def get_erv_joint_counts(self) -> tuple[int, ...] | None:
+        """Latest controller coordinates; new Operator frames include base first."""
         with self._telemetry_lock:
             return self._erv_joint_counts
+
+    def get_erv_telemetry_received_monotonic(self) -> float | None:
+        """Local receive time of the latest valid ER-V telemetry frame."""
+        with self._telemetry_lock:
+            return self._erv_joint_received_monotonic
+
+    def get_erv_telemetry_snapshot(self) -> ERVTelemetrySnapshot:
+        with self._telemetry_lock:
+            return ERVTelemetrySnapshot(self._erv_encoder_counts, self._erv_encoder_received_monotonic, self._erv_joint_counts, self._erv_joint_received_monotonic)
 
     def _on_operator_message(self, message: str) -> None:
         fields = message.split()
         if not fields:
             return
         if fields[0] == "TELP":
-            if len(fields) != 5:
+            if len(fields) not in (5, 6):
                 logger.warning(f"Ignoring malformed joint telemetry: {message}")
                 return
             try:
@@ -103,6 +123,7 @@ class Publisher:
                 return
             with self._telemetry_lock:
                 self._erv_joint_counts = counts
+                self._erv_joint_received_monotonic = time.monotonic()
             return
         if fields[0] != "TEL":
             return
@@ -116,6 +137,7 @@ class Publisher:
             return
         with self._telemetry_lock:
             self._erv_encoder_counts = counts
+            self._erv_encoder_received_monotonic = time.monotonic()
 
     def polar_pan_discrete(
         self,
