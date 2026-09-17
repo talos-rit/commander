@@ -71,6 +71,15 @@ def test_legacy_urdf_loads_and_joints_are_resolved_by_name() -> None:
     assert len(positions) == 7
 
 
+def test_legacy_pedestal_is_level_and_on_the_pybullet_floor() -> None:
+    with PyBulletRobotViewer(gui=False) as viewer:
+        viewer.add_robot(RobotVisualConfig("bluey", LEGACY_URDF))
+        body_id = viewer._robots["bluey"].body_id
+        lower, _upper = viewer._p.getAABB(body_id, -1, physicsClientId=viewer.client_id)
+
+    assert lower[2] == pytest.approx(0.0, abs=1e-6)
+
+
 def test_two_robots_are_independent() -> None:
     with PyBulletRobotViewer(gui=False) as viewer:
         viewer.add_robot(RobotVisualConfig("a", base_position=(-0.5, 0, 0)))

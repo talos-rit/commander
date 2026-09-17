@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -12,7 +13,13 @@ from src.robot_state import RobotStateSnapshot, RobotStateSource
 
 from .publisher import SimulatedPublisher
 from .joint_limit_calibration import capture_soft_endpoint
-from .real_state import MeasuredERVStateSource
+from .erv_calibration import (
+    ELBOW_CALIBRATION,
+    PITCH_CALIBRATION,
+    SHOULDER_CALIBRATION,
+    coordinated_move_counts_for_urdf_degree_deltas,
+)
+from .real_state import MeasuredERVStateSource, TelemetryHealth
 from .robot import RobotPose
 
 
@@ -61,6 +68,10 @@ class RobotCommandTarget(Protocol):
     def erv_joint_jog_stop(self): ...
 
     def erv_joint_move_relative(self, shoulder: int, elbow: int, wrist_pitch: int): ...
+
+    def erv_enable_control(self): ...
+
+    def erv_set_speed_percent(self, percent: int): ...
 
     def polar_pan_discrete(
         self, azimuth: int, altitude: int, delay_ms: int, duration_ms: int
@@ -134,6 +145,11 @@ class InteractiveSimulationController:
         self._keyboard_continuous_active = False
         self.last_error: dict[str, str | None] = {
             robot_id: None for robot_id in self.robot_ids
+        }
+        # This is Commander intent, not a measured controller state.  ACL can
+        # report it through SHOW SPEED, but that response is not part of TELP.
+        self._real_requested_speed_percent = {
+            robot_id: 20 for robot_id in self.real_publishers
         }
 
     @property
@@ -331,6 +347,75 @@ class InteractiveSimulationController:
             return False
         move(shoulder, elbow, wrist_pitch)
         return True
+
+    def get_current_real_joint_angles_degrees(self) -> dict[str, float]:
+        """Return fresh, measured URDF joint angles for the degree-target UI."""
+        if self.selected_backend != "real":
+            raise RuntimeError("degree targets are available only in REAL mode")
+        source = self.state_sources[self.selected_robot_id]
+        health_getter = getattr(source, "telemetry_health", None)
+        health = health_getter() if health_getter else None
+        if health is None or health.health is not TelemetryHealth.LIVE:
+            raise RuntimeError("wait for fresh live TELP telemetry before calculating a target move")
+        snapshot = source.get_snapshot()
+        positions = snapshot.joint_positions or {}
+        required = (
+            SHOULDER_CALIBRATION.joint_name,
+            ELBOW_CALIBRATION.joint_name,
+            PITCH_CALIBRATION.joint_name,
+        )
+        if any(name not in positions for name in required):
+            raise RuntimeError("fresh TELP telemetry does not contain all coordinated joints")
+        return {
+            "shoulder": math.degrees(positions[SHOULDER_CALIBRATION.joint_name]),
+            "elbow": math.degrees(positions[ELBOW_CALIBRATION.joint_name]),
+            "pitch": math.degrees(positions[PITCH_CALIBRATION.joint_name]),
+        }
+
+    def move_real_joints_to_angles(
+        self, shoulder_degrees: float, elbow_degrees: float, pitch_degrees: float
+    ) -> bool:
+        """Move to absolute displayed joint angles using one bounded ACL move."""
+        requested = (shoulder_degrees, elbow_degrees, pitch_degrees)
+        if not all(math.isfinite(value) for value in requested):
+            raise ValueError("joint targets must be finite degree values")
+        current = self.get_current_real_joint_angles_degrees()
+        counts = coordinated_move_counts_for_urdf_degree_deltas(
+            shoulder_degrees - current["shoulder"],
+            elbow_degrees - current["elbow"],
+            pitch_degrees - current["pitch"],
+        )
+        if not all(-500 <= value <= 500 for value in counts):
+            raise ValueError(
+                "requested degree target exceeds the ER-V coordinated-move limit of +/-500 counts"
+            )
+        return self.move_real_joints(*counts)
+
+    def enable_real_control(self) -> bool:
+        if self.selected_backend != "real" or not self.real_backend_connected():
+            return False
+        enable = getattr(self.real_publishers[self.selected_robot_id], "erv_enable_control", None)
+        if enable is None:
+            return False
+        enable()
+        return True
+
+    def set_real_speed_percent(self, percent: int) -> bool:
+        if not 1 <= percent <= 100:
+            raise ValueError("ER-V speed percent must be within 1..100")
+        if self.selected_backend != "real" or not self.real_backend_connected():
+            return False
+        set_speed = getattr(
+            self.real_publishers[self.selected_robot_id], "erv_set_speed_percent", None
+        )
+        if set_speed is None:
+            return False
+        set_speed(percent)
+        self._real_requested_speed_percent[self.selected_robot_id] = percent
+        return True
+
+    def get_real_requested_speed_percent(self) -> int | None:
+        return self._real_requested_speed_percent.get(self.selected_robot_id)
 
     def capture_real_joint_soft_endpoint(self, axis: str, bound: str) -> Path:
         """Persist the current fresh TELP coordinate after a human-supervised jog.

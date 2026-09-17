@@ -471,3 +471,13 @@ class Publisher:
         assert all(-500 <= value <= 500 for value in (shoulder, elbow, wrist_pitch))
         payload = b"".join(toBytes(value, CTypesInt.INT32) for value in (shoulder, elbow, wrist_pitch))
         self.execute_hardware_operation(0x03, payload)
+
+    def erv_enable_control(self):
+        """Request ACL ``CON`` to re-enable ER-V servo control."""
+        self.execute_hardware_operation(0x04, b"")
+
+    def erv_set_speed_percent(self, percent: int):
+        """Request ACL ``SPEED n`` for the ER-V's 1--100% speed setting."""
+        if not 1 <= percent <= 100:
+            raise ValueError("ER-V speed percent must be within 1..100")
+        self.execute_hardware_operation(0x05, toBytes(percent, CTypesInt.UINT8))

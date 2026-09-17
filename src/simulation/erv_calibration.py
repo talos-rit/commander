@@ -153,3 +153,33 @@ def map_arm_controller_coordinates(
         ),
         PITCH_CALIBRATION.joint_name: PITCH_CALIBRATION.to_urdf(pitch_count),
     }
+
+
+def coordinated_move_counts_for_urdf_degree_deltas(
+    shoulder_degrees: float, elbow_degrees: float, pitch_degrees: float
+) -> tuple[int, int, int]:
+    """Convert displayed ER-V joint-angle deltas into controller coordinates.
+
+    The controller maintains forearm orientation independently of the shoulder,
+    while the URDF is a serial chain.  Therefore an elbow-joint delta in the
+    displayed/URDF frame includes the shoulder delta when converted back to the
+    controller's independent elbow coordinate.  This is the inverse of
+    :func:`map_arm_controller_coordinates` and deliberately leaves limit
+    enforcement to the existing bounded coordinated-move operation.
+    """
+    shoulder_delta = math.radians(shoulder_degrees)
+    elbow_delta = math.radians(elbow_degrees)
+    pitch_delta = math.radians(pitch_degrees)
+    shoulder_counts = round(
+        shoulder_delta
+        / (SHOULDER_CALIBRATION.direction * SHOULDER_CALIBRATION.radians_per_count)
+    )
+    elbow_counts = round(
+        (elbow_delta + shoulder_delta)
+        / (ELBOW_CALIBRATION.direction * ELBOW_CALIBRATION.radians_per_count)
+    )
+    pitch_counts = round(
+        pitch_delta
+        / (PITCH_CALIBRATION.direction * PITCH_CALIBRATION.radians_per_count)
+    )
+    return shoulder_counts, elbow_counts, pitch_counts

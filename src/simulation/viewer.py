@@ -35,6 +35,15 @@ LEGACY_URDF = (
     / "sboter4u_model.URDF"
 )
 
+# The legacy CAD export's base mesh is not level in its root-link frame: its
+# pedestal plane is tilted by about 3.61 degrees about X and 0.23 degrees about
+# Y.  The floor offset also accounts for PyBullet applying a root link through
+# its URDF inertial frame.  Keep this model-only correction at the
+# world-placement boundary rather than changing any measured-joint calibration
+# or scattering a renderer-only rotation through the code.
+LEGACY_MODEL_LEVEL_RPY = (-0.0629868471, 0.0040045985, 0.0)
+LEGACY_MODEL_FLOOR_OFFSET = (0.0, 0.0, -0.0583950487)
+
 # Bright defaults keep the untextured legacy STL geometry readable and make the
 # two arms easy to distinguish. RobotVisualConfig.rgba can still override these.
 DEFAULT_ROBOT_COLORS = (
@@ -142,11 +151,20 @@ class PyBulletRobotViewer:
     def add_robot(self, config: RobotVisualConfig) -> None:
         if config.robot_id in self._robots:
             raise ValueError(f"robot already exists: {config.robot_id}")
+        is_legacy_model = config.urdf_path.resolve() == LEGACY_URDF.resolve()
         urdf_path = self._resolved_urdf(config.urdf_path)
         orientation = self._p.getQuaternionFromEuler(config.base_orientation_rpy)
+        position = config.base_position
+        if is_legacy_model:
+            position, orientation = self._p.multiplyTransforms(
+                config.base_position,
+                orientation,
+                LEGACY_MODEL_FLOOR_OFFSET,
+                self._p.getQuaternionFromEuler(LEGACY_MODEL_LEVEL_RPY),
+            )
         body_id = self._p.loadURDF(
             str(urdf_path),
-            basePosition=config.base_position,
+            basePosition=position,
             baseOrientation=orientation,
             useFixedBase=True,
             physicsClientId=self.client_id,

@@ -263,6 +263,26 @@ def test_erv_joint_jog_start_and_stop(mockOperatorConnection):
     )
 
 
+def test_erv_enable_control_and_speed_are_typed_hardware_operations(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+
+    publisher.erv_enable_control()
+    mockOperatorConnection.publish.assert_called_once_with(
+        command=Command.EXECUTE_HARDWARE_OPERATION,
+        payload=b"\x04\x00\x00\x00\x00",
+    )
+
+    mockOperatorConnection.publish.reset_mock()
+    publisher.erv_set_speed_percent(20)
+    mockOperatorConnection.publish.assert_called_once_with(
+        command=Command.EXECUTE_HARDWARE_OPERATION,
+        payload=b"\x05\x00\x00\x00\x00\x14",
+    )
+
+    with pytest.raises(ValueError, match="1..100"):
+        publisher.erv_set_speed_percent(0)
+
+
 def test_erv_encoder_telemetry_is_parsed(mockOperatorConnection):
     publisher = Publisher("localhost", 12345, True)
 

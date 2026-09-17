@@ -204,6 +204,31 @@ class TkSimulationControlPanel:
             self.real_controls, text="Stop Joint Jog", command=controller.stop_joint_jog
         )
         self.joint_jog_stop_button.pack(fill="x", pady=(4, 0))
+        self.enable_control_button = ttk.Button(
+            self.real_controls,
+            text="Enable Control",
+            command=self._enable_real_control,
+        )
+        self.enable_control_button.pack(fill="x", pady=(8, 0))
+        speed_row = ttk.Frame(self.real_controls)
+        speed_row.pack(fill="x", pady=(8, 0))
+        ttk.Label(speed_row, text="Requested speed:").pack(side="left")
+        self.real_speed_percent = tk.IntVar(
+            value=controller.get_real_requested_speed_percent() or 20
+        )
+        self.real_speed_spinbox = ttk.Spinbox(
+            speed_row,
+            from_=1,
+            to=100,
+            width=5,
+            textvariable=self.real_speed_percent,
+        )
+        self.real_speed_spinbox.pack(side="left", padx=(8, 2))
+        ttk.Label(speed_row, text="%").pack(side="left")
+        self.real_speed_button = ttk.Button(
+            speed_row, text="Set speed", command=self._set_real_speed
+        )
+        self.real_speed_button.pack(side="right")
         endpoint_capture = ttk.LabelFrame(
             self.real_controls, text="Observed soft endpoints (TELP counts)"
         )
@@ -220,19 +245,41 @@ class TkSimulationControlPanel:
                 row, text="Capture max",
                 command=lambda joint=axis: self._capture_soft_endpoint(joint, "max"),
             ).pack(side="left", fill="x", expand=True)
-        ttk.Label(self.real_controls, text="Coordinated joint target (counts; drag, then Move)").pack(anchor="w", pady=(10, 2))
-        self.real_joint_target = []
-        for label in ("Shoulder", "Elbow", "Wrist pitch"):
-            row = ttk.Frame(self.real_controls)
-            row.pack(fill="x")
-            ttk.Label(row, text=label, width=12).pack(side="left")
-            value = tk.IntVar(value=0)
-            ttk.Scale(row, from_=-500, to=500, variable=value).pack(side="left", fill="x", expand=True)
-            self.real_joint_target.append(value)
-        self.real_joint_move_button = ttk.Button(
-            self.real_controls, text="Move Real Robot (supervised)", command=self._move_real_joints
+        joint_target = ttk.LabelFrame(
+            self.real_controls, text="Coordinated joint target (measured degrees)"
         )
-        self.real_joint_move_button.pack(fill="x", pady=(4, 0))
+        joint_target.pack(fill="x", pady=(10, 0))
+        header = ttk.Frame(joint_target)
+        header.pack(fill="x", padx=4)
+        ttk.Label(header, text="", width=12).pack(side="left")
+        ttk.Label(header, text="Current", width=12).pack(side="left")
+        ttk.Label(header, text="Target", width=12).pack(side="left")
+        self.real_joint_current = {}
+        self.real_joint_target = []
+        for label, key in (
+            ("Shoulder", "shoulder"),
+            ("Elbow", "elbow"),
+            ("Wrist pitch", "pitch"),
+        ):
+            row = ttk.Frame(joint_target)
+            row.pack(fill="x", padx=4, pady=1)
+            ttk.Label(row, text=label, width=12).pack(side="left")
+            current = tk.StringVar(value="--")
+            ttk.Label(row, textvariable=current, width=12).pack(side="left")
+            self.real_joint_current[key] = current
+            value = tk.StringVar(value="")
+            ttk.Entry(row, textvariable=value, width=12).pack(side="left")
+            self.real_joint_target.append(value)
+        self._joint_targets_initialized_for: str | None = None
+        ttk.Button(
+            joint_target,
+            text="Use current measured angles",
+            command=self._copy_current_joint_targets,
+        ).pack(fill="x", padx=4, pady=(4, 0))
+        self.real_joint_move_button = ttk.Button(
+            joint_target, text="Move to target angles", command=self._move_real_joints
+        )
+        self.real_joint_move_button.pack(fill="x", padx=4, pady=4)
         self.real_controls.pack(fill="x", pady=(10, 0))
 
         self.mapping_status = tk.StringVar(value="Mapping: unknown")
@@ -294,6 +341,9 @@ class TkSimulationControlPanel:
             button.configure(state=joint_jog_state)
         self.joint_jog_stop_button.configure(state=joint_jog_state)
         self.real_joint_move_button.configure(state=joint_jog_state)
+        self.enable_control_button.configure(state=joint_jog_state)
+        self.real_speed_spinbox.configure(state=joint_jog_state)
+        self.real_speed_button.configure(state=joint_jog_state)
         state = next(
             snapshot for snapshot in snapshots if snapshot.robot_id == selected
         )
@@ -327,6 +377,20 @@ class TkSimulationControlPanel:
                 joint_text = "waiting for controller joint telemetry (TELP)"
                 source_text = "controller telemetry"
             health_text = health.health.value.upper() if health is not None else "UNKNOWN"
+            try:
+                angles = self.controller.get_current_real_joint_angles_degrees()
+            except RuntimeError:
+                for value in self.real_joint_current.values():
+                    value.set("-- (stale)")
+            else:
+                for key, value in angles.items():
+                    self.real_joint_current[key].set(f"{value:.1f}\N{DEGREE SIGN}")
+                if self._joint_targets_initialized_for != selected:
+                    for target, key in zip(
+                        self.real_joint_target, ("shoulder", "elbow", "pitch")
+                    ):
+                        target.set(f"{angles[key]:.1f}")
+                    self._joint_targets_initialized_for = selected
             self.telemetry.set(
                 f"backend=REAL   source={source_text}\n"
                 f"{joint_text}\n"
@@ -413,14 +477,39 @@ class TkSimulationControlPanel:
         self.controller.set_selected_backend(self.backend.get())
 
     def _move_real_joints(self) -> None:
-        values = tuple(int(value.get()) for value in self.real_joint_target)
-        if not self._messagebox.askyesno(
-            "Move real robot",
-            f"Execute one coordinated joint move (counts):\nshoulder={values[0]}, elbow={values[1]}, pitch={values[2]}?",
-            icon="warning",
-        ):
+        try:
+            values = tuple(float(value.get()) for value in self.real_joint_target)
+            self.controller.move_real_joints_to_angles(*values)
+        except (RuntimeError, ValueError) as error:
+            self.controller.last_error[self.controller.selected_robot_id] = str(error)
+            print(f"Degree target move rejected: {error}")
+
+    def _copy_current_joint_targets(self) -> None:
+        try:
+            angles = self.controller.get_current_real_joint_angles_degrees()
+        except RuntimeError as error:
+            self.controller.last_error[self.controller.selected_robot_id] = str(error)
+            print(f"Cannot copy joint targets: {error}")
             return
-        self.controller.move_real_joints(*values)
+        for target, key in zip(self.real_joint_target, ("shoulder", "elbow", "pitch")):
+            target.set(f"{angles[key]:.1f}")
+
+    def _enable_real_control(self) -> None:
+        try:
+            if not self.controller.enable_real_control():
+                raise RuntimeError("real Enable Control is unavailable")
+        except (RuntimeError, OSError) as error:
+            self.controller.last_error[self.controller.selected_robot_id] = str(error)
+            print(f"Enable Control failed: {error}")
+
+    def _set_real_speed(self) -> None:
+        try:
+            percent = int(self.real_speed_percent.get())
+            if not self.controller.set_real_speed_percent(percent):
+                raise RuntimeError("real speed control is unavailable")
+        except (RuntimeError, ValueError, self._tk.TclError) as error:
+            self.controller.last_error[self.controller.selected_robot_id] = str(error)
+            print(f"Speed request rejected: {error}")
 
     def _capture_soft_endpoint(self, axis: str, bound: str) -> None:
         try:

@@ -82,6 +82,15 @@ class RecordingRealPublisher:
     def erv_joint_jog_stop(self):
         self._record("joint_jog_stop")
 
+    def erv_joint_move_relative(self, shoulder, elbow, wrist_pitch):
+        self._record("joint_move_relative", shoulder, elbow, wrist_pitch)
+
+    def erv_enable_control(self):
+        self._record("enable_control")
+
+    def erv_set_speed_percent(self, percent):
+        self._record("set_real_speed", percent)
+
     def get_erv_encoder_counts(self):
         return self.encoder_counts
 
@@ -348,6 +357,46 @@ def test_real_joint_coordinate_frames_drive_joint_positions() -> None:
     assert bluey.joint_positions == pytest.approx(expected)
 
 
+def test_real_degree_targets_use_fresh_measurement_and_preserve_forearm_independence() -> None:
+    controller, _robots, _viewer = make_controller()
+    real = RecordingRealPublisher()
+    controller.real_publishers["bluey"] = real
+    controller.set_selected_backend("real")
+    real.emit_telemetry((0, 1088, 2113, 1151), (0, 1088, 2113, 1151, 0))
+
+    assert controller.move_real_joints_to_angles(-89.0, 0.0, 0.0)
+    assert real.calls[-1] == ("joint_move_relative", (33, -33, 0))
+
+
+def test_real_degree_targets_require_fresh_telemetry_and_keep_count_bound() -> None:
+    controller, _robots, _viewer = make_controller()
+    real = RecordingRealPublisher()
+    controller.real_publishers["bluey"] = real
+    controller.set_selected_backend("real")
+
+    with pytest.raises(RuntimeError, match="fresh live TELP"):
+        controller.move_real_joints_to_angles(0.0, 0.0, 0.0)
+
+    real.emit_telemetry((0, 1088, 2113, 1151), (0, 1088, 2113, 1151, 0))
+    with pytest.raises(ValueError, match=r"\+/-500"):
+        controller.move_real_joints_to_angles(90.0, 0.0, 0.0)
+
+
+def test_enable_control_and_requested_real_speed_route_without_claiming_measurement() -> None:
+    controller, _robots, _viewer = make_controller()
+    real = RecordingRealPublisher()
+    controller.real_publishers["bluey"] = real
+    controller.set_selected_backend("real")
+
+    assert controller.enable_real_control()
+    assert controller.set_real_speed_percent(20)
+    assert controller.get_real_requested_speed_percent() == 20
+    assert ("enable_control", ()) in real.calls
+    assert ("set_real_speed", (20,)) in real.calls
+    with pytest.raises(ValueError, match="1..100"):
+        controller.set_real_speed_percent(101)
+
+
 def test_real_backend_is_unavailable_until_registered() -> None:
     controller, _robots, _viewer = make_controller()
 
@@ -504,10 +553,10 @@ def test_panel_polar_labels_describe_the_observed_hardware_axes() -> None:
     }
 
     assert labeled_directions == {
-        "Base rotate +": (0, 1),
-        "Base rotate -": (0, -1),
-        "Claw rotate +": (1, 0),
-        "Claw rotate -": (-1, 0),
+        "Base rotate +": (1, 0),
+        "Base rotate -": (-1, 0),
+        "Claw rotate +": (0, 1),
+        "Claw rotate -": (0, -1),
     }
 
 
