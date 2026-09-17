@@ -42,13 +42,32 @@ class TkSimulationControlPanel:
         self._open = True
         self.root = tk.Tk()
         self.root.title("Commander Simulation Controls")
-        self.root.geometry("430x790")
+        self.root.geometry("500x790")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.bind("<FocusOut>", self._stop_jog_if_window_loses_focus)
         self.root.attributes("-topmost", True)
 
-        container = ttk.Frame(self.root, padding=12)
-        container.pack(fill="both", expand=True)
+        canvas = tk.Canvas(self.root, width=480, height=750)
+        scrollbar = tk.Scrollbar(self.root, orient="vertical", command=canvas.yview)
+        container = ttk.Frame(canvas, padding=12)
+
+        container.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=container, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        self._scroll_canvas = canvas
+        self.root.bind_all("<MouseWheel>", self._scroll_with_mouse_wheel)
+        self.root.bind_all("<Button-4>", self._scroll_with_mouse_wheel)
+        self.root.bind_all("<Button-5>", self._scroll_with_mouse_wheel)
 
         ttk.Label(
             container,
@@ -374,6 +393,20 @@ class TkSimulationControlPanel:
         focused = self.root.focus_displayof()
         if focused is None or focused.winfo_toplevel() != self.root:
             self.controller.stop_joint_jog()
+
+    def _scroll_with_mouse_wheel(self, event) -> None:
+        """Forward platform-specific wheel events to the control canvas."""
+        if event.widget.winfo_toplevel() != self.root:
+            return
+        if getattr(event, "num", None) == 4:
+            units = -1
+        elif getattr(event, "num", None) == 5:
+            units = 1
+        else:
+            delta = getattr(event, "delta", 0)
+            units = -1 if delta > 0 else 1 if delta < 0 else 0
+        if units:
+            self._scroll_canvas.yview_scroll(units, "units")
 
     def _select_robot(self, robot_id: str) -> None:
         self.controller.select_robot(robot_id)
