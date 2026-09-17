@@ -18,6 +18,7 @@ class MappingQuality(str, Enum):
     """How confidently logical coordinates were converted to physical joints."""
 
     PHYSICALLY_VALIDATED = "physically_validated"
+    PARTIALLY_CALIBRATED = "partially_calibrated"
     LEGACY_APPROXIMATION = "legacy_approximation"
     UNKNOWN = "unknown"
 

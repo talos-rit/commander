@@ -8,9 +8,9 @@ from .controls import KEYBOARD_HELP_TEXT, InteractiveSimulationController
 
 
 POLAR_HOLD_DIRECTIONS = (
-    ("", None, "ALT +", (0, 1), "", None),
-    ("AZ -", (-1, 0), "", None, "AZ +", (1, 0)),
-    ("", None, "ALT -", (0, -1), "", None),
+    ("", None, "Claw rotate +", (0, 1), "", None),
+    ("Base rotate -", (-1, 0), "", None, "Base rotate +", (1, 0)),
+    ("", None, "Claw rotate -", (0, -1), "", None),
 )
 
 CARTESIAN_HOLD_DIRECTIONS = (
@@ -146,7 +146,7 @@ class TkSimulationControlPanel:
         self.speed_label = ttk.Label(self.virtual_controls, text=str(self.speed.get()))
         self.speed_label.pack(anchor="e")
 
-        ttk.Label(container, text="Polar movement (press and hold)").pack(
+        ttk.Label(container, text="Direct hardware axes (press and hold)").pack(
             anchor="w", pady=(12, 4)
         )
         polar = ttk.Frame(container)
@@ -208,11 +208,6 @@ class TkSimulationControlPanel:
             self.real_controls, text="Observed soft endpoints (TELP counts)"
         )
         endpoint_capture.pack(fill="x", pady=(10, 0))
-        ttk.Label(
-            endpoint_capture,
-            text="Jog manually, release before contact, then capture. Does not move or clear faults.",
-            wraplength=380,
-        ).pack(anchor="w", padx=4, pady=(3, 5))
         for axis in ("shoulder", "elbow"):
             row = ttk.Frame(endpoint_capture)
             row.pack(fill="x", padx=4, pady=1)
@@ -415,15 +410,7 @@ class TkSimulationControlPanel:
         self._refresh_backend_menu()
 
     def _select_backend(self, _event=None) -> None:
-        requested = self.backend.get()
-        if requested == "real" and not self._messagebox.askyesno(
-            "Enable real robot",
-            f"Send controls to the real {self.controller.selected_robot_id} robot?",
-            icon="warning",
-        ):
-            self.backend.set(self.controller.selected_backend)
-            return
-        self.controller.set_selected_backend(requested)
+        self.controller.set_selected_backend(self.backend.get())
 
     def _move_real_joints(self) -> None:
         values = tuple(int(value.get()) for value in self.real_joint_target)

@@ -17,9 +17,9 @@ from .robot import RobotPose
 
 
 KEYBOARD_HELP_TEXT = (
-    "A / D      rotate robot left / right (hold)\n"
+    "A / D      claw rotate - / + (real; logical AZ in simulation)\n"
     "W / S      extend / retract arm (hold, approximate IK)\n"
-    "J / K      tilt camera head up / down\n"
+    "J / K      base rotate + / - (real; logical ALT in simulation)\n"
     "H          home selected robot\n"
     "Space / X  stop selected robot\n"
     "+ / -      increase / decrease speed\n"

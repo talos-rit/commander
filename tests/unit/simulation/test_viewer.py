@@ -13,6 +13,7 @@ from src.simulation.viewer import (  # noqa: E402
     LEGACY_URDF,
     PyBulletRobotViewer,
     RobotVisualConfig,
+    _wait_for_real_backend,
 )
 from src.simulation import (  # noqa: E402
     SimulatedRobot,
@@ -33,6 +34,30 @@ def snapshot(robot_id: str, **positions: float) -> RobotStateSnapshot:
             else MappingQuality.UNKNOWN
         ),
     )
+
+
+class SequencedRealBackendController:
+    def __init__(self, states: list[bool]) -> None:
+        self.states = iter(states)
+
+    def real_backend_connected(self) -> bool:
+        return next(self.states)
+
+
+def test_wait_for_real_backend_handles_async_connection(monkeypatch) -> None:
+    controller = SequencedRealBackendController([False, False, True])
+    monkeypatch.setattr("src.simulation.viewer.time.sleep", lambda _seconds: None)
+
+    assert _wait_for_real_backend(controller, timeout_seconds=1.0)
+
+
+def test_wait_for_real_backend_times_out(monkeypatch) -> None:
+    now = iter((0.0, 0.0, 1.0))
+    controller = SequencedRealBackendController([False, False])
+    monkeypatch.setattr("src.simulation.viewer.time.monotonic", lambda: next(now))
+    monkeypatch.setattr("src.simulation.viewer.time.sleep", lambda _seconds: None)
+
+    assert not _wait_for_real_backend(controller, timeout_seconds=1.0)
 
 
 def test_legacy_urdf_loads_and_joints_are_resolved_by_name() -> None:

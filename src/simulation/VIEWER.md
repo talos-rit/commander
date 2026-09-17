@@ -47,28 +47,29 @@ implemented structurally by both `SimulatedPublisher` and Commander's network
 registered explicitly when launching:
 
 ```console
-uv run --extra simulation python -m src.simulation.viewer --two-robots --no-demo --real-robot bluey=ROBOT_HOST:ROBOT_PORT
+uv run --extra simulation python -m src.simulation.viewer --no-demo --real-robot bluey=ROBOT_HOST:ROBOT_PORT --start-real
 ```
 
-The Backend selector then offers `virtual` and `real` for Bluey. Switching to real
-requires confirmation and stops the previous backend first. One robot can remain
-virtual while the other uses a real Publisher. Closing the controls performs a
-best-effort polar and Cartesian stop on every registered real Publisher.
+The Backend selector offers `virtual` and `real` for Bluey without an additional
+confirmation dialog. Omit `--start-real` to begin in virtual mode and switch from the
+selector. One robot can remain virtual while another uses a real Publisher. Changing
+backends still stops any active continuous/joint jog before rerouting controls.
 
-Because the current physical protocol does not expose reliable pose telemetry, real
-commands are mirrored into the local deterministic model for visualization and its
-snapshots are labeled `command_estimate`. This is not actual robot position. A future
-telemetry adapter can replace that estimate through the existing `RobotStateSource`
-seam without changing the controls or renderer. Network stop is also not a substitute
-for a physical emergency stop.
+Real visualization is driven only by current-connection `TELP` measurements; commands
+are not mirrored into the simulator as fake feedback. The historical polar field names
+also do not describe the observed ER-V hardware axes: the control formerly labeled
+altitude rotates the base, while the control formerly labeled azimuth rotates the claw.
+The panel therefore labels them `Base rotate` and `Claw rotate`. Network stop remains
+distinct from a physical emergency stop.
 
 Robot controls:
 
 - **Tab** selects Bluey or ER-V independently.
-- Hold **A/D** to rotate the robot left/right.
+- Hold **A/D** for claw rotation on real hardware (logical azimuth in simulation).
 - Hold **W/S** to extend/retract the arm. This sends Cartesian Y commands through
   the Publisher and uses the explicitly approximate IK mapping for visualization.
-- **J/K** tilts the camera head up/down in 10-unit discrete steps.
+- **J/K** rotates the real base in 10-unit discrete steps (logical altitude in
+  simulation).
 - **H** homes, **Space/X** stops, and **+/-** changes speed.
 - **1/2/3** sends one of three absolute simulated target poses.
 - **P** prints command/state telemetry returned by both simulators.
@@ -114,7 +115,8 @@ Use `--headless --exit-on-complete` for deterministic non-GUI execution.
 - movement state and logical pose/velocity when available;
 - named joint positions/velocities when available;
 - homed, command, and fault state when available;
-- mapping quality (`physically_validated`, `legacy_approximation`, or `unknown`).
+- mapping quality (`physically_validated`, `partially_calibrated`,
+  `legacy_approximation`, or `unknown`).
 
 Unavailable fields remain `None`. A future real-robot adapter only needs to implement
 the narrow `RobotStateSource.get_snapshot()` protocol. Real-time mirroring will not be
@@ -126,6 +128,53 @@ Multiple robot IDs are separate PyBullet bodies with independently configured ba
 positions and orientations. A future planned-versus-actual display can use separate
 snapshot streams/bodies and label the planned one `command_estimate`; nothing in the
 viewer currently promotes a commanded pose to actual telemetry.
+
+## Real ER-V controller-coordinate calibration
+
+`MeasuredERVStateSource` consumes absolute controller coordinates from Operator
+`TELP` / ACL `LISTPV POSITION`. It never captures the first received frame as a
+reference. Each controller axis first uses the explicit affine transform:
+
+```text
+q_urdf = q_reference
+       + direction * (controller_count - controller_reference)
+                   * pi / (180 * counts_per_degree)
+```
+
+The physically observed `vertical_straight` reference is retained in
+`calibration/bluey_joint_limits.local.json`: shoulder 1088, elbow 2113, and pitch
+1151 map respectively to URDF `-pi/2`, `0`, and `0` radians. In the URDF the two
+arm link vectors lie along local -Y and their joints rotate around +X; PyBullet
+therefore makes the links collinear along world +Z at shoulder `-pi/2`, elbow `0`.
+At pitch `0`, the loaded model places both finger joints above the wrist, matching
+the observed upward-pointing claw.
+
+The controller's elbow coordinate represents the forearm orientation maintained
+independently of the shoulder. The URDF is a conventional serial chain whose
+`elbow_joint` is relative to the upper arm, so rendering composes the calibrated
+axis deltas as:
+
+```text
+shoulder_joint = shoulder_reference + shoulder_axis_delta
+elbow_joint    = elbow_reference + elbow_axis_delta - shoulder_axis_delta
+pitch_joint    = pitch_reference + pitch_axis_delta
+```
+
+Consequently, moving the shoulder while the elbow TELP count stays at 2113 makes
+PyBullet counter-rotate its relative elbow joint and keeps the forearm vertical.
+The pitch axis remains directly mapped until an equivalent independence/coupling
+observation is physically recorded.
+
+Shoulder direction is `+1`, corrected by the latest supervised physical comparison.
+Elbow direction is `-1`, supported by the supervised endpoint measurements. Pitch
+also remains `-1` based on the earlier supervised visual direction correction, but
+was not independently rechecked at this reference. The
+counts-per-degree scales are inherited controller conversions, not new physical
+scale measurements. Base continues to render using the inherited 42.5666
+counts/degree conversion and the historical controller-zero/URDF-zero assumption;
+its absolute yaw reference and direction remain unverified. Roll is retained in
+the telemetry frame but is not rendered because it is uncalibrated. These mixed
+confidence levels are labeled `partially_calibrated`, not `physically_validated`.
 
 ## Kinematic truth and the legacy mapping
 

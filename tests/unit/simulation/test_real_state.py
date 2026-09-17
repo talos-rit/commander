@@ -6,7 +6,16 @@ from src.simulation.real_state import (
     FakeERVTelemetryPublisher,
     MeasuredERVStateSource,
     TelemetryHealth,
-    _SHOULDER_VERTICAL_OFFSET,
+)
+from src.simulation.erv_calibration import (
+    BASE_CALIBRATION,
+    ELBOW_CALIBRATION,
+    PITCH_CALIBRATION,
+    SHOULDER_CALIBRATION,
+    VERTICAL_STRAIGHT_URDF,
+    CalibrationEvidence,
+    JointCalibration,
+    map_arm_controller_coordinates,
 )
 from src.robot_state import MappingQuality, StateSourceType
 
@@ -36,9 +45,12 @@ def test_real_source_lifecycle_reconnect_and_staleness():
     assert live.joint_positions is None
 
     clock.advance(1.1)
+    assert source.telemetry_health().health is TelemetryHealth.STALE
     assert source.get_snapshot().movement_state == "unknown"
     publisher.disconnect()
-    assert source.get_snapshot().movement_state == "unknown"
+    disconnected = source.get_snapshot()
+    assert disconnected.movement_state == "unknown"
+    assert disconnected.joint_positions is None
 
     publisher.connect()
     # Cached pre-disconnect counts are deliberately not authoritative.
@@ -60,7 +72,10 @@ def test_rate_uses_monotonic_receive_intervals_and_joint_telemetry_wins():
     publisher.emit((1, 2, 3, 4), (100, 200, 300, 400))
     snapshot = source.get_snapshot()
     assert source.telemetry_health().estimated_rate_hz == pytest.approx(2.0)
-    assert snapshot.joint_positions["shoulder_joint"] == pytest.approx(_SHOULDER_VERTICAL_OFFSET + 100 * math.pi / (180 * 33.2121))
+    assert snapshot.joint_positions["shoulder_joint"] == pytest.approx(
+        SHOULDER_CALIBRATION.to_urdf(100)
+    )
+    assert snapshot.joint_mapping_quality is MappingQuality.PARTIALLY_CALIBRATED
 
 
 def test_base_inclusive_controller_coordinates_do_not_require_raw_encoder_stream():
@@ -71,10 +86,13 @@ def test_base_inclusive_controller_coordinates_do_not_require_raw_encoder_stream
     clock.advance(0.1)
     publisher.emit((1, 2, 3, 4), (50, 100, 200, 300, 400))
     snapshot = source.get_snapshot()
-    assert snapshot.joint_positions["base_joint"] == pytest.approx(50 * math.pi / (180 * 42.5666))
+    assert snapshot.joint_positions["base_joint"] == pytest.approx(
+        BASE_CALIBRATION.to_urdf(50)
+    )
+    assert BASE_CALIBRATION.reference_evidence is CalibrationEvidence.UNVERIFIED
 
 
-def test_physical_vertical_reference_maps_shoulder_and_elbow_straight():
+def test_physical_vertical_reference_maps_complete_observed_pose():
     clock = Clock()
     publisher = FakeERVTelemetryPublisher(clock=clock)
     publisher.connect()
@@ -84,8 +102,77 @@ def test_physical_vertical_reference_maps_shoulder_and_elbow_straight():
     publisher.emit((1, 2, 3, 4), (516, 1088, 2113, 1151, -1432))
 
     positions = source.get_snapshot().joint_positions
-    assert positions["shoulder_joint"] == pytest.approx(-math.pi / 2)
-    assert positions["elbow_joint"] == pytest.approx(0.0)
+    assert positions["shoulder_joint"] == pytest.approx(
+        VERTICAL_STRAIGHT_URDF["shoulder_joint"]
+    )
+    assert positions["elbow_joint"] == pytest.approx(
+        VERTICAL_STRAIGHT_URDF["elbow_joint"]
+    )
+    assert positions["pitch_joint"] == pytest.approx(
+        VERTICAL_STRAIGHT_URDF["pitch_joint"]
+    )
+
+
+def test_calibration_directions_around_vertical_reference():
+    assert ELBOW_CALIBRATION.to_urdf(2113) == pytest.approx(0.0)
+    assert ELBOW_CALIBRATION.to_urdf(2112) > ELBOW_CALIBRATION.to_urdf(2113)
+    assert ELBOW_CALIBRATION.to_urdf(2114) < ELBOW_CALIBRATION.to_urdf(2113)
+
+    shoulder_reference = SHOULDER_CALIBRATION.to_urdf(1088)
+    assert shoulder_reference == pytest.approx(-math.pi / 2)
+    assert SHOULDER_CALIBRATION.to_urdf(1087) < shoulder_reference
+    assert SHOULDER_CALIBRATION.to_urdf(1089) > shoulder_reference
+
+    assert PITCH_CALIBRATION.to_urdf(1151) == pytest.approx(0.0)
+
+
+def test_shoulder_motion_keeps_independent_forearm_orientation_vertical():
+    reference = map_arm_controller_coordinates(1088, 2113, 1151)
+    shoulder_moved = map_arm_controller_coordinates(444, 2113, 1151)
+
+    assert shoulder_moved["shoulder_joint"] < reference["shoulder_joint"]
+    assert shoulder_moved["elbow_joint"] > reference["elbow_joint"]
+    assert (
+        shoulder_moved["shoulder_joint"] + shoulder_moved["elbow_joint"]
+    ) == pytest.approx(-math.pi / 2)
+
+
+def test_reconnect_reconstructs_same_absolute_pose_without_first_frame_zeroing():
+    clock = Clock()
+    publisher = FakeERVTelemetryPublisher(clock=clock)
+    source = MeasuredERVStateSource("bingo", publisher, clock=clock)
+    away_from_reference = (700, 900, 1800, 1000, -1200)
+
+    publisher.connect()
+    clock.advance(0.1)
+    publisher.emit((1, 2, 3, 4), away_from_reference)
+    before = source.get_snapshot().joint_positions
+
+    publisher.disconnect()
+    assert source.get_snapshot().joint_positions is None
+    publisher.connect()
+    assert source.get_snapshot().joint_positions is None
+    clock.advance(0.1)
+    publisher.emit((5, 6, 7, 8), away_from_reference)
+    after = source.get_snapshot().joint_positions
+
+    assert after == before
+
+
+def test_joint_calibration_validates_affine_parameters():
+    common = dict(
+        joint_name="joint",
+        controller_reference=0,
+        urdf_reference=0.0,
+        reference_evidence=CalibrationEvidence.UNVERIFIED,
+        direction_evidence=CalibrationEvidence.UNVERIFIED,
+        scale_evidence=CalibrationEvidence.UNVERIFIED,
+        note="test",
+    )
+    with pytest.raises(ValueError, match="counts_per_degree"):
+        JointCalibration(counts_per_degree=0.0, direction=1, **common)
+    with pytest.raises(ValueError, match="direction"):
+        JointCalibration(counts_per_degree=1.0, direction=0, **common)
 
 
 def test_legacy_joint_frame_keeps_base_unknown_even_when_raw_encoders_exist():

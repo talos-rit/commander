@@ -12,7 +12,61 @@
       "recorded_at_utc": "2026-09-16T21:17:00+00:00"
     }
   },
+  "joint_calibrations": {
+    "base": {
+      "controller_reference": 0,
+      "counts_per_degree": 42.5666,
+      "direction": 1,
+      "direction_status": "unverified",
+      "reference_status": "unverified_legacy_assumption",
+      "scale_status": "inherited_controller_conversion",
+      "urdf_reference_radians": 0.0
+    },
+    "elbow": {
+      "controller_coordinate_semantics": "independent_forearm_orientation",
+      "controller_reference": 2113,
+      "counts_per_degree": 33.2121,
+      "direction": 1,
+      "direction_status": "physically_verified_latest_observation",
+      "physical_reference": "vertical_straight",
+      "reference_status": "physically_anchored",
+      "scale_status": "inherited_controller_conversion",
+      "urdf_reference_radians": 0.0
+    },
+    "pitch": {
+      "controller_reference": 1151,
+      "counts_per_degree": 8.3555,
+      "direction": -1,
+      "direction_status": "previously_physically_verified_not_rechecked_at_reference",
+      "physical_reference": "vertical_straight",
+      "reference_status": "physically_anchored",
+      "scale_status": "inherited_controller_conversion",
+      "urdf_reference_radians": 0.0
+    },
+    "roll": {
+      "status": "uncalibrated"
+    },
+    "shoulder": {
+      "controller_reference": 1088,
+      "counts_per_degree": 33.2121,
+      "direction": -1,
+      "direction_status": "physically_verified_from_soft_endpoints",
+      "physical_reference": "vertical_straight",
+      "reference_status": "physically_anchored",
+      "scale_status": "inherited_controller_conversion",
+      "urdf_reference_radians": -1.5707963267948966
+    }
+  },
   "coordinate_source": "Operator TELP / controller LISTPV POSITION",
+  "kinematic_transform": {
+    "elbow_joint": "elbow_reference + elbow_axis_delta - shoulder_axis_delta",
+    "pitch_joint": "pitch_reference + pitch_axis_delta",
+    "shoulder_joint": "shoulder_reference + shoulder_axis_delta"
+  },
+  "notes": [
+    "The vertical-straight observation does not constrain base yaw or wrist roll.",
+    "The 1008-count shoulder soft-endpoint span is only about 30.35 degrees at the inherited scale; collect a measured-angle scale sample before treating that scale as physically established."
+  ],
   "limits": {
     "elbow": {
       "max": {

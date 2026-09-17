@@ -15,14 +15,7 @@ from typing import Callable, Protocol
 
 from src.robot_state import MappingQuality, RobotStateSnapshot, StateSourceType
 
-
-_SHOULDER_RADIANS_PER_COUNT = math.pi / (180 * 33.2121)
-_ELBOW_RADIANS_PER_COUNT = math.pi / (180 * 33.2121)
-# Physically observed on Bingo: controller shoulder=1088 and elbow=2113 put
-# both arm links ramrod straight up.  The legacy offsets left the visual elbow
-# bent at that pose, so these offsets are anchored to that direct observation.
-_SHOULDER_VERTICAL_OFFSET = -2.1425512673647
-_ELBOW_STRAIGHT_OFFSET = 1.11040274763234
+from .erv_calibration import BASE_CALIBRATION, map_arm_controller_coordinates
 
 
 class TelemetryHealth(str, Enum):
@@ -52,9 +45,9 @@ class ERVTelemetryPublisher(Protocol):
 class MeasuredERVStateSource:
     """Convert current-epoch ER-V telemetry into viewer snapshots.
 
-    The established base/shoulder/elbow/pitch scales and signs are used directly;
-    importantly, no first-frame reference is captured.  Roll and gripper remain
-    absent because their telemetry calibration is not established.
+    Absolute controller coordinates are mapped through explicit affine reference
+    calibrations; importantly, no first-frame reference is captured.  Roll and
+    gripper remain absent because their telemetry calibration is not established.
     """
 
     def __init__(
@@ -79,7 +72,9 @@ class MeasuredERVStateSource:
         connected = self._publisher.is_connected()
         if not connected:
             self._was_connected = False
-            self._minimum_fresh_timestamp = now
+            # A frame cached at exactly the disconnect observation time still
+            # belongs to the old epoch.  The next epoch must be strictly newer.
+            self._minimum_fresh_timestamp = math.nextafter(now, math.inf)
             self._accepted_timestamp = None
             self._intervals.clear()
             return TelemetryHealthSnapshot(False, False, None, None, None, TelemetryHealth.DISCONNECTED)
@@ -87,7 +82,8 @@ class MeasuredERVStateSource:
             # A reconnect invalidates any cached Publisher telemetry.  Accept only
             # frames that arrive after this connection epoch begins.
             self._was_connected = True
-            self._minimum_fresh_timestamp = now
+            if self._minimum_fresh_timestamp == float("-inf"):
+                self._minimum_fresh_timestamp = now
             self._accepted_timestamp = None
             self._intervals.clear()
         received = self._publisher.get_erv_telemetry_received_monotonic()
@@ -114,20 +110,17 @@ class MeasuredERVStateSource:
         positions: dict[str, float] = {}
         if joint_counts is not None and len(joint_counts) == 5:
             base, shoulder, elbow, pitch, _roll = joint_counts
-            positions["base_joint"] = base * math.pi / (180 * 42.5666)
+            positions[BASE_CALIBRATION.joint_name] = BASE_CALIBRATION.to_urdf(base)
         elif len(joint_counts) == 4:
             shoulder, elbow, pitch, _roll = joint_counts
         else:
             return RobotStateSnapshot(robot_id=self._robot_id, timestamp=self._clock(), source_type=StateSourceType.REAL, movement_state="unknown")
-        positions.update({
-            "shoulder_joint": _SHOULDER_VERTICAL_OFFSET + shoulder * _SHOULDER_RADIANS_PER_COUNT,
-            "elbow_joint": _ELBOW_STRAIGHT_OFFSET - elbow * _ELBOW_RADIANS_PER_COUNT,
-            "pitch_joint": 0.41547 - pitch * math.pi / (180 * 8.3555),
-        })
+        positions.update(map_arm_controller_coordinates(shoulder, elbow, pitch))
         return RobotStateSnapshot(
             robot_id=self._robot_id, timestamp=health.last_receive_monotonic or self._clock(),
             source_type=StateSourceType.REAL, movement_state="unknown",
-            joint_positions=positions, joint_mapping_quality=MappingQuality.UNKNOWN,
+            joint_positions=positions,
+            joint_mapping_quality=MappingQuality.PARTIALLY_CALIBRATED,
         )
 
 

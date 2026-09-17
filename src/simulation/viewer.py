@@ -43,6 +43,24 @@ DEFAULT_ROBOT_COLORS = (
     (0.20, 0.70, 0.35, 1.0),  # green (for additional/replay robots)
 )
 
+REAL_BACKEND_START_TIMEOUT_SECONDS = 10.0
+
+
+def _wait_for_real_backend(
+    controller: InteractiveSimulationController,
+    timeout_seconds: float = REAL_BACKEND_START_TIMEOUT_SECONDS,
+    poll_seconds: float = 0.05,
+) -> bool:
+    """Wait for the asynchronously-created real Publisher to connect."""
+
+    deadline = time.monotonic() + timeout_seconds
+    while not controller.real_backend_connected():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(poll_seconds, remaining))
+    return True
+
 
 def _load_pybullet() -> Any:
     try:
@@ -363,6 +381,7 @@ class PyBulletRobotViewer:
     ) -> None:
         quality = {
             MappingQuality.PHYSICALLY_VALIDATED: "VALIDATED",
+            MappingQuality.PARTIALLY_CALIBRATED: "ANCHORED",
             MappingQuality.LEGACY_APPROXIMATION: "APPROX",
             MappingQuality.UNKNOWN: "UNMAPPED",
         }[snapshot.joint_mapping_quality]
@@ -475,6 +494,14 @@ def _run_demo(args: argparse.Namespace) -> None:
                     timestep=1 / 60,
                     real_publishers=real_publishers,
                 )
+                if args.start_real:
+                    if not _wait_for_real_backend(controller):
+                        raise ConnectionError(
+                            "real backend did not connect for "
+                            f"{controller.selected_robot_id} within "
+                            f"{REAL_BACKEND_START_TIMEOUT_SECONDS:g} seconds"
+                        )
+                    controller.set_selected_backend("real")
                 panel = (
                     None
                     if args.no_control_panel
@@ -561,6 +588,11 @@ def main() -> None:
         metavar="ROBOT_ID=HOST:PORT",
         help="register an explicitly configured real Publisher for UI selection",
     )
+    parser.add_argument(
+        "--start-real",
+        action="store_true",
+        help="start the selected robot on its registered real backend",
+    )
     parser.add_argument("--record", type=Path, help="record demo snapshots as JSONL")
     parser.add_argument("--replay", type=Path, help="replay a trajectory JSONL")
     parser.add_argument("--playback-speed", type=float, default=1.0)
@@ -568,6 +600,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.playback_speed <= 0:
         parser.error("--playback-speed must be positive")
+    if args.start_real and not args.real_robot:
+        parser.error("--start-real requires at least one --real-robot")
     if args.replay:
         _run_replay(args)
     else:

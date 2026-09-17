@@ -1,4 +1,3 @@
-import math
 import time
 
 import pytest
@@ -19,7 +18,10 @@ from src.simulation import (
     SimulatedRobot,
     SimulatedRobotStateSource,
 )
-from src.simulation.real_state import _ELBOW_STRAIGHT_OFFSET, _SHOULDER_VERTICAL_OFFSET
+from src.simulation.erv_calibration import (
+    BASE_CALIBRATION,
+    map_arm_controller_coordinates,
+)
 
 
 class FakeViewer:
@@ -341,14 +343,9 @@ def test_real_joint_coordinate_frames_drive_joint_positions() -> None:
     bluey = next(snapshot for snapshot in snapshots if snapshot.robot_id == "bluey")
     assert bluey.source_type.value == "real"
     assert bluey.logical_pose is None
-    assert bluey.joint_positions == pytest.approx(
-        {
-            "base_joint": 43 * math.pi / (180 * 42.5666),
-            "shoulder_joint": _SHOULDER_VERTICAL_OFFSET + 16484 * math.pi / (180 * 33.2121),
-            "elbow_joint": _ELBOW_STRAIGHT_OFFSET - (-16184) * math.pi / (180 * 33.2121),
-            "pitch_joint": 0.41547 - 1136 * math.pi / (180 * 8.3555),
-        }
-    )
+    expected = map_arm_controller_coordinates(16484, -16184, 1136)
+    expected["base_joint"] = BASE_CALIBRATION.to_urdf(43)
+    assert bluey.joint_positions == pytest.approx(expected)
 
 
 def test_real_backend_is_unavailable_until_registered() -> None:
@@ -496,6 +493,22 @@ def test_panel_hold_directions_are_normalized_for_continuous_commands() -> None:
     assert all(
         value in (-1, 0, 1) for move in cartesian_directions for value in move
     )
+
+
+def test_panel_polar_labels_describe_the_observed_hardware_axes() -> None:
+    labeled_directions = {
+        row[index]: row[index + 1]
+        for row in POLAR_HOLD_DIRECTIONS
+        for index in range(0, len(row), 2)
+        if row[index]
+    }
+
+    assert labeled_directions == {
+        "Base rotate +": (0, 1),
+        "Base rotate -": (0, -1),
+        "Claw rotate +": (1, 0),
+        "Claw rotate -": (-1, 0),
+    }
 
 
 def test_limit_fault_is_reported_without_callback_exception_and_can_be_cleared() -> None:
