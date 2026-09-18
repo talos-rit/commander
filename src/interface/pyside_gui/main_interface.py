@@ -124,8 +124,14 @@ class ButtonText(StrEnum):
     LEFT = "←"
     RIGHT = "→"
     HOME = "Home"
-    CONTINUOUS_MODE_LABEL = "Continuous"
-    AUTOMATIC_MODE_LABEL = "Automatic"
+    CONTINUOUS_JOG_LABEL = "Continuous Jog"
+    DISCRETE_JOG_LABEL = "Discrete Jog"
+    JOG_MODE_TOOLTIP = (
+        "Hold a jog button in either mode.\n"
+        "Discrete Jog: repeated step commands while held.\n"
+        "Continuous Jog: one start command until you release."
+    )
+    AUTOMATIC_MODE_LABEL = "Track Subject"
 
 
 DIRECTIONAL_KEY_BINDING_MAPPING = {
@@ -221,7 +227,7 @@ class PySide6Interface(QMainWindow):
         toggle_frame.setSizePolicy(
             QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred
         )
-        toggle_frame.setMaximumWidth(240)
+        toggle_frame.setMaximumWidth(260)
         toggle_layout = QVBoxLayout(toggle_frame)
 
         self.automatic_slider = Toggle()
@@ -243,23 +249,35 @@ class PySide6Interface(QMainWindow):
 
         self.continuous_slider = Toggle()
         self.continuous_slider.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
-        self.continuous_slider.toggled.connect(
-            lambda checked: self.app.set_control_mode(
-                ControlMode.CONTINUOUS if checked else ControlMode.DISCRETE
-            )
-        )
+        self.continuous_slider.setToolTip(ButtonText.JOG_MODE_TOOLTIP)
+        self.continuous_slider.toggled.connect(self._on_jog_mode_toggled)
 
         continuous_row_layout = QHBoxLayout()
         continuous_row_layout.setContentsMargins(0, 0, 0, 0)
         continuous_row_layout.setSpacing(10)
-        continuous_label = QLabel(ButtonText.CONTINUOUS_MODE_LABEL)
-        continuous_label.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
+        self.continuous_label = QLabel(ButtonText.DISCRETE_JOG_LABEL)
+        self.continuous_label.setFont(QFont("Cascadia Code", 12, QFont.Weight.Bold))
+        self.continuous_label.setToolTip(ButtonText.JOG_MODE_TOOLTIP)
+        self.continuous_label.setWordWrap(True)
         continuous_row_layout.addWidget(self.continuous_slider)
-        continuous_row_layout.addWidget(continuous_label)
+        continuous_row_layout.addWidget(self.continuous_label)
         continuous_row_layout.addStretch(1)
         toggle_layout.addLayout(continuous_row_layout)
 
         return toggle_frame
+
+    def _on_jog_mode_toggled(self, checked: bool) -> None:
+        self.app.set_control_mode(
+            ControlMode.CONTINUOUS if checked else ControlMode.DISCRETE
+        )
+        self._sync_jog_mode_label(checked)
+
+    def _sync_jog_mode_label(self, continuous: bool) -> None:
+        self.continuous_label.setText(
+            ButtonText.CONTINUOUS_JOG_LABEL
+            if continuous
+            else ButtonText.DISCRETE_JOG_LABEL
+        )
 
     def _setup_directional_controls(self, layout: QGridLayout) -> None:
         self.home_button = self._create_direction_button(
@@ -444,10 +462,10 @@ class PySide6Interface(QMainWindow):
             self.set_manual_control_btn_state(False)
             self.automatic_slider.setChecked(True)
 
-        # Update continuous mode
-        self.continuous_slider.setChecked(
-            self.app.get_control_mode() == ControlMode.CONTINUOUS
-        )
+        # Update jog mode
+        continuous = self.app.get_control_mode() == ControlMode.CONTINUOUS
+        self.continuous_slider.setChecked(continuous)
+        self._sync_jog_mode_label(continuous)
 
         self.model_combo.setCurrentText(self.app.get_selected_model() or "None")
 

@@ -36,7 +36,7 @@ class App:
     tracker: Tracker
     streamer: Streamer
     director: BaseDirector | None = None
-    control_mode: ControlMode = ControlMode.CONTINUOUS
+    control_mode: ControlMode = ControlMode.DISCRETE
     model_selection: str | None = None
     move_delay_ms: int = 300  # time inbetween each directional command being sent while directional button is depressed
 

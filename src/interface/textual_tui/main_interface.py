@@ -84,12 +84,16 @@ class TextualInterface(App):
             with Vertical(classes="column"):
                 with Horizontal():
                     with Vertical(classes="widget"):
-                        yield Static("Automatic Mode:", classes="label-text")
+                        yield Static("Track Subject:", classes="label-text")
                         yield Switch(value=self.auto_mode_state, id="auto-mode-switch")
-                        yield Static("Continuous Control:", classes="label-text")
+                        yield Static("Discrete Jog:", classes="label-text", id="jog-mode-label")
                         yield Switch(
                             value=self.continuous_control_state,
                             id="continuous-control-switch",
+                        ).with_tooltip(
+                            "Hold a jog button in either mode. "
+                            "Discrete Jog: repeated step commands while held. "
+                            "Continuous Jog: one start command until you release."
                         )
                     yield ReactiveButton(
                         "UP", id="up", classes="widget", on_blur=focus_home
@@ -168,6 +172,7 @@ class TextualInterface(App):
         self.query_one(
             "#continuous-control-switch", Switch
         ).value = self.continuous_control_state
+        self._sync_jog_mode_label(self.continuous_control_state)
         self.query_one("#auto-mode-switch", Switch).value = self.auto_mode_state
         connections = [(conn, conn) for conn in self._talos_app.get_connection_hosts()]
         self.connection_options = connections
@@ -242,6 +247,12 @@ class TextualInterface(App):
         val = e.value
         self._talos_app.set_control_mode(
             ControlMode.CONTINUOUS if val else ControlMode.DISCRETE
+        )
+        self._sync_jog_mode_label(val)
+
+    def _sync_jog_mode_label(self, continuous: bool) -> None:
+        self.query_one("#jog-mode-label", Static).update(
+            "Continuous Jog:" if continuous else "Discrete Jog:"
         )
 
     def debounce_input(self, name, func, wait_ms: int = 100):

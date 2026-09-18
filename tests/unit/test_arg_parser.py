@@ -24,6 +24,7 @@ def test_parse_args_without_debug_keeps_defaults():
     assert args.terminal is True
     assert args.draw_bboxes is False
     assert not hasattr(args, "log_level")
+    assert args.director == "discrete"
 
 
 def test_parser_accepts_valid_choices():

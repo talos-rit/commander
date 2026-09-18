@@ -53,8 +53,9 @@ class ButtonText(StrEnum):
     HOME = "🏠 Home"
 
     # toggle switch labels
-    CONTINUOUS_MODE_LABEL = "Continuous"
-    AUTOMATIC_MODE_LABEL = "Automatic"
+    CONTINUOUS_JOG_LABEL = "Continuous Jog"
+    DISCRETE_JOG_LABEL = "Discrete Jog"
+    AUTOMATIC_MODE_LABEL = "Track Subject"
 
 
 DIRECTIONAL_KEY_BINDING_MAPPING = {
@@ -124,10 +125,10 @@ class TKInterface(tk.Tk):
         )  # continuous/discrete
         self.cont_toggle_button = ctk.CTkSwitch(
             self.toggle_group,
-            text=ButtonText.CONTINUOUS_MODE_LABEL,
+            text=self._jog_mode_label(),
             font=("Cascadia Code", 16, "bold"),
             variable=self.continuous_mode,
-            command=self.app.set_control_mode,
+            command=self._on_jog_mode_toggled,
             onvalue=ControlMode.CONTINUOUS,
             offvalue=ControlMode.DISCRETE,
         )
@@ -325,6 +326,7 @@ class TKInterface(tk.Tk):
             self.automatic_button.select()
             logger.debug("manual connection not active")
         self.continuous_mode.set(self.app.get_control_mode())
+        self.cont_toggle_button.configure(text=self._jog_mode_label())
         self.model_menu.set(self.app.get_selected_model() or "None")
         self.update_connection_menu()
         if not self.display_loop_task:
@@ -378,6 +380,15 @@ class TKInterface(tk.Tk):
         # Keep a reference to prevent gc
         # see https://stackoverflow.com/questions/48364168/flickering-video-in-opencv-tkinter-integration
         self.video_label.dumb_image_ref = img  # pyright: ignore[reportAttributeAccessIssue]
+
+    def _jog_mode_label(self) -> str:
+        if self.app.get_control_mode() == ControlMode.CONTINUOUS:
+            return ButtonText.CONTINUOUS_JOG_LABEL
+        return ButtonText.DISCRETE_JOG_LABEL
+
+    def _on_jog_mode_toggled(self) -> None:
+        self.app.set_control_mode(ControlMode(self.continuous_mode.get()))
+        self.cont_toggle_button.configure(text=self._jog_mode_label())
 
     def toggle_command_mode(self) -> None:
         """Toggles command mode between manual mode and automatic mode.

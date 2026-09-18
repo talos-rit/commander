@@ -53,6 +53,7 @@ def test_app_init_sets_up_components(app_under_test, patch_talos_app_dependencie
     assert app.tracker is patch_talos_app_dependencies["tracker"]
     assert app.streamer is patch_talos_app_dependencies["streamer"]
     assert app.director is patch_talos_app_dependencies["director"]
+    assert app.control_mode == talos_app.ControlMode.DISCRETE
 
 
 def test_open_connection_skips_existing(monkeypatch, app_under_test, mocker):

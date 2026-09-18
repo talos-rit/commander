@@ -47,10 +47,10 @@ def _create_arg_parser():
     )
     parser.add_argument(
         "--director",
-        default="continuous",
+        default="discrete",
         choices=["continuous", "discrete"],
         type=str,
-        help="Specify the director to use for robot control (e.g. 'continuous'). This doesn't do anything if the connection argument is not provided",
+        help="Jog command style while a button is held: discrete sends repeated step commands; continuous streams a start/stop move. This doesn't do anything if the connection argument is not provided",
     )
     return parser
 
