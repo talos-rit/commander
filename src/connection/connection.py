@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any, Callable
 
 import av
+import av.error
 import av.video
 import cv2
 import numpy as np
@@ -17,20 +18,51 @@ from src.utils import (
     remove_termination_handler,
 )
 
+# Keep the RTSP demuxer from buffering a live stream. TCP is still used for
+# reliability; a dedicated capture thread drains packets so latency cannot grow.
+RTSP_OPEN_OPTIONS = {
+    "rtsp_transport": "tcp",
+    "fflags": "nobuffer",
+    "flags": "low_delay",
+    "max_delay": "0",
+    "reorder_queue_size": "0",
+}
+RTSP_OPEN_TIMEOUT = (5.0, 2.0)
+
 
 class PyAVCapture:
     _term: int | None = None
 
     def __init__(self, source, **options):
-        self.container = av.open(source, options=options)
+        self._released = False
+        self._source = source
+        self.container = av.open(
+            source,
+            options=options or None,
+            timeout=RTSP_OPEN_TIMEOUT,
+        )
         self.video_stream = next(
             (s for s in self.container.streams if s.type == "video"), None
         )
         if not self.video_stream:
             raise ValueError("No video stream found")
+        self._configure_low_latency()
         self.iter_frames = self._get_frame_iter()
         self.more = True
         self._term = add_termination_handler(self.release)
+
+    def _configure_low_latency(self) -> None:
+        ctx = getattr(self.video_stream, "codec_context", None)
+        if ctx is None:
+            return
+        flags = getattr(av.codec.context, "Flags", None)
+        low_delay = getattr(flags, "low_delay", None) if flags is not None else None
+        if low_delay is None:
+            return
+        try:
+            ctx.flags |= low_delay
+        except Exception:
+            pass
 
     def _get_frame_iter(self):
         """
@@ -48,6 +80,8 @@ class PyAVCapture:
                     yield frame
 
     def read(self):
+        if self._released or not self.more:
+            return False, None, None
         try:
             frame = next(self.iter_frames)
             # BGR like OpenCV
@@ -68,61 +102,161 @@ class PyAVCapture:
         except StopIteration:
             self.more = False
             return False, None, None
+        except av.error.FFmpegError as exc:
+            logger.warning("RTSP demux error from {}: {}", self._source, exc)
+            self.more = False
+            return False, None, None
 
     def release(self):
-        self.container.close()
-        remove_termination_handler(self._term) if self._term is not None else None
-        self._term = None
+        if self._released:
+            return
+        self._released = True
+        self.more = False
+        try:
+            self.container.close()
+        except Exception as exc:
+            logger.debug("Error closing RTSP container: {}", exc)
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
 
 
 @dataclass
 class VideoConnection:
     src: str | int
     video_buffer_size: int = field(default=1)
-    cap: cv2.VideoCapture | PyAVCapture = field(init=False)
+    first_frame_timeout: float = field(default=2.0)
+    reconnect_delay: float = field(default=1.0)
+    cap: cv2.VideoCapture | PyAVCapture | None = field(init=False, default=None)
     shape: tuple | None = field(init=False, default=None)
     dtype: np.dtype | None = field(init=False, default=None)
-    _term: int | None = field(init=False)
-    _read_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
+    _term: int | None = field(init=False, default=None)
+    _frame_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
+    _cap_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
+    _latest_frame: np.ndarray | None = field(init=False, default=None)
+    _stop_event: threading.Event = field(init=False, default_factory=threading.Event)
+    _thread: threading.Thread | None = field(init=False, default=None)
 
     def __post_init__(self):
-        source = None
+        self._open_capture()
+        self._thread = threading.Thread(
+            target=self._capture_loop,
+            name=f"video-capture-{self.src}",
+            daemon=True,
+        )
+        self._thread.start()
+        self._term = add_termination_handler(self.close)
+        self._wait_for_first_frame()
+        if self.shape is None:
+            logger.warning("Unable to pull frame from camera")
+
+    def _resolve_source(self) -> str | int:
         try:
-            source = int(self.src)
-        except ValueError:
-            source = self.src
-        if isinstance(source, str) and source.startswith("rtsp://"):
-            self.cap = PyAVCapture(
-                source, rtsp_transport="tcp", use_wallclock_as_timestamps="1"
-            )
-        else:
-            self.cap = cv2.VideoCapture(source)
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
-        frame = None
-        for _ in range(6):
-            ret, frame, *rest = self.cap.read()
-            if len(rest) > 0:
-                logger.debug(f"{rest=}")
-            if ret and frame is not None:
-                self.shape = frame.shape
-                self.dtype = frame.dtype
+            return int(self.src)
+        except (TypeError, ValueError):
+            return self.src
+
+    def _open_capture(self) -> None:
+        source = self._resolve_source()
+        with self._cap_lock:
+            self._release_capture_unlocked()
+            if isinstance(source, str) and source.startswith("rtsp://"):
+                try:
+                    self.cap = PyAVCapture(source, **RTSP_OPEN_OPTIONS)
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to open RTSP stream with low-latency options ({}). Retrying with TCP only.",
+                        exc,
+                    )
+                    self.cap = PyAVCapture(source, rtsp_transport="tcp")
+            else:
+                self.cap = cv2.VideoCapture(source)
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
+
+    def _release_capture_unlocked(self) -> None:
+        cap = self.cap
+        self.cap = None
+        if cap is None:
+            return
+        try:
+            cap.release()
+        except Exception as exc:
+            logger.debug("Error releasing video capture for {}: {}", self.src, exc)
+
+    def _release_capture(self) -> None:
+        with self._cap_lock:
+            self._release_capture_unlocked()
+
+    def _wait_for_first_frame(self) -> None:
+        deadline = time.monotonic() + self.first_frame_timeout
+        while self.shape is None and time.monotonic() < deadline:
+            if self._stop_event.is_set():
                 return
-        logger.warning("Unable to pull frame from camera")
+            time.sleep(0.01)
+
+    def _capture_loop(self) -> None:
+        while not self._stop_event.is_set():
+            with self._cap_lock:
+                cap = self.cap
+            if cap is None:
+                self._reconnect()
+                continue
+            try:
+                result = cap.read()
+            except Exception as exc:
+                if self._stop_event.is_set():
+                    break
+                logger.warning("Video read failed from {}: {}", self.src, exc)
+                self._reconnect()
+                continue
+            ret, frame, *_ = result if isinstance(result, tuple) else (False, None)
+            if ret and frame is not None:
+                owned = np.copy(frame)
+                with self._frame_lock:
+                    self._latest_frame = owned
+                    self.shape = owned.shape
+                    self.dtype = owned.dtype
+                continue
+            if self._stop_event.is_set():
+                break
+            logger.warning("Lost video stream from {}, reconnecting", self.src)
+            self._reconnect()
+
+    def _reconnect(self) -> None:
+        if self._stop_event.is_set():
+            return
+        self._release_capture()
+        if self._stop_event.wait(self.reconnect_delay):
+            return
+        try:
+            self._open_capture()
+        except Exception as exc:
+            logger.warning("Failed to reconnect to {}: {}", self.src, exc)
 
     def get_frame(self) -> np.ndarray | None:
-        if self.cap is not None:
-            with self._read_lock:
-                r, frame, *rest = (
-                    self.cap.read()
-                )  # rest sometimes have timestamp info from PyAVCapture
-            if not r:
-                return None
-            return frame
+        with self._frame_lock:
+            frame = self._latest_frame
+        if frame is None:
+            return None
+        return frame.copy()
 
     def close(self):
-        if self.cap is not None:
-            self.cap.release()
-            logger.debug(f"Released video connection to {self.src}")
+        if self._stop_event.is_set() and self._thread is None:
+            return
+        self._stop_event.set()
+        self._release_capture()
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=3.0)
+            if thread.is_alive():
+                logger.warning("Capture thread for {} did not stop cleanly", self.src)
+        self._thread = None
+        with self._frame_lock:
+            self._latest_frame = None
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
+        logger.debug(f"Released video connection to {self.src}")
 
 
 @dataclass

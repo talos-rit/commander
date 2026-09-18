@@ -1,3 +1,4 @@
+import queue
 import time
 
 import numpy as np
@@ -30,7 +31,11 @@ def test_pyavcapture_read_returns_frame_and_time(monkeypatch, mocker):
     container.closed = False
     container.close.side_effect = lambda: setattr(container, "closed", True)
 
-    monkeypatch.setattr(connection_module.av, "open", lambda source, options=None: container)
+    monkeypatch.setattr(
+        connection_module.av,
+        "open",
+        lambda source, options=None, **kwargs: container,
+    )
     monkeypatch.setattr(connection_module.av.video.frame, "VideoFrame", DummyVideoFrame)
 
     term_ids = []
@@ -58,25 +63,37 @@ def test_pyavcapture_read_returns_frame_and_time(monkeypatch, mocker):
     assert term_ids == [123, "removed-123"]
 
 
-def test_video_connection_initializes_with_cv2_and_sets_shape(monkeypatch, mocker):
+def test_video_connection_initializes_with_cv2_and_sets_shape(
+    monkeypatch, mocker, no_termination_handlers
+):
+    no_termination_handlers(connection_module)
+    frame = np.zeros((5, 5, 3), dtype=np.uint8)
     fake_cap = mocker.Mock()
-    fake_cap.read.side_effect = [
-        (True, np.zeros((5, 5, 3), dtype=np.uint8)),
-        (False, None),
-    ]
+
+    def fake_read():
+        time.sleep(0.01)
+        return True, frame
+
+    fake_cap.read.side_effect = fake_read
     fake_cap.release = mocker.Mock()
 
     monkeypatch.setattr(connection_module.cv2, "VideoCapture", lambda source: fake_cap)
     monkeypatch.setattr(connection_module.cv2, "CAP_PROP_BUFFERSIZE", 123)
 
-    vc = connection_module.VideoConnection(src="0", video_buffer_size=5)
-    assert vc.shape == (5, 5, 3)
-    assert vc.dtype == np.dtype("uint8")
-
-    assert vc.get_frame() is None
-
-    vc.close()
-    fake_cap.release.assert_called_once()
+    vc = connection_module.VideoConnection(
+        src="0", video_buffer_size=5, first_frame_timeout=1.0, reconnect_delay=0.05
+    )
+    try:
+        assert vc.shape == (5, 5, 3)
+        assert vc.dtype == np.dtype("uint8")
+        got = vc.get_frame()
+        assert got is not None
+        assert got.shape == (5, 5, 3)
+        got[0, 0] = 1
+        assert vc.get_frame()[0, 0, 0] == 0
+    finally:
+        vc.close()
+    fake_cap.release.assert_called()
 
 
 def test_video_connection_initializes_with_pyav(monkeypatch, mocker, no_termination_handlers):
@@ -91,20 +108,37 @@ def test_video_connection_initializes_with_pyav(monkeypatch, mocker, no_terminat
     container.closed = False
     container.close.side_effect = lambda: setattr(container, "closed", True)
 
-    monkeypatch.setattr(connection_module.av, "open", lambda source, options=None: container)
+    opened = {}
+
+    def fake_open(source, options=None, **kwargs):
+        opened["source"] = source
+        opened["options"] = options
+        opened["kwargs"] = kwargs
+        return container
+
+    monkeypatch.setattr(connection_module.av, "open", fake_open)
     monkeypatch.setattr(connection_module.av.video.frame, "VideoFrame", DummyVideoFrame)
 
     no_termination_handlers(connection_module)
 
-    vc = connection_module.VideoConnection(src="rtsp://fake")
-    assert vc.shape == frame.shape
-    assert vc.dtype == frame.dtype
-
-    vc.close()
+    vc = connection_module.VideoConnection(
+        src="rtsp://fake", first_frame_timeout=1.0, reconnect_delay=0.05
+    )
+    try:
+        assert vc.shape == frame.shape
+        assert vc.dtype == frame.dtype
+        assert opened["source"] == "rtsp://fake"
+        assert opened["options"]["rtsp_transport"] == "tcp"
+        assert opened["options"]["fflags"] == "nobuffer"
+        assert opened["options"]["flags"] == "low_delay"
+        assert "timeout" in opened["kwargs"]
+    finally:
+        vc.close()
     assert container.closed is True
 
 
-def test_video_connection_falls_back_when_no_frame(monkeypatch, mocker):
+def test_video_connection_falls_back_when_no_frame(monkeypatch, mocker, no_termination_handlers):
+    no_termination_handlers(connection_module)
     fake_cap = mocker.Mock()
     fake_cap.read.return_value = (False, None)
     fake_cap.release = mocker.Mock()
@@ -112,8 +146,71 @@ def test_video_connection_falls_back_when_no_frame(monkeypatch, mocker):
     monkeypatch.setattr(connection_module.cv2, "VideoCapture", lambda source: fake_cap)
     monkeypatch.setattr(connection_module.cv2, "CAP_PROP_BUFFERSIZE", 1)
 
-    vc = connection_module.VideoConnection(src="0")
-    assert vc.shape is None
+    vc = connection_module.VideoConnection(
+        src="0", first_frame_timeout=0.05, reconnect_delay=0.05
+    )
+    try:
+        assert vc.shape is None
+        assert vc.get_frame() is None
+    finally:
+        vc.close()
+
+
+def test_video_connection_keeps_latest_frame(monkeypatch, no_termination_handlers):
+    no_termination_handlers(connection_module)
+
+    frames_q: queue.Queue = queue.Queue()
+
+    class FakeCap:
+        def __init__(self, _source):
+            self.released = False
+
+        def read(self):
+            while not self.released:
+                try:
+                    item = frames_q.get(timeout=0.05)
+                except queue.Empty:
+                    continue
+                if item is None:
+                    return False, None
+                return True, item
+            return False, None
+
+        def set(self, *_args, **_kwargs):
+            return True
+
+        def release(self):
+            self.released = True
+            frames_q.put(None)
+
+    monkeypatch.setattr(connection_module.cv2, "VideoCapture", FakeCap)
+    monkeypatch.setattr(connection_module.cv2, "CAP_PROP_BUFFERSIZE", 1)
+
+    frame_a = np.full((4, 4, 3), 1, dtype=np.uint8)
+    frame_b = np.full((4, 4, 3), 2, dtype=np.uint8)
+    frames_q.put(frame_a)
+
+    vc = connection_module.VideoConnection(
+        src="0", first_frame_timeout=1.0, reconnect_delay=0.05
+    )
+    try:
+        assert vc.shape == (4, 4, 3)
+        assert vc.get_frame()[0, 0, 0] == 1
+
+        frames_q.put(frame_b)
+        deadline = time.monotonic() + 1.0
+        latest = None
+        while time.monotonic() < deadline:
+            latest = vc.get_frame()
+            if latest is not None and latest[0, 0, 0] == 2:
+                break
+            time.sleep(0.01)
+        assert latest is not None and latest[0, 0, 0] == 2
+
+        latest[0, 0] = 9
+        assert vc.get_frame()[0, 0, 0] == 2
+    finally:
+        vc.close()
 
 
 def test_connection_initializes_manual_flags(monkeypatch, mocker):

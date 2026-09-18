@@ -1,3 +1,4 @@
+import threading
 from enum import StrEnum
 
 import cv2
@@ -35,26 +36,84 @@ from src.utils import (
 
 
 class VideoThread(QThread):
-    """Thread for processing video frames"""
+    """Decode-independent preview thread. The capture thread already keeps only
+    the latest camera frame; this thread converts that snapshot off the GUI
+    thread and never queues more than one pending image."""
 
-    frame_processed = Signal(np.ndarray)
+    frame_ready = Signal()
 
     def __init__(self, app: App):
         super().__init__()
         self.app = app
         self.running = True
-        add_termination_handler(self.stop)
+        self._image_lock = threading.Lock()
+        self._latest_image: QImage | None = None
+        self._term = add_termination_handler(self.stop)
+
+    def take_latest_image(self) -> QImage | None:
+        with self._image_lock:
+            image = self._latest_image
+            self._latest_image = None
+            return image
 
     def run(self):
         while self.running:
+            with self._image_lock:
+                pending = self._latest_image is not None
+            if pending:
+                self.msleep(5)
+                continue
             frame = self.app.get_active_frame()
-            if frame is not None:
-                self.frame_processed.emit(frame)
-            self.msleep(50)  # ~20 FPS
+            if frame is None:
+                self.msleep(50)
+                continue
+            qimage = self._frame_to_qimage(frame)
+            if qimage is None:
+                continue
+            with self._image_lock:
+                was_pending = self._latest_image is not None
+                self._latest_image = qimage
+                should_emit = not was_pending
+            if should_emit:
+                self.frame_ready.emit()
+
+    def _frame_to_qimage(self, frame: np.ndarray) -> QImage | None:
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb_frame = np.ascontiguousarray(rgb_frame)
+        height, width, channels = rgb_frame.shape
+        qimage = QImage(
+            rgb_frame.data,
+            width,
+            height,
+            channels * width,
+            QImage.Format.Format_RGB888,
+        ).copy()
+
+        config_data = self.app.get_active_config()
+        if config_data is None:
+            return qimage
+
+        desired_height = config_data.frame_height
+        desired_width = config_data.frame_width
+        if desired_width and desired_height:
+            return qimage.scaled(
+                desired_width,
+                desired_height,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            )
+        if desired_width:
+            return qimage.scaledToWidth(
+                desired_width, Qt.TransformationMode.FastTransformation
+            )
+        return qimage
 
     def stop(self):
         self.running = False
-        self.wait()
+        self.wait(3000)
+        if self._term is not None:
+            remove_termination_handler(self._term)
+            self._term = None
 
 
 class ButtonText(StrEnum):
@@ -99,9 +158,7 @@ class PySide6Interface(QMainWindow):
         self.scheduler = QTScheduler()
         self.app = App(self.scheduler, args=args)
 
-        # Video thread
-        self.video_thread = VideoThread(self.app)
-        self.video_thread.frame_processed.connect(self.update_video_frame)
+        self.video_thread: VideoThread | None = None
 
         # Setup UI
         self.setup_ui()
@@ -321,40 +378,15 @@ class PySide6Interface(QMainWindow):
 
         self.video_label.setPixmap(pixmap)
 
-    def update_video_frame(self, frame):
-        """Update the video display with new frame"""
-        if frame is None or (config_data := self.app.get_active_config()) is None:
-            return None
-
-        desired_height = config_data.frame_height
-        desired_width = config_data.frame_width
-
-        # Convert BGR to RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_frame.shape
-        bytes_per_line = ch * w
-
-        # Create QImage from numpy array
-        qimage = QImage(
-            rgb_frame.data, w, h, bytes_per_line, QImage.Format.Format_RGB888
-        )
-
-        # Resize if needed
-        if desired_width and desired_height:
-            qimage = qimage.scaled(
-                desired_width,
-                desired_height,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        elif desired_width:
-            qimage = qimage.scaledToWidth(
-                desired_width, Qt.TransformationMode.SmoothTransformation
-            )
-
-        # Convert to QPixmap and display
-        pixmap = QPixmap.fromImage(qimage)
-        self.video_label.setPixmap(pixmap)
+    def update_video_frame(self):
+        """Display the newest converted preview image, dropping any extra ticks."""
+        thread = self.video_thread
+        if thread is None:
+            return
+        qimage = thread.take_latest_image()
+        if qimage is None or qimage.isNull():
+            return
+        self.video_label.setPixmap(QPixmap.fromImage(qimage))
 
     def manage_connections(self):
         """Open connection manager dialog"""
@@ -391,7 +423,7 @@ class PySide6Interface(QMainWindow):
             self.set_manual_control_btn_state(False)
             self.automatic_slider.setChecked(False)
             self.automatic_slider.setEnabled(False)
-            self.video_thread.stop()
+            self._stop_video_thread()
             self.draw_no_signal_display()
             return
 
@@ -426,10 +458,28 @@ class PySide6Interface(QMainWindow):
             self.app.get_control_mode(),
         )
 
-        # Start video thread if not running
-        if not self.video_thread.isRunning():
-            self.video_thread.running = True
-            self.video_thread.start()
+        self._start_video_thread()
+
+    def _start_video_thread(self) -> None:
+        if self.video_thread is not None and self.video_thread.isRunning():
+            return
+        self._stop_video_thread()
+        self.video_thread = VideoThread(self.app)
+        self.video_thread.frame_ready.connect(
+            self.update_video_frame, Qt.ConnectionType.QueuedConnection
+        )
+        self.video_thread.start()
+
+    def _stop_video_thread(self) -> None:
+        thread = self.video_thread
+        self.video_thread = None
+        if thread is None:
+            return
+        try:
+            thread.frame_ready.disconnect(self.update_video_frame)
+        except RuntimeError:
+            pass
+        thread.stop()
 
     def change_model(self, model_name):
         """Change the detection model"""
@@ -448,6 +498,8 @@ class PySide6Interface(QMainWindow):
         if self._term is not None:
             remove_termination_handler(self._term)
             self._term = None
+
+        self._stop_video_thread()
 
         # Cleanup scheduler
         if hasattr(self.scheduler, "cleanup"):
