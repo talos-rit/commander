@@ -54,8 +54,9 @@ class App:
         self.scheduler = scheduler
         self.connections = ConnectionCollection()
         self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
+        self._cli_draw_bboxes = bool(args.draw_bboxes) if args else False
         self.streamer = Streamer(
-            self.connections, draw_bboxes=args.draw_bboxes if args else False
+            self.connections, draw_bboxes=self._cli_draw_bboxes
         )
         self.director = ContinuousDirector(
             self.tracker, self.connections, self.scheduler
@@ -236,6 +237,7 @@ class App:
         if option is None:
             self.tracker.swap_model(None)
             self.model_selection = None
+            self.streamer.draw_bboxes = self._cli_draw_bboxes
             return True
         if option not in USABLE_MODELS:
             logger.error(
@@ -246,6 +248,7 @@ class App:
         self.tracker.swap_model(model_class)
         logger.info(f"Initialized {option} model")
         self.model_selection = option
+        self.streamer.draw_bboxes = True
         return True
 
     def is_manual_only(self) -> bool | None:

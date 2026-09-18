@@ -68,12 +68,8 @@ class Streamer:
             conn = self.connections[hostname]
             video_conn = conn.video_connection
             frame = video_conn.get_frame() if video_conn is not None else None
-            if (
-                frame is not None
-                and self.draw_bboxes
-                and (bboxes := conn.get_bboxes()) is not None
-            ):
-                frame = draw_visuals(bboxes, frame)
+            if frame is not None and self.draw_bboxes:
+                frame = draw_visuals(conn.get_bboxes() or [], frame)
             return frame
         else:
             logger.error(f"Connection to {hostname} does not exist")
@@ -84,12 +80,8 @@ class Streamer:
         if active_conn is not None:
             video_conn = active_conn.video_connection
             frame = video_conn.get_frame() if video_conn is not None else None
-            if (
-                frame is not None
-                and self.draw_bboxes
-                and (bboxes := active_conn.get_bboxes()) is not None
-            ):
-                frame = draw_visuals(bboxes, frame)
+            if frame is not None and self.draw_bboxes:
+                frame = draw_visuals(active_conn.get_bboxes() or [], frame)
             return frame
         else:
             logger.warning("No active connection found.")

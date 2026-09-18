@@ -68,6 +68,7 @@ class Tracker:
         self.bbox_delay = 1000 / self.max_fps
         self._detector = Detector(model, connections, smm)
         self.disable_perf_warnings = config.APP_SETTINGS.disable_performance_warnings
+        self.connections.add_listener(self.on_connection_update)
         logger.debug(f"Tracker initialized with max_fps: {self.max_fps}")
 
     def on_connection_update(self, event: ConnectionCollectionEvent, *_: Any):
@@ -76,10 +77,11 @@ class Tracker:
             self.stop()
 
     def start_detection_process(self) -> None:
-        if self._detector.is_running():
-            return  # Already running
-        logger.info("Starting detection process...")
-        self._detector.start()
+        if not self._detector.is_running():
+            logger.info("Starting detection process...")
+            self._detector.start()
+        if self.is_pipeline_running():
+            return
         self._term_handler_id = add_termination_handler(self.stop)
         logger.info(
             f"Detection process started. bbox delay:{self.bbox_delay}ms, frame delay:{self.frame_delay}ms"

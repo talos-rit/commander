@@ -27,7 +27,7 @@ RTSP_OPEN_OPTIONS = {
     "max_delay": "0",
     "reorder_queue_size": "0",
 }
-RTSP_OPEN_TIMEOUT = (5.0, 2.0)
+RTSP_OPEN_TIMEOUT = (2.0, 1.0)
 
 
 class PyAVCapture:
@@ -125,7 +125,7 @@ class PyAVCapture:
 class VideoConnection:
     src: str | int
     video_buffer_size: int = field(default=1)
-    first_frame_timeout: float = field(default=2.0)
+    first_frame_timeout: float = field(default=5.0)
     reconnect_delay: float = field(default=1.0)
     cap: cv2.VideoCapture | PyAVCapture | None = field(init=False, default=None)
     shape: tuple | None = field(init=False, default=None)
@@ -157,21 +157,34 @@ class VideoConnection:
             return self.src
 
     def _open_capture(self) -> None:
+        if self._stop_event.is_set():
+            return
         source = self._resolve_source()
+        if isinstance(source, str) and source.startswith("rtsp://"):
+            try:
+                new_cap: cv2.VideoCapture | PyAVCapture = PyAVCapture(
+                    source, **RTSP_OPEN_OPTIONS
+                )
+            except Exception as exc:
+                if self._stop_event.is_set():
+                    return
+                logger.warning(
+                    "Failed to open RTSP stream with low-latency options ({}). Retrying with TCP only.",
+                    exc,
+                )
+                new_cap = PyAVCapture(source, rtsp_transport="tcp")
+        else:
+            new_cap = cv2.VideoCapture(source)
+            new_cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
         with self._cap_lock:
             self._release_capture_unlocked()
-            if isinstance(source, str) and source.startswith("rtsp://"):
+            if self._stop_event.is_set():
                 try:
-                    self.cap = PyAVCapture(source, **RTSP_OPEN_OPTIONS)
-                except Exception as exc:
-                    logger.warning(
-                        "Failed to open RTSP stream with low-latency options ({}). Retrying with TCP only.",
-                        exc,
-                    )
-                    self.cap = PyAVCapture(source, rtsp_transport="tcp")
-            else:
-                self.cap = cv2.VideoCapture(source)
-                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, self.video_buffer_size)
+                    new_cap.release()
+                except Exception:
+                    pass
+                return
+            self.cap = new_cap
 
     def _release_capture_unlocked(self) -> None:
         cap = self.cap
@@ -247,7 +260,7 @@ class VideoConnection:
         self._release_capture()
         thread = self._thread
         if thread is not None and thread.is_alive():
-            thread.join(timeout=3.0)
+            thread.join(timeout=5.0)
             if thread.is_alive():
                 logger.warning("Capture thread for {} did not stop cleanly", self.src)
         self._thread = None
