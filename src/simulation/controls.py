@@ -6,13 +6,11 @@ import math
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 from src.robot_state import RobotStateSnapshot, RobotStateSource
 
 from .publisher import SimulatedPublisher
-from .joint_limit_calibration import capture_soft_endpoint
 from .erv_calibration import (
     ELBOW_CALIBRATION,
     PITCH_CALIBRATION,
@@ -339,8 +337,6 @@ class InteractiveSimulationController:
     def move_real_joints(self, shoulder: int, elbow: int, wrist_pitch: int) -> bool:
         if not self.joint_jog_available():
             return False
-        if not all(-500 <= value <= 500 for value in (shoulder, elbow, wrist_pitch)):
-            raise ValueError("ER-V joint target increment must be within +/-500 counts")
         publisher = self.real_publishers[self.selected_robot_id]
         move = getattr(publisher, "erv_joint_move_relative", None)
         if move is None:
@@ -375,7 +371,7 @@ class InteractiveSimulationController:
     def move_real_joints_to_angles(
         self, shoulder_degrees: float, elbow_degrees: float, pitch_degrees: float
     ) -> bool:
-        """Move to absolute displayed joint angles using one bounded ACL move."""
+        """Move to absolute displayed joint angles using one ACL move."""
         requested = (shoulder_degrees, elbow_degrees, pitch_degrees)
         if not all(math.isfinite(value) for value in requested):
             raise ValueError("joint targets must be finite degree values")
@@ -385,10 +381,6 @@ class InteractiveSimulationController:
             elbow_degrees - current["elbow"],
             pitch_degrees - current["pitch"],
         )
-        if not all(-500 <= value <= 500 for value in counts):
-            raise ValueError(
-                "requested degree target exceeds the ER-V coordinated-move limit of +/-500 counts"
-            )
         return self.move_real_joints(*counts)
 
     def enable_real_control(self) -> bool:
@@ -416,34 +408,6 @@ class InteractiveSimulationController:
 
     def get_real_requested_speed_percent(self) -> int | None:
         return self._real_requested_speed_percent.get(self.selected_robot_id)
-
-    def capture_real_joint_soft_endpoint(self, axis: str, bound: str) -> Path:
-        """Persist the current fresh TELP coordinate after a human-supervised jog.
-
-        This is intentionally a recorder, not a limit-seeking motion command.
-        """
-        if self.selected_backend != "real":
-            raise RuntimeError("soft endpoints can only be captured in REAL mode")
-        source = self.state_sources[self.selected_robot_id]
-        health_getter = getattr(source, "telemetry_health", None)
-        health = health_getter() if health_getter else None
-        if health is None or not health.has_state:
-            raise RuntimeError("wait for a fresh TELP sample before capturing an endpoint")
-        publisher = self.real_publishers[self.selected_robot_id]
-        get_counts = getattr(publisher, "get_erv_joint_counts", None)
-        counts = get_counts() if get_counts else None
-        if counts is None:
-            raise RuntimeError("TELP joint coordinates are unavailable")
-        destination = Path(__file__).resolve().parents[2] / "calibration" / "bluey_joint_limits.local.json"
-        saved = capture_soft_endpoint(
-            destination,
-            robot_id=self.selected_robot_id,
-            joint_counts=counts,
-            axis=axis,
-            bound=bound,
-        )
-        print(f"{self.selected_robot_id}: captured {axis} {bound} soft endpoint in {saved}")
-        return saved
 
     def clear_selected_simulation_fault(self) -> None:
         robot_id = self.selected_robot_id

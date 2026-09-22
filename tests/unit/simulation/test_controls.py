@@ -368,7 +368,7 @@ def test_real_degree_targets_use_fresh_measurement_and_preserve_forearm_independ
     assert real.calls[-1] == ("joint_move_relative", (33, -33, 0))
 
 
-def test_real_degree_targets_require_fresh_telemetry_and_keep_count_bound() -> None:
+def test_real_degree_targets_require_fresh_telemetry_without_count_bound() -> None:
     controller, _robots, _viewer = make_controller()
     real = RecordingRealPublisher()
     controller.real_publishers["bluey"] = real
@@ -378,8 +378,9 @@ def test_real_degree_targets_require_fresh_telemetry_and_keep_count_bound() -> N
         controller.move_real_joints_to_angles(0.0, 0.0, 0.0)
 
     real.emit_telemetry((0, 1088, 2113, 1151), (0, 1088, 2113, 1151, 0))
-    with pytest.raises(ValueError, match=r"\+/-500"):
-        controller.move_real_joints_to_angles(90.0, 0.0, 0.0)
+    assert controller.move_real_joints_to_angles(90.0, 0.0, 0.0)
+    assert real.calls[-1][0] == "joint_move_relative"
+    assert abs(real.calls[-1][1][0]) > 500
 
 
 def test_enable_control_and_requested_real_speed_route_without_claiming_measurement() -> None:

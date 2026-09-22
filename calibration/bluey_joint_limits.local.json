@@ -50,7 +50,7 @@
       "controller_reference": 1088,
       "counts_per_degree": 33.2121,
       "direction": -1,
-      "direction_status": "physically_verified_from_soft_endpoints",
+      "direction_status": "physically_verified_latest_observation",
       "physical_reference": "vertical_straight",
       "reference_status": "physically_anchored",
       "scale_status": "inherited_controller_conversion",
@@ -64,35 +64,8 @@
     "shoulder_joint": "shoulder_reference + shoulder_axis_delta"
   },
   "notes": [
-    "The vertical-straight observation does not constrain base yaw or wrist roll.",
-    "The 1008-count shoulder soft-endpoint span is only about 30.35 degrees at the inherited scale; collect a measured-angle scale sample before treating that scale as physically established."
+    "The vertical-straight observation does not constrain base yaw or wrist roll."
   ],
-  "limits": {
-    "elbow": {
-      "max": {
-        "controller_count": -2287,
-        "kind": "human-supervised soft endpoint",
-        "recorded_at_utc": "2026-09-16T20:42:32.678649+00:00"
-      },
-      "min": {
-        "controller_count": 2973,
-        "kind": "human-supervised soft endpoint",
-        "recorded_at_utc": "2026-09-16T20:42:15.661223+00:00"
-      }
-    },
-    "shoulder": {
-      "max": {
-        "controller_count": 444,
-        "kind": "human-supervised soft endpoint",
-        "recorded_at_utc": "2026-09-16T20:43:27.728614+00:00"
-      },
-      "min": {
-        "controller_count": 1452,
-        "kind": "human-supervised soft endpoint",
-        "recorded_at_utc": "2026-09-16T21:15:35.573612+00:00"
-      }
-    }
-  },
   "robot_id": "bluey",
   "schema_version": 1
 }

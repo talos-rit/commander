@@ -229,22 +229,6 @@ class TkSimulationControlPanel:
             speed_row, text="Set speed", command=self._set_real_speed
         )
         self.real_speed_button.pack(side="right")
-        endpoint_capture = ttk.LabelFrame(
-            self.real_controls, text="Observed soft endpoints (TELP counts)"
-        )
-        endpoint_capture.pack(fill="x", pady=(10, 0))
-        for axis in ("shoulder", "elbow"):
-            row = ttk.Frame(endpoint_capture)
-            row.pack(fill="x", padx=4, pady=1)
-            ttk.Label(row, text=axis.title(), width=12).pack(side="left")
-            ttk.Button(
-                row, text="Capture min",
-                command=lambda joint=axis: self._capture_soft_endpoint(joint, "min"),
-            ).pack(side="left", fill="x", expand=True, padx=(0, 3))
-            ttk.Button(
-                row, text="Capture max",
-                command=lambda joint=axis: self._capture_soft_endpoint(joint, "max"),
-            ).pack(side="left", fill="x", expand=True)
         joint_target = ttk.LabelFrame(
             self.real_controls, text="Coordinated joint target (measured degrees)"
         )
@@ -510,13 +494,6 @@ class TkSimulationControlPanel:
         except (RuntimeError, ValueError, self._tk.TclError) as error:
             self.controller.last_error[self.controller.selected_robot_id] = str(error)
             print(f"Speed request rejected: {error}")
-
-    def _capture_soft_endpoint(self, axis: str, bound: str) -> None:
-        try:
-            self.controller.capture_real_joint_soft_endpoint(axis, bound)
-        except (RuntimeError, ValueError) as error:
-            self.controller.last_error[self.controller.selected_robot_id] = str(error)
-            print(f"Endpoint capture failed: {error}")
 
     def _refresh_backend_menu(self) -> None:
         values = self.controller.available_backends()
