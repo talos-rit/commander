@@ -7,7 +7,12 @@ from src.streaming import StreamController, StreamControllerFactory
 
 from . import config
 from .config.schema.robot import ConnectionConfig
-from .connection.connection import Connection, ConnectionCollection, VideoConnection
+from .connection.connection import (
+    Connection,
+    ConnectionCollection,
+    VideoConnection,
+    is_live_source,
+)
 from .connection.publisher import Direction
 from .directors import BaseDirector, ContinuousDirector
 from .observations.replay import ObservationRecorder
@@ -63,9 +68,8 @@ class App:
         self.tracker = Tracker(
             self.connections, scheduler=scheduler, smm=smm, **tracker_options
         )
-        self.streamer = Streamer(
-            self.connections, draw_bboxes=args.draw_bboxes if args else False
-        )
+        self._cli_draw_bboxes = bool(args.draw_bboxes) if args else False
+        self.streamer = Streamer(self.connections, draw_bboxes=self._cli_draw_bboxes)
         self.director = ContinuousDirector(
             self.tracker, self.connections, self.scheduler
         )
@@ -96,7 +100,10 @@ class App:
                 f"Connection hostname {hostname} not found in config, not opening connection"
             )
         try:
-            video_connection = VideoConnection(src=conf.camera_index)
+            video_connection = VideoConnection(
+                src=conf.camera_index,
+                background_capture=is_live_source(conf.camera_index),
+            )
         except Exception as exc:
             logger.warning(f"Failed to open video connection for {hostname}: {exc}")
             video_connection = None
@@ -171,9 +178,14 @@ class App:
             task.cancel()
         self.discrete_move_task.clear()
 
-    def move_home(self) -> None:
-        """Moves the robotic arm from its current location to its home position"""
-        if (connection := self.get_active_connection()) is None:
+    def move_home(self, hostname: str | None = None) -> None:
+        """Moves the robotic arm (active connection, or `hostname`) to its home position"""
+        connection = (
+            self.get_active_connection()
+            if hostname is None
+            else self.connections.get(hostname)
+        )
+        if connection is None:
             return logger.error("No connection found")
         return connection.publisher.home(1000)
 
@@ -245,6 +257,7 @@ class App:
         if option is None:
             self.tracker.swap_model(None)
             self.model_selection = None
+            self.streamer.draw_bboxes = self._cli_draw_bboxes
             return True
         if option not in USABLE_MODELS:
             logger.error(
@@ -255,6 +268,7 @@ class App:
         self.tracker.swap_model(model_class)
         logger.info(f"Initialized {option} model")
         self.model_selection = option
+        self.streamer.draw_bboxes = True
         return True
 
     def is_manual_only(self) -> bool | None:
@@ -263,18 +277,23 @@ class App:
             return None
         return connection.manual_only
 
-    def get_manual_control(self) -> bool | None:
-        """Gets the active connection's manual/automatic control mode"""
+    def get_manual_control(self, hostname: str | None = None) -> bool | None:
+        """Gets the manual/automatic control mode of the active connection or `hostname`"""
         if self.director is None:
             return logger.error("No active director")
-        return self.director.get_manual_control()
+        if hostname is None:
+            return self.director.get_manual_control()
+        return self.director.get_manual_control(hostname=hostname)
 
-    def set_manual_control(self, manual: bool) -> None:
-        """Sets the active connection's manual/automatic control mode"""
+    def set_manual_control(self, manual: bool, hostname: str | None = None) -> None:
+        """Sets the manual/automatic control mode of the active connection or `hostname`"""
         if self.director is None:
             return logger.error("No active director")
-        logger.debug("Setting manual control to {}", manual)
-        self.director.set_manual_control(manual=manual)
+        logger.debug("Setting manual control to {} for {}", manual, hostname)
+        if hostname is None:
+            self.director.set_manual_control(manual=manual)
+            return
+        self.director.set_manual_control(hostname=hostname, manual=manual)
 
     def set_control_mode(self, ctrl_mode: ControlMode) -> ControlMode:
         """

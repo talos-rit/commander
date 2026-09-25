@@ -193,6 +193,58 @@ def test_move_home_uses_publisher(monkeypatch, app_under_test, mocker):
     publisher.home.assert_called_once_with(1000)
 
 
+def test_move_home_targets_named_host_not_active(app_under_test, mocker):
+    app = app_under_test
+    active = mocker.Mock(is_manual=True, publisher=mocker.Mock())
+    other = mocker.Mock(is_manual=True, publisher=mocker.Mock())
+    app.connections["active"] = active
+    app.connections["other"] = other
+    app.connections.set_active("active")
+
+    app.move_home(hostname="other")
+
+    other.publisher.home.assert_called_once_with(1000)
+    active.publisher.home.assert_not_called()
+
+
+def test_move_home_unknown_host_logs_error(monkeypatch, app_under_test, mocker):
+    error = mocker.Mock()
+    monkeypatch.setattr(talos_app.logger, "error", error)
+
+    app_under_test.move_home(hostname="missing")
+
+    error.assert_called_once()
+
+
+def test_manual_control_passes_hostname_to_director(
+    app_under_test, patch_talos_app_dependencies
+):
+    director = patch_talos_app_dependencies["director"]
+
+    app_under_test.set_manual_control(False, hostname="h")
+    app_under_test.get_manual_control(hostname="h")
+    app_under_test.set_manual_control(True)
+
+    director.set_manual_control.assert_any_call(hostname="h", manual=False)
+    director.get_manual_control.assert_called_once_with(hostname="h")
+    director.set_manual_control.assert_called_with(manual=True)
+
+
+def test_change_model_toggles_bbox_overlay(
+    monkeypatch, app_under_test, patch_talos_app_dependencies, mocker
+):
+    app = app_under_test
+    app.connections["h"] = mocker.Mock()
+    monkeypatch.setattr(talos_app, "USABLE_MODELS", {"basic": object})
+    streamer = patch_talos_app_dependencies["streamer"]
+    streamer.draw_bboxes = False
+
+    assert app.change_model("basic") is True
+    assert streamer.draw_bboxes is True
+    assert app.change_model(None) is True
+    assert streamer.draw_bboxes is False
+
+
 def test_active_hostname_and_connection_methods(app_under_test, mocker):
     app = app_under_test
 

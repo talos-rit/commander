@@ -69,6 +69,30 @@ Run the Tk GUI interface:
 uv run commander-tk
 ```
 
+### Web UI
+`commander-web` serves a React operator UI on localhost (default <http://127.0.0.1:8000>). It needs [bun](https://bun.sh) (to install) and [pnpm](https://pnpm.io) (to run scripts) to build the frontend once:
+```bash
+cd web
+bun install
+pnpm run build
+cd ..
+uv run commander-web
+```
+Pass `--connection <host>` to open a robot from `robot_configs.local.yaml` as Camera 1 on startup, or pick it in **Settings**.
+
+- **One robot is enough.** Camera 1 is the only required slot. Assign a Camera 2 in Settings to unlock the *One screen / Two screen* tabs.
+- **One screen** shows a single feed. *Manual* lets you pick Cam 1 / Cam 2 (keys `1` / `2`); *Dynamic* will switch automatically (switching logic is still a stub and currently holds the camera you last chose).
+- **Two screen** shows both feeds side by side; click a feed to choose which robot the controls act on.
+- **Simple** mode only shows *Home* (`H`) and *Auto-Track* (`T`). **Debug** mode adds the jog pad (arrow keys), the detection model picker and live Operator telemetry.
+- Tracking uses a YOLO model (`yolo_nano` unless you pick another). That needs the optional extra: `uv sync --extra yolo`. Haar (`basic`) and MediaPipe are not offered in this UI.
+- **Settings** add/edit/remove robots (`config/robot_configs.local.yaml`) and save defaults such as camera slots, layout, interface mode, tracking model and web host/port (`config/app_settings.local.yaml`).
+
+For frontend development, run the backend and the Vite dev server (proxies `/api` to `COMMANDER_API`, default `http://127.0.0.1:8000`):
+```bash
+uv run commander-web
+pnpm --dir web dev
+```
+
 ## Configurations
 The `config/example_default_config.yaml` file contains default parameters for the application that will be used to fill in the new connections configs. You can override these parameters using `config/default_config.local.yaml` which will be prioritized over the example default config. 
 
@@ -86,6 +110,7 @@ Supported environment variables:
 - `COMMANDER_LOG_LEVEL`
 - `COMMANDER_BBOX_MAX_FPS`
 - `COMMANDER_FRAME_PROCESS_FPS`
+- `COMMANDER_WEB_HOST` / `COMMANDER_WEB_PORT` (also `--web-host` / `--web-port`)
 
 Example:
 ```bash
@@ -106,6 +131,11 @@ uv run pytest tests/unit/
 To run only integration tests:
 ```bash
 uv run pytest tests/integration/
+```
+To run the web UI tests (Vitest) and coverage:
+```bash
+pnpm --dir web test
+pnpm --dir web coverage
 ```
 
 ## Setting up the virtual camera

@@ -291,6 +291,8 @@ def test_tracker_acquires_each_source_once_and_detector_uses_same_batch(mocker) 
     detector.frame_order = [("first", 0), ("second", 2)]
     detector.connections = connections
     detector.waiting_startup = False
+    detector._pending_start = False
+    detector.is_running = lambda: True
     detector._frame_ready_event = mocker.Mock()
     detector._frame_ready_event.is_set.return_value = False
     detector._frame_buf = np.zeros((2, 4, 3), dtype=np.uint8)

@@ -79,9 +79,15 @@ class OperatorConnection:
             self.socket.shutdown(socket.SHUT_RDWR)
         except OSError:
             pass
-        if self.thread is not None:
-            self.thread.join()
-        self.socket.close()
+        if self.thread is not None and self.thread is not threading.current_thread():
+            self.thread.join(timeout=2)
+            still_running = getattr(self.thread, "is_alive", lambda: False)
+            if still_running():
+                logger.warning(f"Operator thread for {self.host}:{self.port} did not stop")
+        try:
+            self.socket.close()
+        except OSError:
+            pass
         logger.debug(f"Socket closed cleanly {self.host}:{self.port}")
 
     def is_connected(self) -> bool:
@@ -148,6 +154,12 @@ class OperatorConnection:
 
     def listen(self):
         while self.is_running:
+            try:
+                readable, _, _ = select.select([self.socket], [], [], 0.5)
+            except (OSError, ValueError):
+                break
+            if not readable or not self.is_running:
+                continue
             try:
                 message = self.socket.recv(2048)
 

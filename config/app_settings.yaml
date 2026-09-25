@@ -1,3 +1,14 @@
 log_level: "INFO"
 bbox_max_fps: 30
 frame_process_fps: 30
+
+# Web operator console (uv run commander-web)
+web_host: "127.0.0.1"
+web_port: 8000
+ui_mode: "simple" # simple | debug
+display_mode: "one_screen" # one_screen | two_screen (two_screen needs camera_2_host)
+one_screen_mode: "manual" # manual | dynamic
+camera_1_host: null # robot_configs.local.yaml hostname for the primary camera
+camera_2_host: null # optional second robot/camera
+default_model: null # yolo_nano when unset; yolo_small, yolo_medium, ...
+jog_mode: "discrete" # discrete | continuous

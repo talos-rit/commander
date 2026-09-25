@@ -76,6 +76,9 @@ class RobotConfigFileHandler(FileSystemEventHandler):
     def on_deleted(self, event: DirDeletedEvent | FileDeletedEvent) -> None:
         if not self._is_target_file(event):
             return
+        # Atomic saves (write temp + rename) surface as deletes on some platforms.
+        if os.path.exists(ROBOT_CONFIGS_PATH):
+            return self._handle_config_change(event)
         logger.warning("Robot config file deleted.")
         path = take_backup()
         logger.info(f"Backed up current robot configs to {path}")
