@@ -262,6 +262,47 @@ def test_auto_track_off(web_config):
     assert app.connections["a"].is_manual is True
 
 
+def test_virtual_camera_streams_the_selected_robot(web_config):
+    backend, app, _ = make_backend(camera_1="a", camera_2="b")
+    backend.startup()
+    backend.select(slot=2)
+
+    assert backend.set_virtual_camera(True) is True
+
+    assert ("start_stream", "pyvcam", None) in app.calls
+    assert app.active == "b"
+    assert backend.status()["virtual_camera"] is True
+
+    assert backend.set_virtual_camera(False) is False
+    assert app.calls[-1] == ("stop_stream",)
+    assert backend.status()["virtual_camera"] is False
+
+
+def test_virtual_camera_requires_a_frame(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].video_connection.shape = None
+
+    with pytest.raises(BackendError) as err:
+        backend.set_virtual_camera(True)
+
+    assert err.value.status == 409
+    assert not any(call[0] == "start_stream" for call in app.calls)
+
+
+def test_virtual_camera_reports_a_missing_device(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.stream_error = RuntimeError("obs backend: virtual camera is not installed")
+
+    with pytest.raises(BackendError) as err:
+        backend.set_virtual_camera(True)
+
+    assert err.value.status == 500
+    assert "Virtual Camera" in str(err.value)
+    assert backend.status()["virtual_camera"] is False
+
+
 # --- debug controls -----------------------------------------------------------
 
 

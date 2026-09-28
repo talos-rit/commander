@@ -45,6 +45,11 @@ function setup(initial: Status, routes: Record<string, unknown> = {}) {
     "POST /control/move/stop": { ok: true },
     "POST /control/jog-mode": { mode: "continuous" },
     "POST /control/model": { model: "yolo" },
+    "POST /control/virtual-camera": ({ body }: { body: unknown }) => {
+      const { enabled } = body as { enabled: boolean };
+      current = { ...current, virtual_camera: enabled };
+      return { enabled };
+    },
     "GET /settings": makeSettings({ camera_1_host: "bluey.local" }),
     "GET /robots": { "bluey.local": makeRobot("bluey.local") },
     ...routes,
@@ -92,6 +97,23 @@ describe("App with one camera", () => {
     await user.click(await screen.findByRole("button", { name: /home/i }));
     expect(callsTo("POST", "/control/home")[0].body).toEqual({ host: "bluey.local" });
     expect(screen.getByText("Homing…")).toBeInTheDocument();
+  });
+
+  it("toggles the virtual camera once the feed has a frame", async () => {
+    const { user, callsTo } = setup(
+      makeStatus({ connections: { "bluey.local": { has_video: true } } }),
+    );
+    const cam = await screen.findByRole("button", { name: /virtual cam/i });
+    expect(cam).toHaveAttribute("aria-pressed", "false");
+    await user.click(cam);
+    expect(callsTo("POST", "/control/virtual-camera")[0].body).toEqual({ enabled: true });
+    await waitFor(() => expect(cam).toHaveAttribute("aria-pressed", "true"));
+    expect(within(cam).getByText("On")).toBeInTheDocument();
+  });
+
+  it("keeps the virtual camera off until a frame arrives", async () => {
+    setup(makeStatus());
+    expect(await screen.findByRole("button", { name: /virtual cam/i })).toBeDisabled();
   });
 
   it("disables Auto-Track for manual-only robots", async () => {

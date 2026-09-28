@@ -62,6 +62,20 @@ def test_api_refuses_calls_until_startup_finishes(web_config):
     assert client.get("/api/status").status_code == 200
 
 
+def test_virtual_camera_toggle(setup):
+    client, app = setup()
+
+    started = client.post("/api/control/virtual-camera", json={"enabled": True})
+    assert started.status_code == 200
+    assert started.json() == {"enabled": True}
+    assert client.get("/api/status").json()["virtual_camera"] is True
+    assert ("start_stream", "pyvcam", None) in app.calls
+
+    stopped = client.post("/api/control/virtual-camera", json={"enabled": False})
+    assert stopped.json() == {"enabled": False}
+    assert client.get("/api/status").json()["virtual_camera"] is False
+
+
 def test_two_screen_rejected_with_single_camera(setup):
     client, _ = setup()
 

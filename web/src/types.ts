@@ -53,6 +53,8 @@ export interface Status {
   connections: Record<string, HostStatus>;
   tracking: TrackingStatus;
   jog_mode: JogMode;
+  /** True while the selected camera is being sent to a virtual webcam. */
+  virtual_camera: boolean;
   robots: string[];
 }
 

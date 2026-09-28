@@ -781,7 +781,8 @@ button:disabled {
   background: var(--surface-3);
 }
 
-.action--track {
+.action--track,
+.action--cam {
   min-width: 190px;
 }
 
@@ -811,23 +812,28 @@ button:disabled {
 }
 
 .action--track.is-on,
-.action--track.is-on:hover:not(:disabled) {
+.action--track.is-on:hover:not(:disabled),
+.action--cam.is-on,
+.action--cam.is-on:hover:not(:disabled) {
   border-color: var(--signal);
   background: var(--signal);
   color: var(--signal-ink);
 }
 
-.action--track.is-on:hover:not(:disabled) {
+.action--track.is-on:hover:not(:disabled),
+.action--cam.is-on:hover:not(:disabled) {
   background: #d7f86d;
 }
 
-.action--track.is-on .action__icon {
+.action--track.is-on .action__icon,
+.action--cam.is-on .action__icon {
   border-color: var(--signal-ink);
   color: var(--signal-ink);
   animation: pulse 1.6s ease-out infinite;
 }
 
-.action--track.is-on .action__text small {
+.action--track.is-on .action__text small,
+.action--cam.is-on .action__text small {
   color: var(--signal-ink);
 }
 
@@ -1232,7 +1238,8 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .spin,
-  .action--track.is-on .action__icon {
+  .action--track.is-on .action__icon,
+  .action--cam.is-on .action__icon {
     animation: none;
   }
 }

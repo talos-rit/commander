@@ -49,6 +49,10 @@ export default function App() {
     (enabled: boolean) => run(() => api.setAutoTrack(enabled, selectedHost)),
     [run, selectedHost],
   );
+  const onVirtualCamera = useCallback(
+    (enabled: boolean) => run(() => api.setVirtualCamera(enabled)),
+    [run],
+  );
   const onMoveStart = useCallback((direction: Direction) => void run(() => api.moveStart(direction)), [run]);
   const onMoveStop = useCallback((direction: Direction) => void run(() => api.moveStop(direction)), [run]);
   const onJogMode = (mode: JogMode) => void run(() => api.setJogMode(mode));
@@ -76,6 +80,7 @@ export default function App() {
       const key = event.key.toLowerCase();
       if (key === "h" && host?.open) void onHome();
       else if (key === "t" && host?.open && !host.manual_only) void onAutoTrack(!host.auto_tracking);
+      else if (key === "v" && (host?.has_video || s.virtual_camera)) void onVirtualCamera(!s.virtual_camera);
       else if ((key === "1" || key === "2") && s.view.available_slots === 2) {
         const slot = Number(key) as Slot;
         const manualOneScreen = s.view.display_mode === "one_screen" && s.view.one_screen_mode === "manual";
@@ -98,7 +103,7 @@ export default function App() {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", releaseAll);
     };
-  }, [onHome, onAutoTrack, onSelectSlot, onMoveStart, onMoveStop]);
+  }, [onHome, onAutoTrack, onVirtualCamera, onSelectSlot, onMoveStart, onMoveStop]);
 
   const debug = status?.view.ui_mode === "debug";
 
@@ -130,7 +135,12 @@ export default function App() {
             )}
           </main>
           {status.view.available_slots > 0 && (
-            <ActionBar status={status} onHome={onHome} onAutoTrack={onAutoTrack} />
+            <ActionBar
+              status={status}
+              onHome={onHome}
+              onAutoTrack={onAutoTrack}
+              onVirtualCamera={onVirtualCamera}
+            />
           )}
         </>
       ) : (

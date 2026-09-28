@@ -83,7 +83,7 @@ Pass `--connection <host>` to open a robot from `robot_configs.local.yaml` as Ca
 - **One robot is enough.** Camera 1 is the only required slot. Assign a Camera 2 in Settings to unlock the *One screen / Two screen* tabs.
 - **One screen** shows a single feed. *Manual* lets you pick Cam 1 / Cam 2 (keys `1` / `2`); *Dynamic* will switch automatically (switching logic is still a stub and currently holds the camera you last chose).
 - **Two screen** shows both feeds side by side; click a feed to choose which robot the controls act on.
-- **Simple** mode only shows *Home* (`H`) and *Auto-Track* (`T`). **Debug** mode adds the jog pad (arrow keys), the detection model picker and live Operator telemetry.
+- **Simple** mode shows *Home* (`H`), *Auto-Track* (`T`), and *Virtual Cam* (`V`). Virtual Cam sends the selected camera to a virtual webcam (OBS Virtual Camera) so OBS, Zoom, or any recorder can capture it. It follows the camera you select, and it needs a frame before it can start. **Debug** mode adds the jog pad (arrow keys), the detection model picker and live Operator telemetry.
 - Tracking uses a YOLO model (`yolo_nano` unless you pick another). That needs the optional extra: `uv sync --extra yolo`. Haar (`basic`) and MediaPipe are not offered in this UI.
 - **Settings** add/edit/remove robots (`config/robot_configs.local.yaml`) and save defaults such as camera slots, layout, interface mode, tracking model and web host/port (`config/app_settings.local.yaml`).
 

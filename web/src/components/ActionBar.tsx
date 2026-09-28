@@ -1,4 +1,4 @@
-import { Crosshair, House, Link2, Link2Off, LoaderCircle, ScanFace, Video, VideoOff } from "lucide-react";
+import { Crosshair, House, Link2, Link2Off, LoaderCircle, ScanFace, Video, VideoOff, Webcam } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { HostStatus, Status } from "../types";
 
@@ -6,6 +6,7 @@ interface Props {
   status: Status;
   onHome: () => Promise<unknown>;
   onAutoTrack: (enabled: boolean) => Promise<unknown>;
+  onVirtualCamera: (enabled: boolean) => Promise<unknown>;
 }
 
 const HOMING_FEEDBACK_MS = 2000;
@@ -18,11 +19,12 @@ function StatusChip({ ok, on, off, label }: { ok: boolean; on: React.ReactNode; 
   );
 }
 
-export function ActionBar({ status, onHome, onAutoTrack }: Props) {
+export function ActionBar({ status, onHome, onAutoTrack, onVirtualCamera }: Props) {
   const selected = status.view.selected_host;
   const host: HostStatus | undefined = selected ? status.connections[selected] : undefined;
   const [homing, setHoming] = useState(false);
   const [pendingTrack, setPendingTrack] = useState(false);
+  const [pendingCamera, setPendingCamera] = useState(false);
 
   useEffect(() => {
     if (!homing) return;
@@ -50,6 +52,23 @@ export function ActionBar({ status, onHome, onAutoTrack }: Props) {
       await onAutoTrack(!tracking);
     } finally {
       setPendingTrack(false);
+    }
+  };
+
+  const streaming = status.virtual_camera;
+  const cameraDisabled = pendingCamera || (!streaming && (!ready || !host?.has_video));
+  const cameraTitle = streaming
+    ? "Stop sending the selected camera to the virtual webcam (V)"
+    : !ready || !host?.has_video
+      ? "Waiting for a camera frame to stream"
+      : "Send the selected camera to a virtual webcam, for OBS or Zoom to record (V)";
+
+  const toggleCamera = async () => {
+    setPendingCamera(true);
+    try {
+      await onVirtualCamera(!streaming);
+    } finally {
+      setPendingCamera(false);
     }
   };
 
@@ -113,6 +132,22 @@ export function ActionBar({ status, onHome, onAutoTrack }: Props) {
           <span className="action__text">
             <span>Auto-Track</span>
             <small>{host?.manual_only ? "Manual only" : tracking ? "On" : "Off"}</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`action action--cam ${streaming ? "is-on" : ""}`}
+          onClick={toggleCamera}
+          disabled={cameraDisabled}
+          aria-pressed={streaming}
+          title={cameraTitle}
+        >
+          <span className="action__icon">
+            {pendingCamera ? <LoaderCircle className="spin" size={26} /> : <Webcam size={26} />}
+          </span>
+          <span className="action__text">
+            <span>Virtual Cam</span>
+            <small>{streaming ? "On" : "Off"}</small>
           </span>
         </button>
       </div>

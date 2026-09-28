@@ -320,7 +320,11 @@ class App:
         fps: int | None = None,
         stream_config: dict[str, int | bool | str | None] = {},
     ) -> None:
-        """Start streaming the active (or specified) connection via ffmpeg."""
+        """Start streaming the active (or specified) connection.
+
+        Raises RuntimeError when the streamer cannot open (for example, no
+        virtual camera device, or no frame yet).
+        """
         logger.info("Starting stream using {}", streamer_type)
         if hostname is None:
             frame_getter = self.streamer.get_active_frame  # pyright: ignore[reportAssignmentType]
@@ -348,6 +352,7 @@ class App:
         except RuntimeError as exc:
             logger.error("Failed to start stream: {}", exc)
             self._streamer = None
+            raise
 
     def stop_stream(self) -> None:
         """Stop an active ffmpeg stream if running."""

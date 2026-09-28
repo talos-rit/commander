@@ -55,6 +55,10 @@ class ModelRequest(BaseModel):
     model: str | None = None
 
 
+class VirtualCameraRequest(BaseModel):
+    enabled: bool
+
+
 def encode_jpeg(frame: np.ndarray, max_width: int | None = None) -> bytes | None:
     if max_width is not None and frame.shape[1] > max_width:
         height = int(frame.shape[0] * max_width / frame.shape[1])
@@ -138,6 +142,10 @@ def create_web_app(
     @api.post("/control/model")
     def model(req: ModelRequest):
         return {"model": backend.set_model(req.model)}
+
+    @api.post("/control/virtual-camera")
+    def virtual_camera(req: VirtualCameraRequest):
+        return {"enabled": backend.set_virtual_camera(req.enabled)}
 
     @api.get("/cameras/{host}/snapshot")
     def snapshot(host: str, width: int | None = None):

@@ -68,6 +68,8 @@ export const api = {
   moveStop: (direction: Direction) => request<{ ok: boolean }>("POST", "/control/move/stop", { direction }),
   setJogMode: (mode: JogMode) => request<{ mode: JogMode }>("POST", "/control/jog-mode", { mode }),
   setModel: (model: string | null) => request<{ model: string | null }>("POST", "/control/model", { model }),
+  setVirtualCamera: (enabled: boolean) =>
+    request<{ enabled: boolean }>("POST", "/control/virtual-camera", { enabled }),
 
   settings: () => request<AppSettings>("GET", "/settings"),
   updateSettings: (updates: Partial<AppSettings>) => request<AppSettings>("PUT", "/settings", updates),

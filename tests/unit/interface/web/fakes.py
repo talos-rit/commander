@@ -59,6 +59,8 @@ class FakeApp:
         self.change_model_result = True
         self.control_mode = ControlMode.DISCRETE
         self.streamer = SimpleNamespace(get_frame=self._get_frame)
+        self.streaming = False
+        self.stream_error: Exception | None = None
 
     def _get_frame(self, host):
         conn = self.connections.get(host)
@@ -125,6 +127,19 @@ class FakeApp:
 
     def stop_all_movement(self):
         self.calls.append(("stop_all", self.active))
+
+    def start_stream(self, streamer_type, hostname=None, fps=None, stream_config=None):
+        self.calls.append(("start_stream", streamer_type, hostname))
+        if self.stream_error is not None:
+            raise self.stream_error
+        self.streaming = True
+
+    def stop_stream(self):
+        self.calls.append(("stop_stream",))
+        self.streaming = False
+
+    def is_streaming(self):
+        return self.streaming
 
 
 def robot(host, **overrides):

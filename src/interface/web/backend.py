@@ -152,6 +152,7 @@ class CommanderWebBackend:
                     "output_fps": round(self.app.get_tracker_output_fps(), 1),
                 },
                 "jog_mode": str(self.app.get_control_mode()),
+                "virtual_camera": self.app.is_streaming(),
                 "robots": sorted(config.ROBOT_CONFIGS.keys()),
             }
 
@@ -291,6 +292,35 @@ class CommanderWebBackend:
                     raise BackendError(f"Could not load tracking model {model!r}", 500)
             self.app.set_manual_control(not enabled, hostname=target)
             return not bool(self.app.get_manual_control(hostname=target))
+
+    def set_virtual_camera(self, enabled: bool) -> bool:
+        """Stream the selected camera out as a virtual webcam, or stop doing so.
+
+        The stream follows whichever robot is selected, so switching cameras in
+        one-screen mode switches the virtual camera too. Both cameras are
+        assumed to share a resolution; the device is sized from the first frame.
+        """
+        with self._lock:
+            if not enabled:
+                self.app.stop_stream()
+                return False
+            target = self._target(None)
+            video = self.app.connections[target].video_connection
+            if video is None or getattr(video, "shape", None) is None:
+                raise BackendError(f"{target} has no video to stream yet", 409)
+            self._sync_active()
+            try:
+                self.app.start_stream(streamer_type="pyvcam")
+            except RuntimeError as exc:
+                detail = str(exc).strip().splitlines()[0] or "unknown error"
+                raise BackendError(
+                    "Could not start the virtual camera. Install OBS and start its "
+                    f"Virtual Camera, then try again. ({detail})",
+                    500,
+                ) from exc
+            if not self.app.is_streaming():
+                raise BackendError("Could not start the virtual camera", 500)
+            return True
 
     def _require_debug(self) -> None:
         if self.state.ui_mode != "debug":
