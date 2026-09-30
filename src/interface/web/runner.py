@@ -56,8 +56,8 @@ def _on_started(backend: CommanderWebBackend, url: str) -> None:
         logger.info(f"Commander web UI running at {url} (connecting to cameras...)")
     else:
         logger.warning(
-            f"Serving API only at {url}/api. Build the UI with `pnpm --dir web build` "
-            "or run `pnpm --dir web dev` and open http://localhost:5173"
+            f"Serving API only at {url}/api. From web/, run `bun install` and `bun run build`, "
+            "or run `bun --cwd web run dev` and open http://localhost:5173"
         )
     backend.start_in_background()
 

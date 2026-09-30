@@ -1,10 +1,16 @@
 import type { Direction } from "./types";
 
 /** Standard Gamepad API indexes. Xbox and matching third-party pads use these. */
+export const FACE_A = 0;
+export const FACE_B = 1;
+export const FACE_X = 2;
+export const FACE_Y = 3;
 export const BUMPER_LEFT = 4;
 export const BUMPER_RIGHT = 5;
 export const TRIGGER_LEFT = 6;
 export const TRIGGER_RIGHT = 7;
+export const BUTTON_BACK = 8;
+export const BUTTON_MENU = 9;
 export const DPAD_UP = 12;
 export const DPAD_DOWN = 13;
 export const DPAD_LEFT = 14;
@@ -55,13 +61,13 @@ export function describeController(gate: ControllerGate): string {
     case "settings":
       return "Controller connected. Close Settings to use it.";
     case "debug":
-      return "Controller connected. Switch to Debug mode to jog the robot.";
+      return "Controller connected. Menu toggles Debug mode.";
     case "tracking":
       return "Controller connected. Turn off Auto-Track to jog.";
     case "offline":
       return "Controller connected. The selected robot isn't ready to move.";
     case "ready":
-      return "Left stick and D-pad aim. Right stick jogs the shoulder and elbow, one joint at a time. Triggers extend and retract the arm. LB and RB switch cameras.";
+      return "Left stick and D-pad aim. Right stick jogs the shoulder and elbow, one joint at a time. Triggers extend and retract the arm. LB and RB switch cameras. Menu toggles Debug, Back homes, A toggles Auto-Track, B the layout, X Virtual Cam, and Y Manual or Dynamic.";
   }
 }
 
@@ -104,6 +110,30 @@ export function bumpersPressed(gamepads: ArrayLike<Gamepad | null>): { left: boo
     if (buttonPressed(pad, BUMPER_RIGHT)) right = true;
   }
   return { left, right };
+}
+
+export type PadAction = "a" | "b" | "x" | "y" | "back" | "menu";
+
+const PAD_ACTION_INDEXES: Record<PadAction, number> = {
+  a: FACE_A,
+  b: FACE_B,
+  x: FACE_X,
+  y: FACE_Y,
+  back: BUTTON_BACK,
+  menu: BUTTON_MENU,
+};
+
+export const PAD_ACTIONS = Object.keys(PAD_ACTION_INDEXES) as PadAction[];
+
+/** Face, Back, and Menu buttons across every listing. A HID duplicate can be the one that actually reports them. */
+export function padActionsPressed(gamepads: ArrayLike<Gamepad | null>): Record<PadAction, boolean> {
+  const pressed = { a: false, b: false, x: false, y: false, back: false, menu: false };
+  for (const pad of connectedGamepads(gamepads)) {
+    for (const action of PAD_ACTIONS) {
+      if (buttonPressed(pad, PAD_ACTION_INDEXES[action])) pressed[action] = true;
+    }
+  }
+  return pressed;
 }
 
 export function probeGamepads(gamepads: ArrayLike<Gamepad | null>): GamepadProbe[] {

@@ -504,7 +504,7 @@ describe("Controller", () => {
     pads[0] = fakePad({ axes: [0, -1, 0, 0] });
     await step();
     expect(calls.some((call) => call.path === "/control/move/start")).toBe(false);
-    expect(screen.getByTitle(/Switch to Debug mode/)).toHaveClass("chip--warn");
+    expect(screen.getByTitle(/Menu toggles Debug mode/)).toHaveClass("chip--warn");
   });
 
   it("does not jog while auto-tracking", async () => {
@@ -616,6 +616,86 @@ describe("Controller", () => {
     await step();
     await waitFor(() => expect(callsTo("POST", "/cameras/select")).toHaveLength(3));
     expect(callsTo("POST", "/cameras/select")[2].body).toEqual({ slot: 2 });
+  });
+
+  it("binds Menu, Back, and the face buttons", async () => {
+    const hosts = ["bluey.local", "raspberrypi.local"];
+    const { callsTo } = setup(
+      makeStatus({ hosts, connections: { "bluey.local": { has_video: true } } }),
+    );
+    await screen.findByTestId("pane-bluey.local");
+
+    pads[0] = press(fakePad(), 9);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/view")[0]?.body).toEqual({ ui_mode: "debug" }));
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 9);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/view")[1]?.body).toEqual({ ui_mode: "simple" }));
+
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 8);
+    await step();
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/home")).toHaveLength(1));
+    expect(callsTo("POST", "/control/home")[0].body).toEqual({ host: "bluey.local" });
+
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 0);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/auto-track")[0]?.body).toEqual({ enabled: true, host: "bluey.local" }));
+    await step();
+    expect(callsTo("POST", "/control/auto-track")).toHaveLength(1);
+
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 3);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/view").some((call) => (call.body as { one_screen_mode?: string }).one_screen_mode === "dynamic")).toBe(true));
+
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 2);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/virtual-camera")[0]?.body).toEqual({ enabled: true }));
+
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 1);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/view").some((call) => (call.body as { display_mode?: string }).display_mode === "two_screen")).toBe(true));
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 1);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/view").some((call) => (call.body as { display_mode?: string }).display_mode === "one_screen")).toBe(true));
+  });
+
+  it("does not change the layout from B when only one camera is assigned", async () => {
+    const { calls } = setup(makeStatus());
+    await screen.findByTestId("pane-bluey.local");
+    pads[0] = press(fakePad(), 1);
+    await step();
+    expect(calls.some((call) => call.path === "/view")).toBe(false);
+  });
+
+  it("does not start the virtual camera before a frame arrives", async () => {
+    const { calls } = setup(makeStatus());
+    await screen.findByTestId("pane-bluey.local");
+    pads[0] = press(fakePad(), 2);
+    await step();
+    expect(calls.some((call) => call.path === "/control/virtual-camera")).toBe(false);
+  });
+
+  it("ignores face buttons while Settings is open", async () => {
+    const { user, calls } = setup(makeStatus());
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    pads[0] = press(fakePad(), 0);
+    await step();
+    expect(calls.some((call) => call.path === "/control/auto-track")).toBe(false);
   });
 
   it("does not switch cameras in dynamic mode", async () => {

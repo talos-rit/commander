@@ -6,7 +6,7 @@ import { DebugRail } from "./components/DebugRail";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TopBar } from "./components/TopBar";
 import { VideoStage } from "./components/VideoStage";
-import { describeController, DIRECTION_ORDER, type ArmCommand, type ControllerGate } from "./gamepad";
+import { describeController, DIRECTION_ORDER, type ArmCommand, type ControllerGate, type PadAction } from "./gamepad";
 import { useCommand, useToasts } from "./hooks/useCommand";
 import { useGamepad } from "./hooks/useGamepad";
 import { useStatus } from "./hooks/useStatus";
@@ -129,6 +129,20 @@ export default function App() {
   const slotRef = useRef<Slot>(1);
   const pendingSlot = useRef<Slot | null>(null);
   const statusSlot = status ? selectedSlot(status) : null;
+  const keyState = useRef({ status, selected, settingsOpen });
+  keyState.current = { status, selected, settingsOpen };
+  const onPadAction = (action: PadAction) => {
+    const { status: viewStatus, selected: host, settingsOpen: blocked } = keyState.current;
+    if (!viewStatus || blocked) return;
+    if (action === "menu") void onUIMode(viewStatus.view.ui_mode === "debug" ? "simple" : "debug");
+    else if (action === "back" && host?.open) void onHome();
+    else if (action === "y") void onOneScreenMode(viewStatus.view.one_screen_mode === "manual" ? "dynamic" : "manual");
+    else if (action === "x" && (viewStatus.virtual_camera || (host?.open && host.has_video))) {
+      void onVirtualCamera(!viewStatus.virtual_camera);
+    } else if (action === "b" && viewStatus.view.available_slots === 2) {
+      void onDisplayMode(viewStatus.view.display_mode === "two_screen" ? "one_screen" : "two_screen");
+    } else if (action === "a" && host?.open && !host.manual_only) void onAutoTrack(!host.auto_tracking);
+  };
   useEffect(() => {
     if (statusSlot == null) return;
     if (pendingSlot.current !== null && pendingSlot.current !== statusSlot) return;
@@ -138,6 +152,7 @@ export default function App() {
   const gamepad = useGamepad({
     jog: jogEnabled,
     bumpers: bumpersEnabled,
+    actions: Boolean(status && !settingsOpen),
     onDirections: (directions) => {
       padHeld.current = new Set(directions);
       syncJog();
@@ -149,6 +164,7 @@ export default function App() {
       pendingSlot.current = next;
       void onSelectSlot(next);
     },
+    onAction: onPadAction,
   });
   const controllerGate: ControllerGate | null = !gamepad.pad
     ? null
@@ -163,9 +179,6 @@ export default function App() {
             : !robotReady
               ? "offline"
               : "ready";
-
-  const keyState = useRef({ status, selected, settingsOpen });
-  keyState.current = { status, selected, settingsOpen };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

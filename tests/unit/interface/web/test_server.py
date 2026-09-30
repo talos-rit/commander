@@ -229,7 +229,7 @@ def test_api_only_when_frontend_not_built(setup, tmp_path):
     client, _ = setup(static_dir=tmp_path / "missing")
     response = client.get("/")
     assert response.status_code == 503
-    assert "pnpm" in response.json()["detail"]
+    assert "bun run build" in response.json()["detail"]
 
 
 def test_serves_built_spa_with_fallback(setup, tmp_path):

@@ -271,8 +271,8 @@ def create_web_app(
         def no_frontend():
             return JSONResponse(
                 {
-                    "detail": "Web UI is not built. Run `pnpm --dir web build`, "
-                    "or use the Vite dev server (`pnpm --dir web dev`)."
+                    "detail": "Web UI is not built. From web/, run `bun install` and `bun run build`, "
+                    "or use the Vite dev server (`bun --cwd web run dev`)."
                 },
                 status_code=503,
             )

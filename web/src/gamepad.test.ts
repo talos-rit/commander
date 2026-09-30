@@ -3,7 +3,9 @@ import type { Direction } from "./types";
 import {
   armFromGamepad,
   armFromGamepads,
+  BUTTON_MENU,
   describeController,
+  FACE_A,
   directionsFromGamepad,
   directionsFromGamepads,
   DPAD_DOWN,
@@ -11,6 +13,7 @@ import {
   DPAD_RIGHT,
   DPAD_UP,
   gamepadLabel,
+  padActionsPressed,
   probeGamepads,
   selectGamepad,
   STICK_ENGAGE,
@@ -149,6 +152,13 @@ describe("gamepad layout", () => {
     expect(directionsFromGamepad(standard)).toEqual([]);
     expect(directionsFromGamepads([standard, hid], new Set(), new Map())).toEqual(["down"]);
     expect(probeGamepads([standard, hid])).toHaveLength(2);
+  });
+
+  it("reads Menu and A from a HID duplicate when the standard listing's buttons are dead", () => {
+    const standard = pad({ index: 0 });
+    const hid = press(pad({ index: 1, mapping: "" }), FACE_A);
+    expect(padActionsPressed([standard, hid])).toMatchObject({ a: true, menu: false });
+    expect(padActionsPressed([press(standard, BUTTON_MENU), hid]).menu).toBe(true);
   });
 });
 

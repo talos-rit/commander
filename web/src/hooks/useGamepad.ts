@@ -6,6 +6,8 @@ import {
   DIRECTION_ORDER,
   directionsFromGamepads,
   IDLE_ARM,
+  PAD_ACTIONS,
+  padActionsPressed,
   presenceFromGamepads,
   probeGamepads,
   type ArmCommand,
@@ -13,6 +15,7 @@ import {
   type ControllerPresence,
   type GamepadProbe,
   type HatState,
+  type PadAction,
 } from "../gamepad";
 import type { Direction } from "../types";
 
@@ -21,11 +24,14 @@ export interface GamepadHandlers {
   jog: boolean;
   /** LB / RB may switch the selected camera. */
   bumpers: boolean;
+  /** Menu, Back, and the face buttons may change view and robot mode. */
+  actions: boolean;
   /** Directions the pad currently wants. Empty when it is idle, blocked, or gone. */
   onDirections: (directions: readonly Direction[]) => void;
   /** Shoulder, elbow, and extend/retract. Idle when jog is blocked or the pad is gone. */
   onArm: (arm: ArmCommand) => void;
   onBumper: (side: "left" | "right") => void;
+  onAction: (action: PadAction) => void;
 }
 
 export interface GamepadState {
@@ -61,6 +67,14 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
 
   const held = useRef(new Set<Direction>());
   const bumpers = useRef({ left: false, right: false });
+  const actions = useRef<Record<PadAction, boolean>>({
+    a: false,
+    b: false,
+    x: false,
+    y: false,
+    back: false,
+    menu: false,
+  });
   const padIndex = useRef<number | null>(null);
   const hats = useRef(new Map<number, HatState>());
   const armHold = useRef<ArmHold>({
@@ -72,7 +86,7 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
   });
   const armKey = useRef(":0:0");
   const blurred = useRef(false);
-  const suppressBumpers = useRef(false);
+  const suppressEdges = useRef(false);
   const padRef = useRef<ControllerPresence | null>(null);
   const heldKey = useRef("");
   const probesRef = useRef("");
@@ -160,14 +174,24 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
       }
 
       const physical = bumpersPressed(list);
-      if (!connected.length || pageAsleep || suppressBumpers.current || !latest.current.bumpers) {
+      const padActions = padActionsPressed(list);
+      const quiet = !connected.length || pageAsleep || suppressEdges.current;
+      if (quiet || !latest.current.bumpers) {
         bumpers.current = physical;
-        if (!pageAsleep) suppressBumpers.current = false;
       } else {
         if (physical.left && !bumpers.current.left) latest.current.onBumper("left");
         if (physical.right && !bumpers.current.right) latest.current.onBumper("right");
         bumpers.current = physical;
       }
+      if (quiet || !latest.current.actions) {
+        actions.current = padActions;
+      } else {
+        for (const action of PAD_ACTIONS) {
+          if (padActions[action] && !actions.current[action]) latest.current.onAction(action);
+        }
+        actions.current = padActions;
+      }
+      if (!pageAsleep) suppressEdges.current = false;
     };
 
     let queued = false;
@@ -182,7 +206,7 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
     };
     const onBlur = () => {
       blurred.current = true;
-      suppressBumpers.current = true;
+      suppressEdges.current = true;
       reportRef.current([]);
       releaseArm();
     };
@@ -191,7 +215,7 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
     };
     const onVisibility = () => {
       if (document.hidden) {
-        suppressBumpers.current = true;
+        suppressEdges.current = true;
         reportRef.current([]);
         releaseArm();
       }
