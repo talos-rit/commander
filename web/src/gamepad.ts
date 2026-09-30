@@ -30,22 +30,7 @@ export interface ControllerPresence {
   mapped: boolean;
 }
 
-export type ControllerGate =
-  | "ready"
-  | "debug"
-  | "tracking"
-  | "offline"
-  | "settings"
-  | "unmapped"
-  | "insecure";
-
-export interface GamepadProbe {
-  index: number;
-  label: string;
-  mapping: string;
-  pressed: number[];
-  axes: number[];
-}
+export type ControllerGate = "ready" | "debug" | "tracking" | "offline" | "settings" | "unmapped";
 
 export function gamepadLabel(id: string): string {
   const cleaned = id.replace(/\s*\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
@@ -54,8 +39,6 @@ export function gamepadLabel(id: string): string {
 
 export function describeController(gate: ControllerGate): string {
   switch (gate) {
-    case "insecure":
-      return "Browsers hide controllers on plain HTTP except localhost. Open http://127.0.0.1 or use HTTPS.";
     case "unmapped":
       return "This controller isn't using the standard Xbox layout. Its D-pad still jogs the robot; the stick and shoulder buttons need that layout.";
     case "settings":
@@ -134,16 +117,6 @@ export function padActionsPressed(gamepads: ArrayLike<Gamepad | null>): Record<P
     }
   }
   return pressed;
-}
-
-export function probeGamepads(gamepads: ArrayLike<Gamepad | null>): GamepadProbe[] {
-  return connectedGamepads(gamepads).map((pad) => ({
-    index: pad.index,
-    label: gamepadLabel(pad.id),
-    mapping: pad.mapping || "none",
-    pressed: pad.buttons.flatMap((button, index) => (isButtonPressed(button) ? [index] : [])),
-    axes: Array.from(pad.axes, (value) => Math.round(value * 100) / 100),
-  }));
 }
 
 export function presenceFromGamepads(gamepads: ArrayLike<Gamepad | null>, preferredIndex: number | null): ControllerPresence | null {

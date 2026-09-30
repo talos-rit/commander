@@ -14,7 +14,6 @@ import {
   DPAD_UP,
   gamepadLabel,
   padActionsPressed,
-  probeGamepads,
   selectGamepad,
   STICK_ENGAGE,
   STICK_RELEASE,
@@ -58,7 +57,6 @@ describe("gamepad layout", () => {
     expect(describeController("offline")).toMatch(/isn't ready/);
     expect(describeController("settings")).toMatch(/Close Settings/);
     expect(describeController("unmapped")).toMatch(/standard Xbox layout/);
-    expect(describeController("insecure")).toMatch(/127\.0\.0\.1/);
   });
 
   it("prefers the pad already in use, then any standard-layout pad", () => {
@@ -151,7 +149,6 @@ describe("gamepad layout", () => {
     });
     expect(directionsFromGamepad(standard)).toEqual([]);
     expect(directionsFromGamepads([standard, hid], new Set(), new Map())).toEqual(["down"]);
-    expect(probeGamepads([standard, hid])).toHaveLength(2);
   });
 
   it("reads Menu and A from a HID duplicate when the standard listing's buttons are dead", () => {

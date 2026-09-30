@@ -9,11 +9,9 @@ import {
   PAD_ACTIONS,
   padActionsPressed,
   presenceFromGamepads,
-  probeGamepads,
   type ArmCommand,
   type ArmHold,
   type ControllerPresence,
-  type GamepadProbe,
   type HatState,
   type PadAction,
 } from "../gamepad";
@@ -37,8 +35,6 @@ export interface GamepadHandlers {
 export interface GamepadState {
   pad: ControllerPresence | null;
   held: readonly Direction[];
-  probes: GamepadProbe[];
-  secure: boolean;
 }
 
 function readGamepads(): ArrayLike<Gamepad | null> {
@@ -47,12 +43,6 @@ function readGamepads(): ArrayLike<Gamepad | null> {
   } catch {
     return [];
   }
-}
-
-function probesKey(probes: GamepadProbe[]): string {
-  return probes
-    .map((probe) => `${probe.index}:${probe.mapping}:${probe.pressed.join(".")}:${probe.axes.join(",")}`)
-    .join("|");
 }
 
 /**
@@ -89,13 +79,10 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
   const suppressEdges = useRef(false);
   const padRef = useRef<ControllerPresence | null>(null);
   const heldKey = useRef("");
-  const probesRef = useRef("");
   const connectedRef = useRef(false);
 
   const [pad, setPad] = useState<ControllerPresence | null>(null);
   const [heldList, setHeldList] = useState<readonly Direction[]>([]);
-  const [probes, setProbes] = useState<GamepadProbe[]>([]);
-  const [secure] = useState(() => window.isSecureContext !== false);
 
   const publishPad = (next: ControllerPresence | null) => {
     const prev = padRef.current;
@@ -156,13 +143,6 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
       const presence = presenceFromGamepads(list, padIndex.current);
       padIndex.current = connected.find((pad) => pad.index === padIndex.current)?.index ?? connected[0]?.index ?? null;
       publishPad(presence);
-
-      const nextProbes = probeGamepads(list);
-      const key = probesKey(nextProbes);
-      if (key !== probesRef.current) {
-        probesRef.current = key;
-        setProbes(nextProbes);
-      }
 
       const pageAsleep = blurred.current || document.hidden;
       if (!connected.length || pageAsleep || !latest.current.jog) {
@@ -244,5 +224,5 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
     };
   }, []);
 
-  return { pad, held: heldList, probes, secure };
+  return { pad, held: heldList };
 }
