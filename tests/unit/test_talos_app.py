@@ -169,6 +169,77 @@ def test_stop_move_continuous_and_stop_all(monkeypatch, app_under_test, mocker):
     assert publisher.polar_pan_continuous_stop.call_count >= 1
 
 
+def test_joint_jog_refreshes_until_stopped(app_under_test, mocker):
+    app = app_under_test
+    publisher = mocker.Mock()
+    conn = mocker.Mock(is_manual=True, publisher=publisher, host="h")
+    app.connections["h"] = conn
+    app.connections.set_active("h")
+    task = mocker.Mock()
+    app.scheduler.set_interval.return_value = task
+
+    app.start_joint_jog(2, 1)
+    publisher.erv_joint_jog_start.assert_called_once_with(2, 1)
+    app.scheduler.set_interval.assert_called_once()
+    assert app.scheduler.set_interval.call_args.args[0] == talos_app.JOINT_JOG_REFRESH_MS
+
+    app.start_joint_jog(2, 1)
+    publisher.erv_joint_jog_start.assert_called_once()
+
+    app._refresh_joint_jog()
+    assert publisher.erv_joint_jog_start.call_count == 2
+
+    app.start_joint_jog(3, -1)
+    publisher.erv_joint_jog_stop.assert_called_once()
+    publisher.erv_joint_jog_start.assert_called_with(3, -1)
+
+    app.stop_joint_jog()
+    task.cancel.assert_called()
+    assert publisher.erv_joint_jog_stop.call_count == 2
+    assert app._joint_jog is None
+
+
+def test_cartesian_continuous_replaces_vector_and_stops(app_under_test, mocker):
+    app = app_under_test
+    publisher = mocker.Mock()
+    conn = mocker.Mock(is_manual=True, publisher=publisher, host="h")
+    app.connections["h"] = conn
+    app.connections.set_active("h")
+    app.control_mode = talos_app.ControlMode.CONTINUOUS
+
+    app.start_cartesian(0, -1, 0)
+    publisher.cartesian_move_continuous_start.assert_called_once_with(0, -1, 0)
+    app.start_cartesian(0, -1, 0)
+    publisher.cartesian_move_continuous_start.assert_called_once()
+
+    app.start_cartesian(0, 1, 0)
+    publisher.cartesian_move_continuous_start.assert_called_with(0, 1, 0)
+
+    app.stop_cartesian()
+    publisher.cartesian_move_continuous_stop.assert_called_once()
+    app.stop_all_movement()
+    publisher.polar_pan_continuous_stop.assert_called_once()
+
+
+def test_cartesian_discrete_repeats_a_step(app_under_test, mocker):
+    app = app_under_test
+    publisher = mocker.Mock()
+    conn = mocker.Mock(is_manual=True, publisher=publisher, host="h")
+    app.connections["h"] = conn
+    app.connections.set_active("h")
+    task = mocker.Mock()
+    app.scheduler.set_interval.return_value = task
+    app.control_mode = talos_app.ControlMode.DISCRETE
+
+    app.start_cartesian(0, -1, 0)
+    app._publish_cartesian_discrete()
+    publisher.cartesian_move_discrete.assert_called_once_with(0, -10, 0, 1000, 3000)
+
+    app.stop_cartesian()
+    task.cancel.assert_called_once()
+    publisher.cartesian_move_continuous_stop.assert_not_called()
+
+
 def test_stop_move_discrete_cancels_task(monkeypatch, app_under_test, mocker):
     app = app_under_test
     app.control_mode = talos_app.ControlMode.DISCRETE

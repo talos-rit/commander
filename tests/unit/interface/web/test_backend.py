@@ -327,6 +327,37 @@ def test_jog_in_debug_mode_targets_selected_robot(web_config):
     assert ("stop_move", "LEFT", "b") in app.calls
 
 
+def test_joint_and_cartesian_jog_target_the_selected_robot(web_config):
+    backend, app, _ = make_backend(camera_1="a", camera_2="b", ui_mode="debug")
+    backend.startup()
+    backend.select(slot=2)
+
+    backend.joint_jog("elbow", -1, active=True)
+    backend.joint_jog("elbow", -1, active=False)
+    backend.cartesian(0, -1, 0, active=True)
+    backend.cartesian(0, 0, 0, active=False)
+
+    assert ("start_joint", 3, -1, "b") in app.calls
+    assert ("stop_joint", "b") in app.calls
+    assert ("start_cartesian", (0, -1, 0), "b") in app.calls
+    assert ("stop_cartesian", "b") in app.calls
+
+
+def test_joint_jog_rejects_unknown_axis(web_config):
+    backend, _, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+    with pytest.raises(BackendError):
+        backend.joint_jog("wrist", 1, active=True)
+
+
+def test_arm_jog_requires_debug_mode(web_config):
+    backend, _, _ = make_backend(camera_1="a")
+    backend.startup()
+    with pytest.raises(BackendError) as err:
+        backend.joint_jog("shoulder", 1, active=True)
+    assert err.value.status == 403
+
+
 def test_jog_unknown_direction(web_config):
     backend, _, _ = make_backend(camera_1="a", ui_mode="debug")
     backend.startup()

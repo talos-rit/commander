@@ -17,6 +17,7 @@ from .state import ViewStateError, WebOperatorState
 
 DEFAULT_TRACKING_MODEL = "yolo_nano"
 JOG_MODES = ("discrete", "continuous")
+JOINT_AXES = {"shoulder": 2, "elbow": 3}
 
 
 class BackendError(Exception):
@@ -339,6 +340,36 @@ class CommanderWebBackend:
                 self.app.start_move(parsed)
             else:
                 self.app.stop_move(parsed)
+
+    def joint_jog(self, axis: str, direction: int, active: bool) -> None:
+        """Hold or release an ER-V shoulder or elbow jog. Wrist roll is not exposed."""
+        joint = JOINT_AXES.get(axis)
+        if joint is None:
+            raise BackendError(f"Unknown joint {axis!r}")
+        if direction not in (-1, 1):
+            raise BackendError(f"Joint direction must be -1 or 1, got {direction!r}")
+        with self._lock:
+            self._require_debug()
+            self._target(None)
+            self._sync_active()
+            if active:
+                self.app.start_joint_jog(joint, direction)
+            else:
+                self.app.stop_joint_jog()
+
+    def cartesian(self, x: int, y: int, z: int, active: bool) -> None:
+        """Hold or release a Cartesian move. Each axis is -1, 0, or 1."""
+        vector = (x, y, z)
+        if any(component not in (-1, 0, 1) for component in vector):
+            raise BackendError(f"Cartesian components must be -1, 0, or 1, got {vector!r}")
+        with self._lock:
+            self._require_debug()
+            self._target(None)
+            self._sync_active()
+            if active and vector != (0, 0, 0):
+                self.app.start_cartesian(*vector)
+            else:
+                self.app.stop_cartesian()
 
     def _apply_jog_mode(self, mode: str) -> None:
         if self.app.get_active_connection() is not None:

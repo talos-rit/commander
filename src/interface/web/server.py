@@ -47,6 +47,17 @@ class MoveRequest(BaseModel):
     direction: Literal["up", "down", "left", "right"]
 
 
+class JointJogRequest(BaseModel):
+    axis: Literal["shoulder", "elbow"]
+    direction: int
+
+
+class CartesianRequest(BaseModel):
+    x: int = 0
+    y: int = 0
+    z: int = 0
+
+
 class JogModeRequest(BaseModel):
     mode: Literal["discrete", "continuous"]
 
@@ -133,6 +144,26 @@ def create_web_app(
     @api.post("/control/move/stop")
     def move_stop(req: MoveRequest):
         backend.move(req.direction, active=False)
+        return {"ok": True}
+
+    @api.post("/control/joint/start")
+    def joint_start(req: JointJogRequest):
+        backend.joint_jog(req.axis, req.direction, active=True)
+        return {"ok": True}
+
+    @api.post("/control/joint/stop")
+    def joint_stop():
+        backend.joint_jog("shoulder", 1, active=False)
+        return {"ok": True}
+
+    @api.post("/control/cartesian/start")
+    def cartesian_start(req: CartesianRequest):
+        backend.cartesian(req.x, req.y, req.z, active=True)
+        return {"ok": True}
+
+    @api.post("/control/cartesian/stop")
+    def cartesian_stop():
+        backend.cartesian(0, 0, 0, active=False)
         return {"ok": True}
 
     @api.post("/control/jog-mode")

@@ -1,4 +1,4 @@
-import { Crosshair, House, Link2, Link2Off, LoaderCircle, ScanFace, Video, VideoOff, Webcam } from "lucide-react";
+import { Crosshair, Gamepad2, House, Link2, Link2Off, LoaderCircle, ScanFace, Video, VideoOff, Webcam } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { HostStatus, Status } from "../types";
 
@@ -7,6 +7,8 @@ interface Props {
   onHome: () => Promise<unknown>;
   onAutoTrack: (enabled: boolean) => Promise<unknown>;
   onVirtualCamera: (enabled: boolean) => Promise<unknown>;
+  /** A connected gamepad, when the browser has reported one. */
+  controller?: { label: string; driving: boolean; title: string } | null;
 }
 
 const HOMING_FEEDBACK_MS = 2000;
@@ -19,7 +21,7 @@ function StatusChip({ ok, on, off, label }: { ok: boolean; on: React.ReactNode; 
   );
 }
 
-export function ActionBar({ status, onHome, onAutoTrack, onVirtualCamera }: Props) {
+export function ActionBar({ status, onHome, onAutoTrack, onVirtualCamera, controller = null }: Props) {
   const selected = status.view.selected_host;
   const host: HostStatus | undefined = selected ? status.connections[selected] : undefined;
   const [homing, setHoming] = useState(false);
@@ -99,6 +101,15 @@ export function ActionBar({ status, onHome, onAutoTrack, onVirtualCamera }: Prop
             {status.tracking.model && (
               <span className="chip" title="Detection model used for tracking">
                 <ScanFace size={14} /> {status.tracking.model}
+              </span>
+            )}
+            {controller && (
+              <span
+                className={`chip chip--pad ${controller.driving ? "chip--ok" : "chip--warn"}`}
+                title={controller.title}
+              >
+                <Gamepad2 size={14} />
+                <span className="chip__text">{controller.label}</span>
               </span>
             )}
           </>

@@ -6,7 +6,9 @@ import { DebugRail } from "./components/DebugRail";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TopBar } from "./components/TopBar";
 import { VideoStage } from "./components/VideoStage";
+import { describeController, DIRECTION_ORDER, type ArmCommand, type ControllerGate } from "./gamepad";
 import { useCommand, useToasts } from "./hooks/useCommand";
+import { useGamepad } from "./hooks/useGamepad";
 import { useStatus } from "./hooks/useStatus";
 import type { Direction, DisplayMode, JogMode, OneScreenMode, Slot, Status, UIMode } from "./types";
 
@@ -16,6 +18,19 @@ const ARROWS: Record<string, Direction> = {
   ArrowLeft: "left",
   ArrowRight: "right",
 };
+
+/** Right bumper steps forward and left bumper steps back, wrapping past either end. */
+function slotAfterBumper(current: Slot, side: "left" | "right"): Slot {
+  if (side === "right") return current === 2 ? 1 : 2;
+  return current === 1 ? 2 : 1;
+}
+
+function selectedSlot(status: Status): Slot {
+  const { camera_1, camera_2, selected_host, displayed_slot } = status.view;
+  if (selected_host && selected_host === camera_2) return 2;
+  if (selected_host && selected_host === camera_1) return 1;
+  return displayed_slot === 2 ? 2 : 1;
+}
 
 function isTyping(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -55,10 +70,100 @@ export default function App() {
   );
   const onMoveStart = useCallback((direction: Direction) => void run(() => api.moveStart(direction)), [run]);
   const onMoveStop = useCallback((direction: Direction) => void run(() => api.moveStop(direction)), [run]);
+  const onJointStart = useCallback(
+    (axis: "shoulder" | "elbow", direction: -1 | 1) => void run(() => api.jointStart(axis, direction)),
+    [run],
+  );
+  const onJointStop = useCallback(() => void run(() => api.jointStop()), [run]);
+  const onCartesianStart = useCallback(
+    (y: -1 | 1) => void run(() => api.cartesianStart(0, y, 0)),
+    [run],
+  );
+  const onCartesianStop = useCallback(() => void run(() => api.cartesianStop()), [run]);
   const onJogMode = (mode: JogMode) => void run(() => api.setJogMode(mode));
   const onModel = (model: string | null) => void run(() => api.setModel(model));
 
-  const heldKeys = useRef(new Set<Direction>());
+  const debug = status?.view.ui_mode === "debug";
+  const robotReady = Boolean(selected?.open);
+  const jogEnabled = Boolean(debug && robotReady && !selected?.auto_tracking && !settingsOpen);
+  const bumpersEnabled = Boolean(
+    status &&
+      !settingsOpen &&
+      status.view.available_slots === 2 &&
+      (status.view.display_mode === "two_screen" ||
+        (status.view.display_mode === "one_screen" && status.view.one_screen_mode === "manual")),
+  );
+  const keyHeld = useRef(new Set<Direction>());
+  const padHeld = useRef(new Set<Direction>());
+  const jogged = useRef(new Set<Direction>());
+  // Keys and the controller share one jog. Releasing one does not stop a direction the other still holds.
+  const syncJog = useCallback(() => {
+    const next = new Set<Direction>([...keyHeld.current, ...padHeld.current]);
+    for (const direction of DIRECTION_ORDER) {
+      if (jogged.current.has(direction) && !next.has(direction)) onMoveStop(direction);
+    }
+    for (const direction of DIRECTION_ORDER) {
+      if (!jogged.current.has(direction) && next.has(direction)) onMoveStart(direction);
+    }
+    jogged.current = next;
+  }, [onMoveStart, onMoveStop]);
+  const jointSent = useRef<ArmCommand["joint"]>(null);
+  const extensionSent = useRef<ArmCommand["y"]>(0);
+  const syncArm = useCallback(
+    (arm: ArmCommand) => {
+      const previous = jointSent.current;
+      const next = arm.joint;
+      if (previous?.axis !== next?.axis || previous?.direction !== next?.direction) {
+        if (next) onJointStart(next.axis, next.direction);
+        else onJointStop();
+        jointSent.current = next;
+      }
+      if (extensionSent.current !== arm.y) {
+        if (arm.y === 0) onCartesianStop();
+        else onCartesianStart(arm.y);
+        extensionSent.current = arm.y;
+      }
+    },
+    [onCartesianStart, onCartesianStop, onJointStart, onJointStop],
+  );
+  const slotRef = useRef<Slot>(1);
+  const pendingSlot = useRef<Slot | null>(null);
+  const statusSlot = status ? selectedSlot(status) : null;
+  useEffect(() => {
+    if (statusSlot == null) return;
+    if (pendingSlot.current !== null && pendingSlot.current !== statusSlot) return;
+    slotRef.current = statusSlot;
+    pendingSlot.current = null;
+  }, [statusSlot]);
+  const gamepad = useGamepad({
+    jog: jogEnabled,
+    bumpers: bumpersEnabled,
+    onDirections: (directions) => {
+      padHeld.current = new Set(directions);
+      syncJog();
+    },
+    onArm: syncArm,
+    onBumper: (side) => {
+      const next = slotAfterBumper(slotRef.current, side);
+      slotRef.current = next;
+      pendingSlot.current = next;
+      void onSelectSlot(next);
+    },
+  });
+  const controllerGate: ControllerGate | null = !gamepad.pad
+    ? null
+    : !gamepad.pad.mapped
+      ? "unmapped"
+      : settingsOpen
+        ? "settings"
+        : !debug
+          ? "debug"
+          : selected?.auto_tracking
+            ? "tracking"
+            : !robotReady
+              ? "offline"
+              : "ready";
+
   const keyState = useRef({ status, selected, settingsOpen });
   keyState.current = { status, selected, settingsOpen };
 
@@ -70,9 +175,9 @@ export default function App() {
       if (direction) {
         if (s.view.ui_mode !== "debug" || !host?.open || host.auto_tracking) return;
         event.preventDefault();
-        if (!event.repeat && !heldKeys.current.has(direction)) {
-          heldKeys.current.add(direction);
-          onMoveStart(direction);
+        if (!event.repeat && !keyHeld.current.has(direction)) {
+          keyHeld.current.add(direction);
+          syncJog();
         }
         return;
       }
@@ -89,11 +194,12 @@ export default function App() {
     };
     const onKeyUp = (event: KeyboardEvent) => {
       const direction = ARROWS[event.key];
-      if (direction && heldKeys.current.delete(direction)) onMoveStop(direction);
+      if (direction && keyHeld.current.delete(direction)) syncJog();
     };
     const releaseAll = () => {
-      heldKeys.current.forEach((direction) => onMoveStop(direction));
-      heldKeys.current.clear();
+      if (keyHeld.current.size === 0) return;
+      keyHeld.current.clear();
+      syncJog();
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -103,9 +209,7 @@ export default function App() {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", releaseAll);
     };
-  }, [onHome, onAutoTrack, onVirtualCamera, onSelectSlot, onMoveStart, onMoveStop]);
-
-  const debug = status?.view.ui_mode === "debug";
+  }, [onHome, onAutoTrack, onVirtualCamera, onSelectSlot, syncJog]);
 
   return (
     <div className={`shell ${debug ? "shell--debug" : ""}`}>
@@ -131,6 +235,8 @@ export default function App() {
                 onJogMode={onJogMode}
                 onModel={onModel}
                 onHome={() => void onHome()}
+                heldDirections={gamepad.held}
+                controllerConnected={Boolean(gamepad.pad)}
               />
             )}
           </main>
@@ -140,6 +246,15 @@ export default function App() {
               onHome={onHome}
               onAutoTrack={onAutoTrack}
               onVirtualCamera={onVirtualCamera}
+              controller={
+                gamepad.pad && controllerGate
+                  ? {
+                      label: gamepad.pad.label,
+                      driving: controllerGate === "ready",
+                      title: describeController(controllerGate),
+                    }
+                  : null
+              }
             />
           )}
         </>

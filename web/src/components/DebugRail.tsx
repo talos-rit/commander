@@ -16,6 +16,10 @@ interface Props {
   onJogMode: (mode: JogMode) => void;
   onModel: (model: string | null) => void;
   onHome: () => void;
+  /** Directions currently held by a controller. */
+  heldDirections?: readonly Direction[];
+  /** A pad is connected; the extra hint can mention it. */
+  controllerConnected?: boolean;
 }
 
 const PAD: { direction: Direction; icon: React.ReactNode; area: string }[] = [
@@ -56,7 +60,16 @@ function TelemetryCard({ telemetry }: { telemetry: Telemetry | null }) {
   );
 }
 
-export function DebugRail({ status, onMoveStart, onMoveStop, onJogMode, onModel, onHome }: Props) {
+export function DebugRail({
+  status,
+  onMoveStart,
+  onMoveStop,
+  onJogMode,
+  onModel,
+  onHome,
+  heldDirections = [],
+  controllerConnected = false,
+}: Props) {
   const selected = status.view.selected_host;
   const host = selected ? status.connections[selected] : undefined;
   const held = useRef(new Set<Direction>());
@@ -93,9 +106,10 @@ export function DebugRail({ status, onMoveStart, onMoveStop, onJogMode, onModel,
             <button
               key={direction}
               type="button"
-              className="jogpad__btn"
+              className={`jogpad__btn${heldDirections.includes(direction) ? " is-held" : ""}`}
               style={{ gridArea: area }}
               aria-label={`Jog ${direction}`}
+              aria-pressed={heldDirections.includes(direction) || undefined}
               disabled={jogDisabled}
               onPointerDown={(event) => {
                 event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -128,7 +142,11 @@ export function DebugRail({ status, onMoveStart, onMoveStop, onJogMode, onModel,
           size="sm"
           options={JOG_OPTIONS}
         />
-        <p className="hint">Hold a button or an arrow key.</p>
+        <p className="hint">
+          {controllerConnected
+            ? "Left stick aims. Right stick moves the shoulder and elbow. Triggers extend and retract. LB and RB switch cameras."
+            : "Hold a button or an arrow key."}
+        </p>
       </section>
 
       <section className="rail__section">

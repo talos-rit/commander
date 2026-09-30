@@ -35,6 +35,11 @@ DIRECTION_MAP = {
     Direction.RIGHT: (10, 0),
 }
 
+# Operator drops a held joint jog after about 500 ms unless the start is repeated.
+JOINT_JOG_REFRESH_MS = 200
+# Discrete Cartesian steps, in the same units polar discrete uses for tenths of a degree.
+CARTESIAN_STEP = 10
+
 
 class App:
     scheduler: Scheduler
@@ -69,6 +74,10 @@ class App:
             self.connections, scheduler=scheduler, smm=smm, **tracker_options
         )
         self._cli_draw_bboxes = bool(args.draw_bboxes) if args else False
+        self._joint_jog: tuple[int, int] | None = None
+        self._joint_jog_task: IterativeTask | None = None
+        self._cartesian: tuple[int, int, int] | None = None
+        self._cartesian_task: IterativeTask | None = None
         self.streamer = Streamer(self.connections, draw_bboxes=self._cli_draw_bboxes)
         self.director = ContinuousDirector(
             self.tracker, self.connections, self.scheduler
@@ -166,8 +175,121 @@ class App:
         if self.discrete_move_task.get(direction) is not None:
             return self.discrete_move_task.pop(direction).cancel()
 
+    def start_joint_jog(self, axis: int, direction: int) -> None:
+        """Hold an ER-V shoulder (axis 2) or elbow (axis 3) jog. One joint at a time."""
+        if axis not in (2, 3) or direction not in (-1, 1):
+            return logger.error(f"Invalid joint jog {axis=} {direction=}")
+        if (publisher := self._manual_publisher()) is None:
+            return
+        if self._joint_jog == (axis, direction):
+            return
+        self._cancel_joint_jog_task()
+        if self._joint_jog is not None:
+            publisher.erv_joint_jog_stop()
+        logger.info(f"Joint jog axis {axis} direction {direction}")
+        publisher.erv_joint_jog_start(axis, direction)
+        self._joint_jog = (axis, direction)
+        self._joint_jog_task = self.scheduler.set_interval(
+            JOINT_JOG_REFRESH_MS, self._refresh_joint_jog
+        )
+
+    def stop_joint_jog(self) -> None:
+        """Stop a held shoulder or elbow jog."""
+        if self._joint_jog is None and self._joint_jog_task is None:
+            return
+        self._cancel_joint_jog_task()
+        self._joint_jog = None
+        if (connection := self.get_active_connection()) is None:
+            return logger.error("No connection found")
+        connection.publisher.erv_joint_jog_stop()
+
+    def _refresh_joint_jog(self) -> None:
+        if self._joint_jog is None:
+            return
+        if (connection := self.get_active_connection()) is None:
+            return
+        axis, direction = self._joint_jog
+        connection.publisher.erv_joint_jog_start(axis, direction)
+
+    def _cancel_joint_jog_task(self) -> None:
+        if self._joint_jog_task is not None:
+            self._joint_jog_task.cancel()
+            self._joint_jog_task = None
+
+    def start_cartesian(self, x: int, y: int, z: int) -> None:
+        """
+        Hold a Cartesian move. Each component is -1, 0, or 1.
+        Y- extends the arm (away from the base) and Y+ retracts it.
+        """
+        vector = (x, y, z)
+        if any(component not in (-1, 0, 1) for component in vector) or vector == (0, 0, 0):
+            return logger.error(f"Invalid cartesian jog {vector}")
+        if self._manual_publisher() is None:
+            return
+        if self._cartesian == vector:
+            return
+        self._cancel_cartesian_task()
+        self._cartesian = vector
+        logger.info(f"Cartesian jog x={x} y={y} z={z}")
+        if self.control_mode == ControlMode.CONTINUOUS:
+            return self._publish_cartesian_continuous()
+        self._cartesian_task = self.scheduler.set_interval(
+            self.move_delay_ms, self._publish_cartesian_discrete
+        )
+
+    def stop_cartesian(self) -> None:
+        """Stop a held Cartesian move."""
+        if self._cartesian is None and self._cartesian_task is None:
+            return
+        was_continuous = self.control_mode == ControlMode.CONTINUOUS
+        self._cancel_cartesian_task()
+        self._cartesian = None
+        logger.info("Cartesian jog stop")
+        if not was_continuous:
+            return
+        if (connection := self.get_active_connection()) is None:
+            return logger.error("No connection found")
+        connection.publisher.cartesian_move_continuous_stop()
+
+    def _publish_cartesian_continuous(self) -> None:
+        if self._cartesian is None:
+            return
+        if (connection := self.get_active_connection()) is None:
+            return
+        connection.publisher.cartesian_move_continuous_start(*self._cartesian)
+
+    def _publish_cartesian_discrete(self) -> None:
+        if self._cartesian is None:
+            return
+        if (connection := self.get_active_connection()) is None:
+            return
+        x, y, z = self._cartesian
+        connection.publisher.cartesian_move_discrete(
+            x * CARTESIAN_STEP,
+            y * CARTESIAN_STEP,
+            z * CARTESIAN_STEP,
+            1000,
+            3000,
+        )
+
+    def _cancel_cartesian_task(self) -> None:
+        if self._cartesian_task is not None:
+            self._cartesian_task.cancel()
+            self._cartesian_task = None
+
+    def _manual_publisher(self):
+        if (connection := self.get_active_connection()) is None:
+            logger.error("No connection found")
+            return None
+        if not connection.is_manual:
+            logger.error(f"Active connection {connection.host} is not in manual mode")
+            return None
+        return connection.publisher
+
     def stop_all_movement(self) -> None:
         """Stops all continuous and discrete movements."""
+        self.stop_joint_jog()
+        self.stop_cartesian()
         if (connection := self.get_active_connection()) is None:
             return logger.error("No connection found")
         if self.control_mode == ControlMode.CONTINUOUS:

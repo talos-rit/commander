@@ -218,6 +218,8 @@ describe("Debug mode", () => {
     );
     const rail = await screen.findByLabelText("Debug controls");
     expect(within(rail).getByRole("button", { name: "Jog up" })).toBeEnabled();
+    expect(within(rail).getByText("Hold a button or an arrow key.")).toBeInTheDocument();
+    expect(within(rail).queryByText(/controller/i)).not.toBeInTheDocument();
     expect(within(rail).getByText("10 20")).toBeInTheDocument();
     expect(within(rail).getByText("200 ms ago")).toBeInTheDocument();
     expect(within(rail).getByText("never")).toBeInTheDocument();
@@ -311,6 +313,318 @@ describe("Debug mode", () => {
     await screen.findByTestId("pane-bluey.local");
     fireEvent.keyDown(window, { key: "ArrowUp" });
     expect(calls.some((c) => c.path === "/control/move/start")).toBe(false);
+  });
+});
+
+describe("Controller", () => {
+  const frames: FrameRequestCallback[] = [];
+  let pads: (Gamepad | null)[] = [];
+
+  function fakePad(overrides: Partial<Gamepad> = {}): Gamepad {
+    return {
+      id: "Xbox 360 Controller (STANDARD GAMEPAD Vendor: 045e Product: 028e)",
+      index: 0,
+      connected: true,
+      mapping: "standard",
+      timestamp: 0,
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+      ...overrides,
+    } as Gamepad;
+  }
+
+  function press(gamepad: Gamepad, index: number) {
+    const buttons = Array.from(gamepad.buttons);
+    buttons[index] = { pressed: true, touched: true, value: 1 };
+    return fakePad({ ...gamepad, buttons });
+  }
+
+  async function step() {
+    const pending = frames.splice(0, frames.length);
+    expect(pending.length).toBeGreaterThan(0);
+    await act(async () => {
+      pending.forEach((cb) => cb(0));
+    });
+  }
+
+  beforeEach(() => {
+    pads = [null, null, null, null];
+    frames.length = 0;
+    Object.defineProperty(navigator, "getGamepads", { configurable: true, value: () => pads });
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "getGamepads");
+  });
+
+  it("jogs the selected robot from the left stick and releases inside the dead zone", async () => {
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: [0, -1, 0, 0] });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")).toHaveLength(1));
+    expect(callsTo("POST", "/control/move/start")[0].body).toEqual({ direction: "up" });
+    expect(screen.getByRole("button", { name: "Jog up" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTitle(/Left stick and D-pad/)).toHaveClass("chip--ok");
+    expect(screen.getByText("Xbox 360 Controller")).toBeInTheDocument();
+    expect(screen.getByText(/Right stick moves the shoulder/)).toBeInTheDocument();
+
+    await step();
+    expect(callsTo("POST", "/control/move/start")).toHaveLength(1);
+
+    pads[0] = fakePad({ axes: [-1, 1, 0, 0] });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")).toHaveLength(3));
+    const moves = callsTo("POST", "/control/move/start").map((call) => call.body);
+    expect(moves).toEqual([{ direction: "up" }, { direction: "down" }, { direction: "left" }]);
+    expect(callsTo("POST", "/control/move/stop").map((call) => call.body)).toEqual([{ direction: "up" }]);
+
+    pads[0] = fakePad();
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/stop")).toHaveLength(3));
+  });
+
+  it("jogs the shoulder and elbow from the right stick and extends from the trigger", async () => {
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: [0, 0, 1, 0] });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/joint/start")).toHaveLength(1));
+    expect(callsTo("POST", "/control/joint/start")[0].body).toEqual({ axis: "shoulder", direction: 1 });
+    expect(callsTo("POST", "/control/move/start")).toHaveLength(0);
+
+    pads[0] = fakePad({ axes: [0, 0, 0, -1] });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/joint/start")).toHaveLength(2));
+    expect(callsTo("POST", "/control/joint/start")[1].body).toEqual({ axis: "elbow", direction: 1 });
+
+    pads[0] = press(fakePad(), 7);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/joint/stop")).toHaveLength(1));
+    await waitFor(() => expect(callsTo("POST", "/control/cartesian/start")).toHaveLength(1));
+    expect(callsTo("POST", "/control/cartesian/start")[0].body).toEqual({ x: 0, y: -1, z: 0 });
+
+    pads[0] = fakePad();
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/cartesian/stop")).toHaveLength(1));
+  });
+
+  it("extends from a HID duplicate when the standard listing's triggers stay dead", async () => {
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: [0, 0, 0, 0] });
+    pads[1] = fakePad({
+      index: 1,
+      id: "Xbox 360 Controller (Vendor: 045e Product: 028e)",
+      mapping: "",
+      axes: [0, 0, 0, 0, -1, 1],
+    });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/cartesian/start")).toHaveLength(1));
+    expect(callsTo("POST", "/control/cartesian/start")[0].body).toEqual({ x: 0, y: -1, z: 0 });
+    expect(callsTo("POST", "/control/move/start")).toHaveLength(0);
+  });
+
+  it("keeps jogging while either the stick or an arrow key is still held", async () => {
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: [0, -1, 0, 0] });
+    await step();
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    fireEvent.keyUp(window, { key: "ArrowUp" });
+    expect(callsTo("POST", "/control/move/stop")).toHaveLength(0);
+    expect(callsTo("POST", "/control/move/start")).toHaveLength(1);
+
+    pads[0] = fakePad();
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/stop")).toHaveLength(1));
+  });
+
+  function hatAxes(value: number): number[] {
+    const axes = Array.from({ length: 10 }, () => 0);
+    axes[9] = value;
+    return axes;
+  }
+
+  it("jogs from a hat-switch D-pad when the D-pad buttons never report pressed", async () => {
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: hatAxes(9 / 7) });
+    await step();
+    expect(callsTo("POST", "/control/move/start")).toHaveLength(0);
+
+    pads[0] = fakePad({ axes: hatAxes(-1) });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")[0]?.body).toEqual({ direction: "up" }));
+    expect(screen.getByRole("button", { name: "Jog up" })).toHaveAttribute("aria-pressed", "true");
+
+    pads[0] = fakePad({ axes: hatAxes(9 / 7) });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/stop")[0]?.body).toEqual({ direction: "up" }));
+  });
+
+  it("jogs an unrecognized controller from its hat-switch D-pad", async () => {
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ id: "Weird Stick (Vendor: 0000)", mapping: "", axes: hatAxes(1 / 7) });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")[0]?.body).toEqual({ direction: "down" }));
+  });
+
+  it("jogs from a HID duplicate when the standard listing's D-pad buttons never fire", async () => {
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: [0, 0, 0, 0] });
+    pads[1] = fakePad({
+      index: 1,
+      id: "Xbox 360 Controller (Vendor: 045e Product: 028e)",
+      mapping: "",
+      axes: hatAxes(1 / 7),
+    });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")[0]?.body).toEqual({ direction: "down" }));
+  });
+
+  it("jogs from the D-pad", async () => {
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = press(fakePad(), 15);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")[0]?.body).toEqual({ direction: "right" }));
+  });
+
+  it("does not jog outside debug mode, but shows that the controller is connected", async () => {
+    const { calls } = setup(makeStatus());
+    await screen.findByTestId("pane-bluey.local");
+    pads[0] = fakePad({ axes: [0, -1, 0, 0] });
+    await step();
+    expect(calls.some((call) => call.path === "/control/move/start")).toBe(false);
+    expect(screen.getByTitle(/Switch to Debug mode/)).toHaveClass("chip--warn");
+  });
+
+  it("does not jog while auto-tracking", async () => {
+    const { calls } = setup(
+      makeStatus({ view: { ui_mode: "debug" }, connections: { "bluey.local": { auto_tracking: true } } }),
+    );
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: [1, 0, 0, 0] });
+    await step();
+    expect(calls.some((call) => call.path === "/control/move/start")).toBe(false);
+    expect(screen.getByTitle(/Turn off Auto-Track/)).toBeInTheDocument();
+  });
+
+  it("does not jog while the selected robot is offline", async () => {
+    const { calls } = setup(
+      makeStatus({ view: { ui_mode: "debug" }, connections: { "bluey.local": { open: false } } }),
+    );
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: [1, 0, 0, 0] });
+    await step();
+    expect(calls.some((call) => call.path === "/control/move/start")).toBe(false);
+    expect(screen.getByTitle(/isn't ready/)).toBeInTheDocument();
+  });
+
+  it("stops jogging when the window loses focus, settings open, or the pad disconnects", async () => {
+    const { user, callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ axes: [0, -1, 0, 0] });
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")).toHaveLength(1));
+
+    fireEvent.blur(window);
+    await waitFor(() => expect(callsTo("POST", "/control/move/stop")[0]?.body).toEqual({ direction: "up" }));
+    fireEvent.focus(window);
+    await step();
+    expect(callsTo("POST", "/control/move/start")).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await screen.findByRole("dialog", { name: "Settings" });
+    await waitFor(() => expect(callsTo("POST", "/control/move/stop")).toHaveLength(2));
+    await step();
+    expect(callsTo("POST", "/control/move/start")).toHaveLength(2);
+    expect(screen.getByTitle(/Close Settings/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close settings" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")).toHaveLength(3));
+
+    const disconnected = fakePad();
+    pads[0] = null;
+    window.dispatchEvent(Object.assign(new Event("gamepaddisconnected"), { gamepad: disconnected }));
+    await waitFor(() => expect(callsTo("POST", "/control/move/stop")).toHaveLength(3));
+    await step();
+    expect(screen.queryByText("Xbox 360 Controller")).not.toBeInTheDocument();
+  });
+
+  it("ignores a controller that does not use the standard layout", async () => {
+    const { calls } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = fakePad({ id: "Weird Stick (Vendor: 0000)", mapping: "", axes: [1, 1, 0, 0] });
+    await step();
+    expect(calls.some((call) => call.path === "/control/move/start")).toBe(false);
+    expect(screen.getByText("Weird Stick")).toBeInTheDocument();
+    expect(screen.getByTitle(/standard Xbox layout/)).toHaveClass("chip--warn");
+  });
+
+  it("switches cameras from the shoulder buttons, once per press", async () => {
+    const hosts = ["bluey.local", "raspberrypi.local"];
+    const { callsTo } = setup(makeStatus({ hosts }));
+    await screen.findByTestId("pane-bluey.local");
+    let gamepad = press(fakePad(), 5);
+    pads[0] = gamepad;
+    await step();
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/cameras/select")).toHaveLength(1));
+    expect(callsTo("POST", "/cameras/select")[0].body).toEqual({ slot: 2 });
+
+    gamepad = fakePad();
+    pads[0] = gamepad;
+    await step();
+    gamepad = press(gamepad, 4);
+    pads[0] = gamepad;
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/cameras/select")).toHaveLength(2));
+    expect(callsTo("POST", "/cameras/select")[1].body).toEqual({ slot: 1 });
+  });
+
+  it("rolls the shoulder buttons past either end", async () => {
+    const hosts = ["bluey.local", "raspberrypi.local"];
+    const { callsTo } = setup(makeStatus({ hosts }));
+    await screen.findByTestId("pane-bluey.local");
+
+    pads[0] = press(fakePad(), 5);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/cameras/select")).toHaveLength(1));
+    expect(callsTo("POST", "/cameras/select")[0].body).toEqual({ slot: 2 });
+
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 5);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/cameras/select")).toHaveLength(2));
+    expect(callsTo("POST", "/cameras/select")[1].body).toEqual({ slot: 1 });
+
+    pads[0] = fakePad();
+    await step();
+    pads[0] = press(fakePad(), 4);
+    await step();
+    await waitFor(() => expect(callsTo("POST", "/cameras/select")).toHaveLength(3));
+    expect(callsTo("POST", "/cameras/select")[2].body).toEqual({ slot: 2 });
+  });
+
+  it("does not switch cameras in dynamic mode", async () => {
+    const hosts = ["bluey.local", "raspberrypi.local"];
+    const { calls } = setup(makeStatus({ hosts, view: { one_screen_mode: "dynamic" } }));
+    await screen.findByText(/auto-switch coming soon/);
+    pads[0] = press(fakePad(), 5);
+    await step();
+    expect(calls.some((call) => call.path === "/cameras/select")).toBe(false);
   });
 });
 

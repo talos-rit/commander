@@ -559,6 +559,16 @@ button:disabled {
   border-color: rgb(255 107 94 / 0.4);
 }
 
+.chip--pad {
+  max-width: 240px;
+}
+
+.chip__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Video stage */
 .stage {
   flex: 1;
@@ -919,7 +929,8 @@ button:disabled {
   background: var(--surface-2);
 }
 
-.jogpad__btn:active:not(:disabled) {
+.jogpad__btn:active:not(:disabled),
+.jogpad__btn.is-held:not(:disabled) {
   background: var(--signal);
   color: var(--signal-ink);
   border-color: var(--signal);

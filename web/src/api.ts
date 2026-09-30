@@ -66,6 +66,12 @@ export const api = {
     request<{ enabled: boolean }>("POST", "/control/auto-track", { enabled, host }),
   moveStart: (direction: Direction) => request<{ ok: boolean }>("POST", "/control/move/start", { direction }),
   moveStop: (direction: Direction) => request<{ ok: boolean }>("POST", "/control/move/stop", { direction }),
+  jointStart: (axis: "shoulder" | "elbow", direction: -1 | 1) =>
+    request<{ ok: boolean }>("POST", "/control/joint/start", { axis, direction }),
+  jointStop: () => request<{ ok: boolean }>("POST", "/control/joint/stop"),
+  cartesianStart: (x: -1 | 0 | 1, y: -1 | 0 | 1, z: -1 | 0 | 1) =>
+    request<{ ok: boolean }>("POST", "/control/cartesian/start", { x, y, z }),
+  cartesianStop: () => request<{ ok: boolean }>("POST", "/control/cartesian/stop"),
   setJogMode: (mode: JogMode) => request<{ mode: JogMode }>("POST", "/control/jog-mode", { mode }),
   setModel: (model: string | null) => request<{ model: string | null }>("POST", "/control/model", { model }),
   setVirtualCamera: (enabled: boolean) =>

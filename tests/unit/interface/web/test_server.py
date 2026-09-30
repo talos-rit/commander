@@ -145,6 +145,16 @@ def test_debug_controls_in_debug_mode(setup):
     }
     assert client.post("/api/control/model", json={"model": "basic"}).status_code == 404
     assert ("start_move", "UP", "a") in app.calls
+    assert client.post(
+        "/api/control/joint/start", json={"axis": "shoulder", "direction": 1}
+    ).status_code == 200
+    assert client.post("/api/control/joint/stop").status_code == 200
+    assert client.post(
+        "/api/control/cartesian/start", json={"x": 0, "y": -1, "z": 0}
+    ).status_code == 200
+    assert client.post("/api/control/cartesian/stop").status_code == 200
+    assert ("start_joint", 2, 1, "a") in app.calls
+    assert ("start_cartesian", (0, -1, 0), "a") in app.calls
 
 
 def test_command_without_camera_is_conflict(setup):

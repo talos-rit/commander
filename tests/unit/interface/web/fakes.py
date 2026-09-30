@@ -128,6 +128,18 @@ class FakeApp:
     def stop_all_movement(self):
         self.calls.append(("stop_all", self.active))
 
+    def start_joint_jog(self, axis, direction):
+        self.calls.append(("start_joint", axis, direction, self.active))
+
+    def stop_joint_jog(self):
+        self.calls.append(("stop_joint", self.active))
+
+    def start_cartesian(self, x, y, z):
+        self.calls.append(("start_cartesian", (x, y, z), self.active))
+
+    def stop_cartesian(self):
+        self.calls.append(("stop_cartesian", self.active))
+
     def start_stream(self, streamer_type, hostname=None, fps=None, stream_config=None):
         self.calls.append(("start_stream", streamer_type, hostname))
         if self.stream_error is not None:
