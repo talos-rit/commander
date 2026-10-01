@@ -19,6 +19,7 @@ type RobotDraft = {
   camera_index: string;
   fps: string;
   manual_only: boolean;
+  pi_vision_url?: string;
 };
 
 const EMPTY_DRAFT: RobotDraft = { socket_host: "", socket_port: "61616", camera_index: "", fps: "30", manual_only: false };
@@ -30,6 +31,7 @@ function toDraft(robot: RobotConfig): RobotDraft {
     camera_index: String(robot.camera_index),
     fps: String(robot.fps),
     manual_only: robot.manual_only,
+    pi_vision_url: robot.pi_vision_url ?? "",
   };
 }
 
@@ -42,6 +44,7 @@ function fromDraft(draft: RobotDraft): RobotInput {
     camera_index: asInt(draft.camera_index),
     fps: Number(draft.fps) || 30,
     manual_only: draft.manual_only,
+    pi_vision_url: draft.pi_vision_url?.trim() || null,
   };
 }
 
@@ -116,6 +119,12 @@ function RobotForm({
       <label className="field field--narrow">
         <span>FPS</span>
         <input inputMode="numeric" value={draft.fps} onChange={(e) => set("fps", e.target.value)} />
+      </label>
+      <label className="field field--wide">
+        <span>PiVision URL (optional)</span>
+        <input placeholder="http://bluey.local:5050" value={draft.pi_vision_url ?? ""}
+          onChange={(e) => set("pi_vision_url", e.target.value)} />
+        <small>PiVision tracks locally. Commander supervises Auto-Track and manual control.</small>
       </label>
       <label className="check">
         <input type="checkbox" checked={draft.manual_only} onChange={(e) => set("manual_only", e.target.checked)} />

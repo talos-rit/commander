@@ -12,6 +12,7 @@ from src.config.schema.app import AppSettingsFields
 from src.config.schema.robot import ConnectionConfig
 from src.connection.publisher import Direction
 from src.talos_app import ControlMode
+from src.tracking.pi_vision import PiVisionControl
 
 from .state import ViewStateError, WebOperatorState
 
@@ -57,6 +58,7 @@ class CommanderWebBackend:
         self._ready = threading.Event()
         self._cancel_startup = threading.Event()
         self._startup_thread: threading.Thread | None = None
+        self._pi_vision: dict[str, PiVisionControl] = {}
 
     # --- lifecycle -------------------------------------------------------
 
@@ -83,12 +85,14 @@ class CommanderWebBackend:
         """Stop opening further connections and wait for the one in flight."""
         self._cancel_startup.set()
         thread = self._startup_thread
-        if thread is None or not thread.is_alive() or thread is threading.current_thread():
-            return
-        logger.info("Waiting for camera connections to settle before exiting...")
-        thread.join(timeout)
-        if thread.is_alive():
-            logger.warning("Startup is still connecting; exiting anyway")
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            logger.info("Waiting for camera connections to settle before exiting...")
+            thread.join(timeout)
+            if thread.is_alive():
+                logger.warning("Startup is still connecting; exiting anyway")
+        for control in list(self._pi_vision.values()):
+            control.close()
+        self._pi_vision.clear()
 
     def startup(self) -> None:
         """Open the configured camera slots. One configured robot is enough."""
@@ -110,19 +114,47 @@ class CommanderWebBackend:
             # Load a saved model now. A saved Haar/MediaPipe name is replaced
             # with YOLO; with nothing saved, Auto-Track loads YOLO on demand.
             saved = config.APP_SETTINGS.default_model
-            if saved and self.app.connections:
+            if saved and any(host not in self._pi_vision for host in self.app.connections):
                 model = saved if saved in self._yolo_models() else self._preferred_model()
                 if model:
                     self.app.change_model(model)
 
     def _ensure_connected(self, host: str) -> bool:
         if host in self.app.connections:
+            self._ensure_pi_vision(host)
             return True
         if host not in config.ROBOT_CONFIGS:
             logger.warning(f"Camera slot host {host!r} has no robot config; skipping")
             return False
         self.app.open_connection(host)
+        self._ensure_pi_vision(host)
         return host in self.app.connections
+
+    def _ensure_pi_vision(self, host: str) -> None:
+        robot = config.ROBOT_CONFIGS.get(host)
+        if robot and robot.pi_vision_url and host in self.app.connections and host not in self._pi_vision:
+            self.app.set_manual_control(True, hostname=host)
+            control = PiVisionControl(self.app.connections[host].publisher, robot)
+            self._pi_vision[host] = control
+            control.start()
+
+    def _stop_pi_vision(self, host: str | None, close: bool = False) -> None:
+        control = self._pi_vision.get(host)
+        if control:
+            control.close() if close else control.set_enabled(False)
+            if close:
+                self._pi_vision.pop(host, None)
+
+    def set_pi_vision_perception(self, enabled: bool, host: str | None = None) -> dict:
+        with self._lock:
+            target = self._target(host)
+            control = self._pi_vision.get(target)
+            if control is None:
+                raise BackendError("Configure this robot's PiVision URL first", 409)
+            try:
+                return control.set_perception(enabled)
+            except Exception as exc:
+                raise BackendError(f"PiVision unavailable: {exc}", 502) from exc
 
     def _sync_active(self) -> None:
         """Keep App's active connection pointed at the operator's selected robot."""
@@ -141,16 +173,18 @@ class CommanderWebBackend:
     def status(self) -> dict[str, Any]:
         with self._lock:
             hosts = list(dict.fromkeys([*self.state.slots.values(), *self.app.connections.keys()]))
+            edge = self._pi_vision.get(self.state.selected_host)
+            edge_status = edge.status() if edge else None
             return {
                 "view": self.state.to_dict(),
                 "connections": {host: self._host_status(host) for host in hosts},
                 "tracking": {
-                    "model": self.app.get_selected_model(),
+                    "model": "pi_pose" if edge else self.app.get_selected_model(),
                     "model_options": self._yolo_models(),
                     "default_model": self._preferred_model(),
-                    "director_active": self.app.is_director_active(),
-                    "input_fps": round(self.app.get_tracker_input_fps(), 1),
-                    "output_fps": round(self.app.get_tracker_output_fps(), 1),
+                    "director_active": edge_status["enabled"] if edge else self.app.is_director_active(),
+                    "input_fps": round(edge_status.get("fps", 0), 1) if edge else round(self.app.get_tracker_input_fps(), 1),
+                    "output_fps": round(edge_status.get("fps", 0), 1) if edge else round(self.app.get_tracker_output_fps(), 1),
                 },
                 "jog_mode": str(self.app.get_control_mode()),
                 "virtual_camera": self.app.is_streaming(),
@@ -182,8 +216,9 @@ class CommanderWebBackend:
             **base,
             "operator_connected": bool(is_connected()) if callable(is_connected) else False,
             "has_video": video is not None and video.shape is not None,
-            "auto_tracking": not conn.is_manual,
-            "subjects": len(conn.get_bboxes() or []),
+            "auto_tracking": self._pi_vision[host].status()["enabled"] if host in self._pi_vision else not conn.is_manual,
+            "subjects": self._pi_vision[host].status()["subjects"] if host in self._pi_vision else len(conn.get_bboxes() or []),
+            "pi_vision": self._pi_vision[host].status() if host in self._pi_vision else None,
             "telemetry": self._telemetry(publisher),
         }
 
@@ -236,6 +271,7 @@ class CommanderWebBackend:
             self.state.assign_slots(camera_1, camera_2)
             current = set(self.state.slots.values())
             for host in previous - current:
+                self._stop_pi_vision(host, close=True)
                 if host in self.app.connections:
                     self.app.disconnect_connection(host)
             for host in current:
@@ -245,6 +281,7 @@ class CommanderWebBackend:
 
     def select(self, host: str | None = None, slot: int | None = None) -> None:
         with self._lock:
+            previous = self.state.selected_host
             try:
                 if slot is not None:
                     self.state.select_slot(slot)
@@ -254,6 +291,8 @@ class CommanderWebBackend:
                     raise BackendError("Provide a host or slot to select")
             except ViewStateError as exc:
                 raise BackendError(str(exc), 409) from exc
+            if previous != self.state.selected_host:
+                self._stop_pi_vision(previous)
             self._stop_jog()
             self._sync_active()
 
@@ -270,6 +309,7 @@ class CommanderWebBackend:
     def home(self, host: str | None = None) -> str:
         with self._lock:
             target = self._target(host)
+            self._stop_pi_vision(target)
             # A tracking director would immediately steer away from home.
             self.app.set_manual_control(True, hostname=target)
             self.app.move_home(hostname=target)
@@ -281,6 +321,17 @@ class CommanderWebBackend:
             robot_config = config.ROBOT_CONFIGS.get(target)
             if enabled and robot_config is not None and robot_config.manual_only:
                 raise BackendError(f"{target!r} is configured as manual only", 409)
+            if target in self._pi_vision:
+                if enabled:
+                    if target != self.state.selected_host:
+                        raise BackendError("Select this robot before enabling PiVision tracking", 409)
+                    self._stop_jog()
+                    self._pi_vision[target].manual_handoff()
+                self.app.set_manual_control(True, hostname=target)
+                try:
+                    return self._pi_vision[target].set_enabled(enabled)
+                except ValueError as exc:
+                    raise BackendError(str(exc), 409) from exc
             if enabled and self.app.get_selected_model() is None:
                 model = self._preferred_model()
                 if model is None:
@@ -335,6 +386,7 @@ class CommanderWebBackend:
             except KeyError as exc:
                 raise BackendError(f"Unknown direction {direction!r}") from exc
             self._target(None)
+            self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
             if active:
                 self.app.start_move(parsed)
@@ -351,6 +403,7 @@ class CommanderWebBackend:
         with self._lock:
             self._require_debug()
             self._target(None)
+            self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
             if active:
                 self.app.start_joint_jog(joint, direction)
@@ -365,6 +418,7 @@ class CommanderWebBackend:
         with self._lock:
             self._require_debug()
             self._target(None)
+            self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
             if active and vector != (0, 0, 0):
                 self.app.start_cartesian(*vector)
@@ -506,6 +560,7 @@ class CommanderWebBackend:
             update_config(host, robot_config)
             if host in self.app.connections:
                 # Reopen so camera/port changes take effect.
+                self._stop_pi_vision(host, close=True)
                 self.app.disconnect_connection(host)
                 self._ensure_connected(host)
                 self._sync_active()
@@ -519,6 +574,7 @@ class CommanderWebBackend:
                 remaining = [h for h in self.state.slots.values() if h != host]
                 self.assign_slots(remaining[0] if remaining else None, None)
             elif host in self.app.connections:
+                self._stop_pi_vision(host, close=True)
                 self.app.disconnect_connection(host)
             remove_config(host)
 

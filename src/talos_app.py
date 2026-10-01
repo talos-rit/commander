@@ -116,7 +116,12 @@ class App:
         except Exception as exc:
             logger.warning(f"Failed to open video connection for {hostname}: {exc}")
             video_connection = None
-        conn = Connection(hostname, conf.socket_port, video_connection)
+        if isinstance(conf.pi_vision_url, str) and conf.pi_vision_url:
+            from .connection.edge_publisher import EdgePublisher
+            conn = Connection(hostname, conf.socket_port, video_connection,
+                              publisher_factory=lambda _host, _port: EdgePublisher(conf.pi_vision_url))
+        else:
+            conn = Connection(hostname, conf.socket_port, video_connection)
         self.connections[hostname] = conn
 
     def start_move(self, direction: Direction) -> None:

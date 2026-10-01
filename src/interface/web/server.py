@@ -1,4 +1,5 @@
 import asyncio
+from urllib.error import HTTPError, URLError
 import os
 import threading
 from pathlib import Path
@@ -91,6 +92,19 @@ def create_web_app(
     async def backend_error_handler(_request: Request, exc: BackendError):
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
+    @app.exception_handler(HTTPError)
+    async def gateway_http_error(_request: Request, exc: HTTPError):
+        import json
+        try:
+            detail = json.loads(exc.read(4096)).get("detail", str(exc))
+        except (ValueError, AttributeError):
+            detail = str(exc)
+        return JSONResponse(status_code=exc.code, content={"detail": detail})
+
+    @app.exception_handler(URLError)
+    async def gateway_unreachable(_request: Request, exc: URLError):
+        return JSONResponse(status_code=502, content={"detail": f"PiVision gateway unavailable: {exc.reason}"})
+
     # Refuse (rather than queue) API calls until startup has opened the
     # connections, so nothing acts on or persists a half-initialized state.
     @app.middleware("http")
@@ -135,6 +149,10 @@ def create_web_app(
     def auto_track(req: AutoTrackRequest):
         enabled = backend.set_auto_track(req.enabled, req.host)
         return {"enabled": enabled}
+
+    @api.put("/control/pi-vision/perception")
+    def pi_vision_perception(req: AutoTrackRequest):
+        return backend.set_pi_vision_perception(req.enabled, req.host)
 
     @api.post("/control/move/start")
     def move_start(req: MoveRequest):

@@ -64,6 +64,10 @@ export default function App() {
     (enabled: boolean) => run(() => api.setAutoTrack(enabled, selectedHost)),
     [run, selectedHost],
   );
+  const onPiVision = useCallback(
+    (enabled: boolean) => run(() => api.setPiVisionPerception(enabled, selectedHost)),
+    [run, selectedHost],
+  );
   const onVirtualCamera = useCallback(
     (enabled: boolean) => run(() => api.setVirtualCamera(enabled)),
     [run],
@@ -258,6 +262,7 @@ export default function App() {
               status={status}
               onHome={onHome}
               onAutoTrack={onAutoTrack}
+              onPiVision={onPiVision}
               onVirtualCamera={onVirtualCamera}
               controller={
                 gamepad.pad && controllerGate

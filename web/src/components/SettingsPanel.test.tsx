@@ -86,6 +86,7 @@ describe("SettingsPanel", () => {
       camera_index: 0,
       fps: 30,
       manual_only: true,
+      pi_vision_url: null,
     });
     expect(await screen.findByText("raspberrypi.local", { selector: "strong" })).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalled();

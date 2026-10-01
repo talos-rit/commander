@@ -6,6 +6,7 @@ interface Props {
   status: Status;
   onHome: () => Promise<unknown>;
   onAutoTrack: (enabled: boolean) => Promise<unknown>;
+  onPiVision?: (enabled: boolean) => Promise<unknown>;
   onVirtualCamera: (enabled: boolean) => Promise<unknown>;
   /** A connected gamepad, when the browser has reported one. */
   controller?: { label: string; driving: boolean; title: string } | null;
@@ -21,7 +22,7 @@ function StatusChip({ ok, on, off, label }: { ok: boolean; on: React.ReactNode; 
   );
 }
 
-export function ActionBar({ status, onHome, onAutoTrack, onVirtualCamera, controller = null }: Props) {
+export function ActionBar({ status, onHome, onAutoTrack, onPiVision, onVirtualCamera, controller = null }: Props) {
   const selected = status.view.selected_host;
   const host: HostStatus | undefined = selected ? status.connections[selected] : undefined;
   const [homing, setHoming] = useState(false);
@@ -98,9 +99,15 @@ export function ActionBar({ status, onHome, onAutoTrack, onVirtualCamera, contro
               off={<><VideoOff size={14} /> No video</>}
               label="Camera stream"
             />
-            {status.tracking.model && (
+            {status.tracking.model && !host?.pi_vision && (
               <span className="chip" title="Detection model used for tracking">
                 <ScanFace size={14} /> {status.tracking.model}
+              </span>
+            )}
+            {host?.pi_vision && (
+              <span className={`chip ${host.pi_vision.error ? "chip--warn" : "chip--ok"}`}
+                title={host.pi_vision.error ?? "PiVision detects and tracks locally; Commander supervises"}>
+                PiVision · {host.pi_vision.inference_s == null ? "waiting" : `${Math.round(host.pi_vision.inference_s * 1000)} ms`}
               </span>
             )}
             {controller && (
@@ -119,6 +126,16 @@ export function ActionBar({ status, onHome, onAutoTrack, onVirtualCamera, contro
       </div>
 
       <div className="actionbar__actions">
+        {host?.pi_vision && onPiVision && (
+          <button type="button" className="btn" disabled={pendingTrack}
+            onClick={async () => {
+              setPendingTrack(true);
+              try { await onPiVision(!host.pi_vision?.perception_enabled); }
+              finally { setPendingTrack(false); }
+            }}>
+            {host.pi_vision.perception_enabled ? "Pause PiVision" : "Resume PiVision"}
+          </button>
+        )}
         <button
           type="button"
           className="action action--home"

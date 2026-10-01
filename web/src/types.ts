@@ -36,6 +36,7 @@ export interface HostStatus {
   auto_tracking: boolean;
   subjects?: number;
   telemetry: Telemetry | null;
+  pi_vision?: { enabled: boolean; perception_enabled: boolean | null; error: string | null; inference_s: number | null; observation_age_s: number | null } | null;
 }
 
 export interface TrackingStatus {
@@ -88,6 +89,9 @@ export interface RobotConfig {
   frame_height: number | null;
   max_fps: number;
   manual_only: boolean;
+  pi_vision_url?: string | null;
+  pi_vision_speed_percent?: number;
+  pi_vision_max_age_s?: number;
 }
 
 /** Form input; a non-numeric port is sent as-is so the backend can report it. */
