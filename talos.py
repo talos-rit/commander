@@ -29,6 +29,10 @@ if sys.platform == "win32":
 
 
 def create_args():
+    import src.config as config
+
+    # Loading AppSettings registers its CLI flags (e.g. --web-port) on ARG_PARSER.
+    _ = config.APP_SETTINGS
     args = ARG_PARSER.parse_args()
     if args.debug:
         args.log_level = "DEBUG"
@@ -41,9 +45,10 @@ def run_server(app: App):
     endpoint.run()
 
 
-def terminal_interface(args=create_args()):
+def terminal_interface(args=None):
     from src.interface.textual_tui.main_interface import TextualInterface
 
+    args = args if args is not None else create_args()
     configure_logger(True)
     smm = multiprocessing.managers.SharedMemoryManager()
     interface = TextualInterface(args=args)
@@ -54,9 +59,10 @@ def terminal_interface(args=create_args()):
         terminate(0, 0)
 
 
-def tk_interface(args=create_args()):
+def tk_interface(args=None):
     from src.interface.tk_gui.main_interface import TKInterface
 
+    args = args if args is not None else create_args()
     configure_logger()
     interface = TKInterface(args)
     # TODO: TKinter is incapable of running this much resource intensive tasks
@@ -66,12 +72,13 @@ def tk_interface(args=create_args()):
     interface.mainloop()
 
 
-def pyside_interface(args=create_args()):
+def pyside_interface(args=None):
     from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QApplication
 
     from src.interface.pyside_gui.main_interface import PySide6Interface
 
+    args = args if args is not None else create_args()
     configure_logger()
     app = QApplication(sys.argv)
 
@@ -83,6 +90,18 @@ def pyside_interface(args=create_args()):
     window.show()
 
     sys.exit(app.exec())
+
+
+def web_interface(args=None):
+    from src.interface.web.runner import run_web
+
+    multiprocessing.freeze_support()
+    args = args if args is not None else create_args()
+    configure_logger()
+    try:
+        run_web(args)
+    finally:
+        terminate(0, 0)
 
 
 def main() -> None:

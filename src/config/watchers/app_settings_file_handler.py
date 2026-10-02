@@ -14,7 +14,7 @@ from watchdog.events import (
 from src.path_utils import get_file_path
 
 from ..path import APP_SETTINGS_PATH, BACKUP_DIR
-from ..schema.app import AppSettings
+from ..schema.app import AppSettingsFields
 
 
 def take_backup_from_app_settings() -> str:
@@ -49,7 +49,10 @@ class AppSettingFileHandler(FileSystemEventHandler):
             return
         try:
             logger.info("Detected change in app settings file, verifying changes...")
-            AppSettings()
+            import yaml
+
+            with open(APP_SETTINGS_PATH, "r") as f:
+                AppSettingsFields.model_validate(yaml.safe_load(f) or {})
             logger.info(
                 "App settings file is valid. Please restart the application to apply changes."
             )
@@ -61,6 +64,9 @@ class AppSettingFileHandler(FileSystemEventHandler):
     def on_deleted(self, event: DirDeletedEvent | FileDeletedEvent) -> None:
         if not self._is_target_file(event):
             return
+        # Atomic saves (write temp + rename) surface as deletes on some platforms.
+        if os.path.exists(APP_SETTINGS_PATH):
+            return self.on_modified(event)  # pyright: ignore[reportArgumentType]
         logger.warning("App settings file deleted.")
         path = take_backup_from_app_settings()
         logger.info(f"Backed up current app settings to {path}")
