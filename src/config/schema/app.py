@@ -69,8 +69,9 @@ class AppSettingsFields(BaseModel):
     web_port: int = Field(
         default=8000, ge=1, le=65535, description="Port the web UI server listens on"
     )
+    # Debug is the default while the web UI is still in development.
     ui_mode: UIMode = Field(
-        default="simple",
+        default="debug",
         description="simple shows only Home and Auto-Track; debug adds manual controls and telemetry",
     )
     display_mode: DisplayMode = Field(

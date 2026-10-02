@@ -307,7 +307,7 @@ def test_virtual_camera_reports_a_missing_device(web_config):
 
 
 def test_jog_requires_debug_mode(web_config):
-    backend, _, _ = make_backend(camera_1="a")
+    backend, _, _ = make_backend(camera_1="a", ui_mode="simple")
     backend.startup()
 
     with pytest.raises(BackendError) as err:
@@ -351,7 +351,7 @@ def test_joint_jog_rejects_unknown_axis(web_config):
 
 
 def test_arm_jog_requires_debug_mode(web_config):
-    backend, _, _ = make_backend(camera_1="a")
+    backend, _, _ = make_backend(camera_1="a", ui_mode="simple")
     backend.startup()
     with pytest.raises(BackendError) as err:
         backend.joint_jog("shoulder", 1, active=True)

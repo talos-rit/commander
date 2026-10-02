@@ -438,7 +438,7 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
               <SwitchField label="Interface">
                 <Rocker<AppSettings["ui_mode"]>
                   label="Interface"
-                  value={draft.ui_mode ?? "simple"}
+                  value={draft.ui_mode ?? "debug"}
                   onChange={(v) => set("ui_mode", v)}
                   describe
                   options={[

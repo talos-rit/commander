@@ -127,7 +127,7 @@ def test_slots_endpoint(setup):
 
 
 def test_debug_controls_forbidden_in_simple_mode(setup):
-    client, _ = setup()
+    client, _ = setup(ui_mode="simple")
     response = client.post("/api/control/move/start", json={"direction": "up"})
     assert response.status_code == 403
 
@@ -203,10 +203,10 @@ def test_mjpeg_ends_when_server_is_stopping(setup):
 def test_settings_roundtrip(setup):
     client, _ = setup()
 
-    assert client.get("/api/settings").json()["ui_mode"] == "simple"
-    updated = client.put("/api/settings", json={"ui_mode": "debug"}).json()
+    assert client.get("/api/settings").json()["ui_mode"] == "debug"
+    updated = client.put("/api/settings", json={"ui_mode": "simple"}).json()
     assert updated["ui_mode"] in ("simple", "debug")
-    assert client.get("/api/status").json()["view"]["ui_mode"] == "debug"
+    assert client.get("/api/status").json()["view"]["ui_mode"] == "simple"
     bad = client.put("/api/settings", json={"web_port": 0})
     assert bad.status_code == 422
 
