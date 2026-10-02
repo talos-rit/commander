@@ -173,3 +173,4 @@ config/**/*.backup*
 
 # VSCODE
 .vscode/mcp.json
+artifacts/*
