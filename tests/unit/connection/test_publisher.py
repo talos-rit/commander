@@ -244,3 +244,75 @@ def test_execute_hardware_operation(mockOperatorConnection):
     mockOperatorConnection.publish.assert_called_once_with(
         command=Command.EXECUTE_HARDWARE_OPERATION, payload=expected_payload
     )
+
+
+def test_erv_joint_jog_start_and_stop(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+    publisher.erv_joint_jog_start(axis=2, direction=-1)
+
+    mockOperatorConnection.publish.assert_called_once_with(
+        command=Command.EXECUTE_HARDWARE_OPERATION,
+        payload=b"\x01\x00\x00\x00\x00\x02\xff",
+    )
+
+    mockOperatorConnection.publish.reset_mock()
+    publisher.erv_joint_jog_stop()
+    mockOperatorConnection.publish.assert_called_once_with(
+        command=Command.EXECUTE_HARDWARE_OPERATION,
+        payload=b"\x02\x00\x00\x00\x00",
+    )
+
+
+def test_erv_enable_control_and_speed_are_typed_hardware_operations(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+
+    publisher.erv_enable_control()
+    mockOperatorConnection.publish.assert_called_once_with(
+        command=Command.EXECUTE_HARDWARE_OPERATION,
+        payload=b"\x04\x00\x00\x00\x00",
+    )
+
+    mockOperatorConnection.publish.reset_mock()
+    publisher.erv_set_speed_percent(20)
+    mockOperatorConnection.publish.assert_called_once_with(
+        command=Command.EXECUTE_HARDWARE_OPERATION,
+        payload=b"\x05\x00\x00\x00\x00\x14",
+    )
+
+    with pytest.raises(ValueError, match="1..100"):
+        publisher.erv_set_speed_percent(0)
+
+
+def test_erv_encoder_telemetry_is_parsed(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+
+    publisher._on_operator_message("TEL 1 2 3 4 5 6 7 8 9 10 11")
+
+    assert publisher.get_erv_encoder_counts() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+
+
+def test_erv_joint_telemetry_accepts_new_base_inclusive_frame(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+
+    publisher._on_operator_message("TELP 10 20 30 40 50")
+
+    assert publisher.get_erv_joint_counts() == (10, 20, 30, 40, 50)
+    assert publisher.get_erv_telemetry_received_monotonic() is not None
+
+
+def test_erv_malformed_telemetry_is_ignored(mockOperatorConnection):
+    publisher = Publisher("localhost", 12345, True)
+
+    publisher._on_operator_message("TEL 1 no 3")
+
+    assert publisher.get_erv_encoder_counts() is None
+
+
+@pytest.mark.parametrize("axis,direction", [(1, 1), (4, -1), (2, 0), (3, 2)])
+def test_erv_joint_jog_rejects_invalid_axis_or_direction(
+    mockOperatorConnection, axis, direction
+):
+    publisher = Publisher("localhost", 12345, True)
+
+    with pytest.raises(AssertionError):
+        publisher.erv_joint_jog_start(axis, direction)
