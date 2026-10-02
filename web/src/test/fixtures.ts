@@ -127,7 +127,7 @@ export function mockApi(routes: Record<string, Handler | unknown>) {
     if (!(key in routes)) {
       return new Response(JSON.stringify({ detail: `No mock for ${method} ${path}` }), { status: 404 });
     }
-    const result = typeof route === "function" ? (route as Handler)(call) : route;
+    const result = typeof route === "function" ? await (route as Handler)(call) : route;
     if (result instanceof Response) return result;
     if (result === undefined) return new Response(null, { status: 204 });
     return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });

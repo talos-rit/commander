@@ -76,7 +76,9 @@ describe("SettingsPanel", () => {
     await user.click(await screen.findByRole("button", { name: /add robot/i }));
     const form = screen.getByRole("form", { name: "Add robot" });
     await user.type(within(form).getByLabelText("Operator host"), "raspberrypi.local");
-    await user.type(within(form).getByLabelText(/camera/i), "0");
+    const camera = within(form).getByLabelText(/^camera$/i);
+    await user.clear(camera);
+    await user.type(camera, "0");
     await user.click(within(form).getByLabelText(/manual only/i));
     await user.click(within(form).getByRole("button", { name: /add robot/i }));
     await waitFor(() => expect(callsTo("POST", "/robots")).toHaveLength(1));
@@ -90,6 +92,73 @@ describe("SettingsPanel", () => {
     });
     expect(await screen.findByText("raspberrypi.local", { selector: "strong" })).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("fills the camera URL from the operator host as it is typed", async () => {
+    const { user, callsTo } = setup({ robots: {}, settings: makeSettings() });
+    const form = await screen.findByRole("form", { name: "Add robot" });
+    const host = within(form).getByLabelText("Operator host");
+    const camera = within(form).getByLabelText(/^camera$/i);
+
+    expect(camera).toHaveValue("");
+    expect(within(form).getByText("Fills in from the operator host.")).toBeInTheDocument();
+
+    await user.type(host, "blu");
+    expect(camera).toHaveValue("rtsp://blu:8554/camera");
+    await user.type(host, "ey.local");
+    expect(camera).toHaveValue("rtsp://bluey.local:8554/camera");
+    expect(within(form).getByText("Follows the operator host.")).toBeInTheDocument();
+
+    await user.click(within(form).getByRole("button", { name: /add robot/i }));
+    await waitFor(() => expect(callsTo("POST", "/robots")).toHaveLength(1));
+    expect(callsTo("POST", "/robots")[0].body).toMatchObject({
+      socket_host: "bluey.local",
+      socket_port: 61616,
+      camera_index: "rtsp://bluey.local:8554/camera",
+      fps: 30,
+      manual_only: false,
+    });
+  });
+
+  it("keeps a camera URL the user edited, and follows again after it is cleared", async () => {
+    const { user } = setup({ robots: {}, settings: makeSettings() });
+    const form = await screen.findByRole("form", { name: "Add robot" });
+    const host = within(form).getByLabelText("Operator host");
+    const camera = within(form).getByLabelText(/^camera$/i);
+
+    await user.type(host, "bluey.local");
+    await user.clear(camera);
+    await user.type(camera, "0");
+    await user.type(host, "x");
+    expect(camera).toHaveValue("0");
+    expect(within(form).getByText("RTSP or HTTP URL, or a device index.")).toBeInTheDocument();
+
+    await user.clear(camera);
+    await user.type(host, "y");
+    expect(camera).toHaveValue("rtsp://bluey.localxy:8554/camera");
+  });
+
+  it("shows Connecting… while a new robot connection is opening", async () => {
+    let release: (robot: RobotConfig) => void = () => {};
+    const gate = new Promise<RobotConfig>((resolve) => {
+      release = resolve;
+    });
+    const { user } = setup({
+      robots: {},
+      settings: makeSettings(),
+      routes: { "POST /robots": () => gate },
+    });
+    const form = await screen.findByRole("form", { name: "Add robot" });
+    await user.type(within(form).getByLabelText("Operator host"), "bluey.local");
+    const submitted = user.click(within(form).getByRole("button", { name: /add robot/i }));
+    const connecting = await screen.findByRole("button", { name: /connecting/i });
+    expect(connecting).toBeDisabled();
+    expect(connecting).toHaveAttribute("aria-busy", "true");
+    expect(within(form).getByLabelText("Operator host")).toBeDisabled();
+    release(makeRobot("bluey.local"));
+    await submitted;
+    expect(await screen.findByRole("button", { name: /add robot/i })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /connecting/i })).not.toBeInTheDocument();
   });
 
   it("opens the add form straight away when there are no robots", async () => {
@@ -108,7 +177,9 @@ describe("SettingsPanel", () => {
     await user.type(within(form).getByLabelText("Operator host"), "x");
     await user.clear(within(form).getByLabelText("Port"));
     await user.type(within(form).getByLabelText("Port"), "abc");
-    await user.type(within(form).getByLabelText(/camera/i), "rtsp://x");
+    const camera = within(form).getByLabelText(/^camera$/i);
+    await user.clear(camera);
+    await user.type(camera, "rtsp://x");
     await user.click(within(form).getByRole("button", { name: /add robot/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid port; Bad camera");
     expect(callsTo("POST", "/robots")[0].body).toMatchObject({ socket_port: "abc" });
@@ -120,6 +191,7 @@ describe("SettingsPanel", () => {
     await user.click(await screen.findByRole("button", { name: "Edit bluey.local" }));
     const form = screen.getByRole("form", { name: "Edit bluey.local" });
     expect(within(form).getByLabelText("Operator host")).toBeDisabled();
+    expect(within(form).getByLabelText(/^camera$/i)).toHaveValue("rtsp://bluey.local:8554/camera");
     const port = within(form).getByLabelText("Port");
     await user.clear(port);
     await user.type(port, "5000");
