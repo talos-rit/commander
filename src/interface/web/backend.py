@@ -406,10 +406,14 @@ class CommanderWebBackend:
             self._target(None)
             self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
+            # Match the digital twin's real ER-V controls: a press is one
+            # continuous polar hold and release is its paired stop/update.
+            # Do not use the legacy repeated-discrete scheduler here; it can
+            # flood the controller queue and race telemetry.
             if active:
-                self.app.start_move(parsed)
+                self.app.continuous_move(parsed)
             else:
-                self.app.stop_move(parsed)
+                self.app.stop_continuous_move(parsed)
 
     def joint_jog(self, axis: str, direction: int, active: bool) -> None:
         """Hold or release an ER-V shoulder or elbow jog. Wrist roll is not exposed."""

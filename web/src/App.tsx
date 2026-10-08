@@ -83,11 +83,6 @@ export default function App() {
     [run],
   );
   const onJointStop = useCallback(() => void run(() => api.jointStop()), [run]);
-  const onCartesianStart = useCallback(
-    (y: -1 | 1) => void run(() => api.cartesianStart(0, y, 0)),
-    [run],
-  );
-  const onCartesianStop = useCallback(() => void run(() => api.cartesianStop()), [run]);
   const onJogMode = (mode: JogMode) => void run(() => api.setJogMode(mode));
   const onModel = (model: string | null) => void run(() => api.setModel(model));
 
@@ -103,10 +98,11 @@ export default function App() {
   );
   const keyHeld = useRef(new Set<Direction>());
   const padHeld = useRef(new Set<Direction>());
+  const armHeld = useRef(new Set<Direction>());
   const jogged = useRef(new Set<Direction>());
   // Keys and the controller share one jog. Releasing one does not stop a direction the other still holds.
   const syncJog = useCallback(() => {
-    const next = new Set<Direction>([...keyHeld.current, ...padHeld.current]);
+    const next = new Set<Direction>([...keyHeld.current, ...padHeld.current, ...armHeld.current]);
     for (const direction of DIRECTION_ORDER) {
       if (jogged.current.has(direction) && !next.has(direction)) onMoveStop(direction);
     }
@@ -116,7 +112,6 @@ export default function App() {
     jogged.current = next;
   }, [onMoveStart, onMoveStop]);
   const jointSent = useRef<ArmCommand["joint"]>(null);
-  const extensionSent = useRef<ArmCommand["y"]>(0);
   const syncArm = useCallback(
     (arm: ArmCommand) => {
       const previous = jointSent.current;
@@ -126,13 +121,18 @@ export default function App() {
         else onJointStop();
         jointSent.current = next;
       }
-      if (extensionSent.current !== arm.y) {
-        if (arm.y === 0) onCartesianStop();
-        else onCartesianStart(arm.y);
-        extensionSent.current = arm.y;
+      // The ER-V has no implemented Cartesian command.  Route the triggers to
+      // its supported wrist-pitch polar axis, exactly like the digital twin's
+      // Up/Down hold controls, and merge them with keyboard/stick holds so one
+      // input cannot stop another that is still active.
+      const pitch = arm.y < 0 ? "down" : arm.y > 0 ? "up" : null;
+      const previousPitch = armHeld.current.values().next().value as Direction | undefined;
+      if (previousPitch !== pitch) {
+        armHeld.current = pitch ? new Set<Direction>([pitch]) : new Set<Direction>();
+        syncJog();
       }
     },
-    [onCartesianStart, onCartesianStop, onJointStart, onJointStop],
+    [onJointStart, onJointStop, syncJog],
   );
   const slotRef = useRef<Slot>(1);
   const pendingSlot = useRef<Slot | null>(null);

@@ -169,6 +169,33 @@ def test_stop_move_continuous_and_stop_all(monkeypatch, app_under_test, mocker):
     assert publisher.polar_pan_continuous_stop.call_count >= 1
 
 
+def test_continuous_direction_release_updates_the_remaining_vector(
+    app_under_test, mocker
+):
+    app = app_under_test
+    publisher = mocker.Mock()
+    conn = mocker.Mock(is_manual=True, publisher=publisher)
+    app.connections["h"] = conn
+    app.connections.set_active("h")
+    app.continuous_move(talos_app.Direction.UP)
+    publisher.polar_pan_continuous_direction_start.assert_called_once_with(
+        talos_app.Direction.UP
+    )
+    app.continuous_move(talos_app.Direction.RIGHT)
+    publisher.polar_pan_continuous_direction_start.assert_called_with(
+        talos_app.Direction.UP + talos_app.Direction.RIGHT
+    )
+
+    app.stop_continuous_move(talos_app.Direction.UP)
+    publisher.polar_pan_continuous_direction_start.assert_called_with(
+        talos_app.Direction.RIGHT
+    )
+    publisher.polar_pan_continuous_stop.assert_not_called()
+
+    app.stop_continuous_move(talos_app.Direction.RIGHT)
+    publisher.polar_pan_continuous_stop.assert_called_once()
+
+
 def test_joint_jog_refreshes_until_stopped(app_under_test, mocker):
     app = app_under_test
     publisher = mocker.Mock()

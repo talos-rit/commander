@@ -125,6 +125,12 @@ class FakeApp:
     def stop_move(self, direction):
         self.calls.append(("stop_move", direction.name, self.active))
 
+    def continuous_move(self, direction):
+        self.calls.append(("continuous_move", direction.name, self.active))
+
+    def stop_continuous_move(self, direction):
+        self.calls.append(("stop_continuous_move", direction.name, self.active))
+
     def stop_all_movement(self):
         self.calls.append(("stop_all", self.active))
 

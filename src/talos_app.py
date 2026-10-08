@@ -169,16 +169,21 @@ class App:
     def stop_move(self, direction: Direction) -> None:
         """Stops continuous movement if in continuous mode and no keys are pressed."""
         if self.control_mode == ControlMode.CONTINUOUS:
-            logger.debug(f"{self.control_mode} {self.current_continuous_directions}")
-            if direction in self.current_continuous_directions:
-                self.current_continuous_directions.remove(direction)
-            if len(self.current_continuous_directions) != 0:
-                return
-            if (connection := self.get_active_connection()) is None:
-                return logger.error("No connection found")
-            return connection.publisher.polar_pan_continuous_stop()
+            return self.stop_continuous_move(direction)
         if self.discrete_move_task.get(direction) is not None:
             return self.discrete_move_task.pop(direction).cancel()
+
+    def stop_continuous_move(self, direction: Direction) -> None:
+        """Release one held polar direction and update the remaining vector."""
+        logger.debug(f"continuous {self.current_continuous_directions}")
+        self.current_continuous_directions.discard(direction)
+        if (connection := self.get_active_connection()) is None:
+            return logger.error("No connection found")
+        if self.current_continuous_directions:
+            return connection.publisher.polar_pan_continuous_direction_start(
+                sum(self.current_continuous_directions)
+            )
+        return connection.publisher.polar_pan_continuous_stop()
 
     def start_joint_jog(self, axis: int, direction: int) -> None:
         """Hold an ER-V shoulder (axis 2) or elbow (axis 3) jog. One joint at a time."""
@@ -297,7 +302,7 @@ class App:
         self.stop_cartesian()
         if (connection := self.get_active_connection()) is None:
             return logger.error("No connection found")
-        if self.control_mode == ControlMode.CONTINUOUS:
+        if self.control_mode == ControlMode.CONTINUOUS or self.current_continuous_directions:
             publisher = connection.publisher
             self.current_continuous_directions.clear()
             return publisher.polar_pan_continuous_stop()

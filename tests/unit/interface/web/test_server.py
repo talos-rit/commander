@@ -144,7 +144,8 @@ def test_debug_controls_in_debug_mode(setup):
         "model": "yolo_nano"
     }
     assert client.post("/api/control/model", json={"model": "basic"}).status_code == 404
-    assert ("start_move", "UP", "a") in app.calls
+    assert ("continuous_move", "UP", "a") in app.calls
+    assert ("stop_continuous_move", "UP", "a") in app.calls
     assert client.post(
         "/api/control/joint/start", json={"axis": "shoulder", "direction": 1}
     ).status_code == 200

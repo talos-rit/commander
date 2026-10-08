@@ -50,7 +50,7 @@ export function describeController(gate: ControllerGate): string {
     case "offline":
       return "Controller connected. The selected robot isn't ready to move.";
     case "ready":
-      return "Left stick and D-pad aim. Right stick jogs the shoulder and elbow, one joint at a time. Triggers extend and retract the arm. LB and RB switch cameras. Menu toggles Debug, Back homes, A toggles Auto-Track, B the layout, X Virtual Cam, and Y Manual or Dynamic.";
+      return "Left stick and D-pad aim. Right stick jogs the shoulder and elbow, one joint at a time. LT pitches the wrist up and RT pitches it down. LB and RB switch cameras. Menu toggles Debug, Back homes, A toggles Auto-Track, B the layout, X Virtual Cam, and Y Manual or Dynamic.";
   }
 }
 
@@ -285,10 +285,10 @@ export function directionsFromGamepads(
 
 export type JointAxis = "shoulder" | "elbow";
 
-/** Right-stick joint and trigger extension. Wrist roll (the claw) is left unmapped. */
+/** Right-stick joint and trigger wrist-pitch control. Wrist roll (the claw) is left unmapped. */
 export interface ArmCommand {
   joint: { axis: JointAxis; direction: -1 | 1 } | null;
-  /** Cartesian Y. -1 extends away from the base, +1 retracts, 0 holds still. */
+  /** Supported polar wrist-pitch axis. -1 is down, +1 is up, 0 holds still. */
   y: -1 | 0 | 1;
 }
 

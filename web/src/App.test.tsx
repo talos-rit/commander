@@ -389,7 +389,7 @@ describe("Controller", () => {
     await waitFor(() => expect(callsTo("POST", "/control/move/stop")).toHaveLength(3));
   });
 
-  it("jogs the shoulder and elbow from the right stick and extends from the trigger", async () => {
+  it("jogs the shoulder and elbow from the right stick and pitches from the trigger", async () => {
     const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
     await screen.findByLabelText("Debug controls");
     pads[0] = fakePad({ axes: [0, 0, 1, 0] });
@@ -406,15 +406,16 @@ describe("Controller", () => {
     pads[0] = press(fakePad(), 7);
     await step();
     await waitFor(() => expect(callsTo("POST", "/control/joint/stop")).toHaveLength(1));
-    await waitFor(() => expect(callsTo("POST", "/control/cartesian/start")).toHaveLength(1));
-    expect(callsTo("POST", "/control/cartesian/start")[0].body).toEqual({ x: 0, y: -1, z: 0 });
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")).toHaveLength(1));
+    expect(callsTo("POST", "/control/move/start")[0].body).toEqual({ direction: "down" });
 
     pads[0] = fakePad();
     await step();
-    await waitFor(() => expect(callsTo("POST", "/control/cartesian/stop")).toHaveLength(1));
+    await waitFor(() => expect(callsTo("POST", "/control/move/stop")).toHaveLength(1));
+    expect(callsTo("POST", "/control/move/stop")[0].body).toEqual({ direction: "down" });
   });
 
-  it("extends from a HID duplicate when the standard listing's triggers stay dead", async () => {
+  it("pitches from a HID duplicate when the standard listing's triggers stay dead", async () => {
     const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
     await screen.findByLabelText("Debug controls");
     pads[0] = fakePad({ axes: [0, 0, 0, 0] });
@@ -425,9 +426,8 @@ describe("Controller", () => {
       axes: [0, 0, 0, 0, -1, 1],
     });
     await step();
-    await waitFor(() => expect(callsTo("POST", "/control/cartesian/start")).toHaveLength(1));
-    expect(callsTo("POST", "/control/cartesian/start")[0].body).toEqual({ x: 0, y: -1, z: 0 });
-    expect(callsTo("POST", "/control/move/start")).toHaveLength(0);
+    await waitFor(() => expect(callsTo("POST", "/control/move/start")).toHaveLength(1));
+    expect(callsTo("POST", "/control/move/start")[0].body).toEqual({ direction: "down" });
   });
 
   it("keeps jogging while either the stick or an arrow key is still held", async () => {

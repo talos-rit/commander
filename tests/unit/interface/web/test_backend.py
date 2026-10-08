@@ -323,8 +323,8 @@ def test_jog_in_debug_mode_targets_selected_robot(web_config):
     backend.move("left", active=True)
     backend.move("left", active=False)
 
-    assert ("start_move", "LEFT", "b") in app.calls
-    assert ("stop_move", "LEFT", "b") in app.calls
+    assert ("continuous_move", "LEFT", "b") in app.calls
+    assert ("stop_continuous_move", "LEFT", "b") in app.calls
 
 
 def test_joint_and_cartesian_jog_target_the_selected_robot(web_config):

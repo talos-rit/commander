@@ -144,7 +144,7 @@ export function DebugRail({
         />
         <p className="hint">
           {controllerConnected
-            ? "Left stick aims. Right stick moves the shoulder and elbow. Triggers extend and retract. LB and RB switch cameras."
+            ? "Left stick aims. Right stick moves the shoulder and elbow. LT/RT pitch the wrist. LB and RB switch cameras."
             : "Hold a button or an arrow key."}
         </p>
       </section>
