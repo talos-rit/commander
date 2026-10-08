@@ -20,7 +20,7 @@ export function VideoStage({ status, onSelectHost, onOpenSettings }: Props) {
           <p>
             {status.robots.length > 0
               ? "Pick a robot to use as Camera 1."
-              : "Add a robot with its operator address and camera stream to get started."}
+              : "Add a robot with its operator address to get started."}
           </p>
           <button type="button" className="btn btn--primary" onClick={onOpenSettings}>
             <Settings size={18} /> Open settings

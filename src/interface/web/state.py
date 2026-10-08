@@ -27,7 +27,8 @@ class WebOperatorState:
     camera_2: str | None = None
     display_mode: DisplayMode = "one_screen"
     one_screen_mode: OneScreenMode = "manual"
-    ui_mode: UIMode = "simple"
+    # Debug while the web UI is still in development. See AppSettings.ui_mode.
+    ui_mode: UIMode = "debug"
     manual_slot: Slot = 1
     dynamic_slot: Slot = 1
     """Slot shown in dynamic mode. Nothing moves it yet; subject-aware

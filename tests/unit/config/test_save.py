@@ -95,5 +95,5 @@ def test_app_settings_fields_defaults_keep_single_camera_setup():
     fields = AppSettingsFields()
     assert fields.camera_2_host is None
     assert fields.display_mode == "one_screen"
-    assert fields.ui_mode == "simple"
+    assert fields.ui_mode == "debug"
     assert fields.web_host == "127.0.0.1"

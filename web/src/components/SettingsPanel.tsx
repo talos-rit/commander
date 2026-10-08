@@ -1,5 +1,5 @@
-import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { LoaderCircle, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api";
 import type { AppSettings, RobotConfig, RobotInput } from "../types";
 import { JOG_OPTIONS } from "./DebugRail";
@@ -23,6 +23,17 @@ type RobotDraft = {
 };
 
 const EMPTY_DRAFT: RobotDraft = { socket_host: "", socket_port: "61616", camera_index: "", fps: "30", manual_only: false };
+
+/** Usual camera stream for a robot: RTSP on the operator host. */
+function suggestedCameraUrl(host: string): string {
+  const trimmed = host.trim();
+  return trimmed ? `rtsp://${trimmed}:8554/camera` : "";
+}
+
+/** Empty, or still the URL derived from this host, so host edits may rewrite it. */
+function cameraFollowsHost(camera: string, host: string): boolean {
+  return camera === "" || camera === suggestedCameraUrl(host);
+}
 
 function toDraft(robot: RobotConfig): RobotDraft {
   return {
@@ -72,9 +83,28 @@ function RobotForm({
   onSubmit: (draft: RobotDraft) => Promise<boolean>;
   onCancel?: () => void;
 }) {
+  const cameraHintId = useId();
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof RobotDraft>(key: K, value: RobotDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
+
+  const setHost = (socket_host: string) => {
+    setDraft((d) => ({
+      ...d,
+      socket_host,
+      camera_index:
+        !editing && cameraFollowsHost(d.camera_index, d.socket_host)
+          ? suggestedCameraUrl(socket_host)
+          : d.camera_index,
+    }));
+  };
+
+  const derived = draft.camera_index !== "" && draft.camera_index === suggestedCameraUrl(draft.socket_host);
+  const cameraHint = derived
+    ? "Follows the operator host."
+    : draft.camera_index
+      ? "RTSP or HTTP URL, or a device index."
+      : "Fills in from the operator host.";
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -92,52 +122,81 @@ function RobotForm({
         <span>Operator host</span>
         <input
           required
-          disabled={editing}
+          disabled={editing || busy}
           placeholder="bluey.local"
+          spellCheck={false}
           value={draft.socket_host}
-          onChange={(e) => set("socket_host", e.target.value)}
+          onChange={(e) => setHost(e.target.value)}
         />
       </label>
       <label className="field field--narrow">
         <span>Port</span>
         <input
           required
+          disabled={busy}
           inputMode="numeric"
           value={draft.socket_port}
           onChange={(e) => set("socket_port", e.target.value)}
         />
       </label>
-      <label className="field field--wide">
-        <span>Camera (RTSP/HTTP URL or device index)</span>
-        <input
-          required
-          placeholder="rtsp://bluey.local:8554/camera"
-          value={draft.camera_index}
-          onChange={(e) => set("camera_index", e.target.value)}
-        />
-      </label>
-      <label className="field field--narrow">
-        <span>FPS</span>
-        <input inputMode="numeric" value={draft.fps} onChange={(e) => set("fps", e.target.value)} />
-      </label>
-      <label className="field field--wide">
-        <span>PiVision URL (optional)</span>
-        <input placeholder="http://bluey.local:5050" value={draft.pi_vision_url ?? ""}
-          onChange={(e) => set("pi_vision_url", e.target.value)} />
-        <small>PiVision tracks locally. Commander supervises Auto-Track and manual control.</small>
-      </label>
-      <label className="check">
-        <input type="checkbox" checked={draft.manual_only} onChange={(e) => set("manual_only", e.target.checked)} />
-        <span>Manual only (no auto-tracking)</span>
-      </label>
+      <div className="robotform__secondary">
+        <p className="robotform__kicker">Rarely needs changing</p>
+        <label className={`field${derived ? " field--derived" : ""}`}>
+          <span>Camera</span>
+          <input
+            required
+            disabled={busy}
+            placeholder="rtsp://bluey.local:8554/camera"
+            spellCheck={false}
+            aria-describedby={cameraHintId}
+            value={draft.camera_index}
+            onChange={(e) => set("camera_index", e.target.value)}
+          />
+        </label>
+        <p id={cameraHintId} className="robotform__hint">
+          {cameraHint}
+        </p>
+        <label className="field">
+          <span>PiVision URL (optional)</span>
+          <input
+            placeholder="http://bluey.local:5050"
+            spellCheck={false}
+            disabled={busy}
+            value={draft.pi_vision_url ?? ""}
+            onChange={(e) => set("pi_vision_url", e.target.value)}
+          />
+        </label>
+        <p className="robotform__hint">PiVision tracks locally. Commander supervises Auto-Track and manual control.</p>
+        <div className="robotform__rare">
+          <label className="field">
+            <span>FPS</span>
+            <input inputMode="numeric" disabled={busy} value={draft.fps} onChange={(e) => set("fps", e.target.value)} />
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              disabled={busy}
+              checked={draft.manual_only}
+              onChange={(e) => set("manual_only", e.target.checked)}
+            />
+            <span>Manual only (no auto-tracking)</span>
+          </label>
+        </div>
+      </div>
       <div className="robotform__actions">
         {onCancel && (
-          <button type="button" className="btn" onClick={onCancel}>
+          <button type="button" className="btn" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
         )}
-        <button type="submit" className="btn btn--primary" disabled={busy}>
-          {editing ? <Save size={16} /> : <Plus size={16} />} {editing ? "Save robot" : "Add robot"}
+        <button
+          type="submit"
+          className={`btn btn--primary${busy ? " btn--busy" : ""}`}
+          disabled={busy}
+          aria-busy={busy}
+        >
+          {busy ? <LoaderCircle className="spin" size={16} /> : editing ? <Save size={16} /> : <Plus size={16} />}
+          {busy ? "Connecting…" : editing ? "Save robot" : "Add robot"}
         </button>
       </div>
     </form>
@@ -379,7 +438,7 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
               <SwitchField label="Interface">
                 <Rocker<AppSettings["ui_mode"]>
                   label="Interface"
-                  value={draft.ui_mode ?? "simple"}
+                  value={draft.ui_mode ?? "debug"}
                   onChange={(v) => set("ui_mode", v)}
                   describe
                   options={[
