@@ -72,6 +72,10 @@ export default function App() {
     (enabled: boolean) => run(() => api.setVirtualCamera(enabled)),
     [run],
   );
+  const onPiTolerance = useCallback(
+    (ratio: number) => run(() => api.setPiVisionTolerance(ratio, selectedHost)),
+    [run, selectedHost],
+  );
   const onMoveStart = useCallback((direction: Direction) => void run(() => api.moveStart(direction)), [run]);
   const onMoveStop = useCallback((direction: Direction) => void run(() => api.moveStop(direction)), [run]);
   const onJointStart = useCallback(
@@ -261,8 +265,10 @@ export default function App() {
             <ActionBar
               status={status}
               onHome={onHome}
+              onClearError={() => run(() => api.clearRobotError(selectedHost))}
               onAutoTrack={onAutoTrack}
               onPiVision={onPiVision}
+              onPiTolerance={onPiTolerance}
               onVirtualCamera={onVirtualCamera}
               controller={
                 gamepad.pad && controllerGate

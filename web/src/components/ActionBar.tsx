@@ -1,12 +1,15 @@
 import { Crosshair, Gamepad2, House, Link2, Link2Off, LoaderCircle, ScanFace, Video, VideoOff, Webcam } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { HostStatus, Status } from "../types";
+import { CenteringTolerance } from "./CenteringTolerance";
 
 interface Props {
   status: Status;
   onHome: () => Promise<unknown>;
+  onClearError?: () => Promise<unknown>;
   onAutoTrack: (enabled: boolean) => Promise<unknown>;
   onPiVision?: (enabled: boolean) => Promise<unknown>;
+  onPiTolerance?: (ratio: number) => Promise<unknown>;
   onVirtualCamera: (enabled: boolean) => Promise<unknown>;
   /** A connected gamepad, when the browser has reported one. */
   controller?: { label: string; driving: boolean; title: string } | null;
@@ -22,12 +25,13 @@ function StatusChip({ ok, on, off, label }: { ok: boolean; on: React.ReactNode; 
   );
 }
 
-export function ActionBar({ status, onHome, onAutoTrack, onPiVision, onVirtualCamera, controller = null }: Props) {
+export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVision, onPiTolerance, onVirtualCamera, controller = null }: Props) {
   const selected = status.view.selected_host;
   const host: HostStatus | undefined = selected ? status.connections[selected] : undefined;
   const [homing, setHoming] = useState(false);
   const [pendingTrack, setPendingTrack] = useState(false);
   const [pendingCamera, setPendingCamera] = useState(false);
+  const [clearingError, setClearingError] = useState(false);
 
   useEffect(() => {
     if (!homing) return;
@@ -87,12 +91,14 @@ export function ActionBar({ status, onHome, onAutoTrack, onPiVision, onVirtualCa
                 {selected}
               </span>
             </span>
-            <StatusChip
+            {host?.pi_vision?.robot_fault ? (
+              <span role="status" className="chip chip--danger" title={host.pi_vision.robot_fault}>Robot error</span>
+            ) : <StatusChip
               ok={host?.operator_connected ?? false}
               on={<><Link2 size={14} /> Robot linked</>}
               off={<><Link2Off size={14} /> Robot offline</>}
               label="Connection to the robot's Operator"
-            />
+            />}
             <StatusChip
               ok={host?.has_video ?? false}
               on={<><Video size={14} /> Video</>}
@@ -106,8 +112,8 @@ export function ActionBar({ status, onHome, onAutoTrack, onPiVision, onVirtualCa
             )}
             {host?.pi_vision && (
               <span className={`chip ${host.pi_vision.error ? "chip--warn" : "chip--ok"}`}
-                title={host.pi_vision.error ?? "PiVision detects and tracks locally; Commander supervises"}>
-                PiVision · {host.pi_vision.inference_s == null ? "waiting" : `${Math.round(host.pi_vision.inference_s * 1000)} ms`}
+                title={host.pi_vision.error ?? undefined}>
+                PiVision · {host.pi_vision.state ?? (host.pi_vision.inference_s == null ? "waiting" : `${Math.round(host.pi_vision.inference_s * 1000)} ms`)}
               </span>
             )}
             {controller && (
@@ -125,7 +131,20 @@ export function ActionBar({ status, onHome, onAutoTrack, onPiVision, onVirtualCa
         )}
       </div>
 
+      {host?.pi_vision && onPiTolerance && (
+        <CenteringTolerance key={selected} ratio={host.pi_vision.acceptable_ratio ?? .25} onChange={onPiTolerance} />
+      )}
       <div className="actionbar__actions">
+        {host?.pi_vision && onClearError && (
+          <button type="button" className="btn" disabled={!ready || clearingError}
+            onClick={async () => {
+              setClearingError(true);
+              try { await onClearError(); }
+              finally { setClearingError(false); }
+            }}>
+            {clearingError ? "Clearing…" : "Clear error"}
+          </button>
+        )}
         {host?.pi_vision && onPiVision && (
           <button type="button" className="btn" disabled={pendingTrack}
             onClick={async () => {

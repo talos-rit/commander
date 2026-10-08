@@ -61,11 +61,14 @@ export const api = {
     request<Status>("POST", "/cameras/slots", { camera_1, camera_2 }),
   select: (target: { host?: string; slot?: Slot }) => request<Status>("POST", "/cameras/select", target),
 
+  clearRobotError: (host?: string) => request<{ host: string }>("POST", "/control/clear-error", host ? { host } : {}),
   home: (host?: string) => request<{ host: string }>("POST", "/control/home", host ? { host } : {}),
   setAutoTrack: (enabled: boolean, host?: string) =>
     request<{ enabled: boolean }>("POST", "/control/auto-track", { enabled, host }),
   setPiVisionPerception: (enabled: boolean, host?: string) =>
     request<{ enabled: boolean }>("PUT", "/control/pi-vision/perception", { enabled, host }),
+  setPiVisionTolerance: (acceptable_ratio: number, host?: string) =>
+    request<{ acceptable_ratio: number }>("PUT", "/control/pi-vision/tuning", { acceptable_ratio, host }),
   moveStart: (direction: Direction) => request<{ ok: boolean }>("POST", "/control/move/start", { direction }),
   moveStop: (direction: Direction) => request<{ ok: boolean }>("POST", "/control/move/stop", { direction }),
   jointStart: (axis: "shoulder" | "elbow", direction: -1 | 1) =>

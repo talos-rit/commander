@@ -728,6 +728,15 @@ button:disabled {
 }
 
 /* Action bar */
+.centering-tolerance {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  font-size: 12px;
+}
+.centering-tolerance > span { display: flex; justify-content: space-between; }
+.centering-tolerance output { font-family: var(--mono); }
+.centering-tolerance input { width: 100%; accent-color: var(--accent); }
 .actionbar {
   display: flex;
   align-items: center;

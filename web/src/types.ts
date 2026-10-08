@@ -36,7 +36,7 @@ export interface HostStatus {
   auto_tracking: boolean;
   subjects?: number;
   telemetry: Telemetry | null;
-  pi_vision?: { enabled: boolean; perception_enabled: boolean | null; error: string | null; inference_s: number | null; observation_age_s: number | null } | null;
+  pi_vision?: { enabled: boolean; perception_enabled: boolean | null; error: string | null; robot_fault?: string | null; inference_s: number | null; observation_age_s: number | null; state?: string | null; last_thought?: string | null; acceptable_ratio?: number } | null;
 }
 
 export interface TrackingStatus {

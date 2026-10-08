@@ -156,6 +156,17 @@ class CommanderWebBackend:
             except Exception as exc:
                 raise BackendError(f"PiVision unavailable: {exc}", 502) from exc
 
+    def set_pi_vision_tolerance(self, ratio: float, host: str | None = None) -> dict:
+        with self._lock:
+            target = self._target(host)
+            control = self._pi_vision.get(target)
+            if control is None:
+                raise BackendError("Configure this robot's PiVision URL first", 409)
+            try:
+                return control.set_tolerance(ratio)
+            except ValueError as exc:
+                raise BackendError(str(exc), 422) from exc
+
     def _sync_active(self) -> None:
         """Keep App's active connection pointed at the operator's selected robot."""
         selected = self.state.selected_host
@@ -306,6 +317,13 @@ class CommanderWebBackend:
             raise BackendError(f"{target!r} is not connected", 409)
         return target
 
+    def clear_robot_error(self, host: str | None = None) -> str:
+        with self._lock:
+            target = self._target(host)
+            self._stop_pi_vision(target)
+            self.app.connections[target].publisher.erv_enable_control()
+            return target
+
     def home(self, host: str | None = None) -> str:
         with self._lock:
             target = self._target(host)
@@ -331,7 +349,7 @@ class CommanderWebBackend:
                 try:
                     return self._pi_vision[target].set_enabled(enabled)
                 except ValueError as exc:
-                    raise BackendError(str(exc), 409) from exc
+                    raise BackendError(str(exc), getattr(exc, "status", 409)) from exc
             if enabled and self.app.get_selected_model() is None:
                 model = self._preferred_model()
                 if model is None:
@@ -472,7 +490,9 @@ class CommanderWebBackend:
     def get_frame(self, host: str) -> np.ndarray | None:
         if host not in self.app.connections:
             return None
-        return self.app.streamer.get_frame(host)
+        frame = self.app.streamer.get_frame(host)
+        control = self._pi_vision.get(host)
+        return control.annotate_frame(frame) if control is not None and frame is not None else frame
 
     def frame_sequence(self, host: str) -> int | None:
         conn = self.app.connections.get(host)

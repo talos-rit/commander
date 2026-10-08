@@ -10,7 +10,7 @@ import numpy as np
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .backend import BackendError, CommanderWebBackend
 
@@ -41,6 +41,11 @@ class TargetRequest(BaseModel):
 
 class AutoTrackRequest(BaseModel):
     enabled: bool
+    host: str | None = None
+
+
+class PiVisionTuningRequest(BaseModel):
+    acceptable_ratio: float = Field(ge=0.05, le=0.8)
     host: str | None = None
 
 
@@ -140,6 +145,10 @@ def create_web_app(
         backend.select(host=req.host, slot=req.slot)
         return backend.status()
 
+    @api.post("/control/clear-error")
+    def clear_error(req: TargetRequest | None = None):
+        return {"host": backend.clear_robot_error(req.host if req else None)}
+
     @api.post("/control/home")
     def home(req: TargetRequest | None = None):
         target = backend.home(req.host if req else None)
@@ -153,6 +162,10 @@ def create_web_app(
     @api.put("/control/pi-vision/perception")
     def pi_vision_perception(req: AutoTrackRequest):
         return backend.set_pi_vision_perception(req.enabled, req.host)
+
+    @api.put("/control/pi-vision/tuning")
+    def pi_vision_tuning(req: PiVisionTuningRequest):
+        return backend.set_pi_vision_tolerance(req.acceptable_ratio, req.host)
 
     @api.post("/control/move/start")
     def move_start(req: MoveRequest):
