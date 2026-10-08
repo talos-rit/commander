@@ -54,6 +54,8 @@ export interface Status {
   connections: Record<string, HostStatus>;
   tracking: TrackingStatus;
   jog_mode: JogMode;
+  /** Last Operator speed sent from this UI, from 1 to 100. Null until set. Home ignores it. */
+  speed_percent: number | null;
   /** True while the selected camera is being sent to a virtual webcam. */
   virtual_camera: boolean;
   robots: string[];

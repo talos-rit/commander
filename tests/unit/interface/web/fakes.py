@@ -15,12 +15,19 @@ class FakePublisher:
     def __init__(self, connected=True, telemetry=None):
         self.connected = connected
         self.telemetry = telemetry or ERVTelemetrySnapshot(None, None, None, None)
+        self.calls: list[tuple] = []
 
     def is_connected(self):
         return self.connected
 
     def get_erv_telemetry_snapshot(self):
         return self.telemetry
+
+    def erv_enable_control(self):
+        self.calls.append(("enable",))
+
+    def erv_set_speed_percent(self, percent: int):
+        self.calls.append(("speed", percent))
 
 
 class FakeVideo:

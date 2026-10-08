@@ -60,6 +60,7 @@ export function makeStatus({
       output_fps: 0,
     },
     jog_mode: "discrete",
+    speed_percent: null,
     virtual_camera: false,
     robots: hosts,
     ...rest,

@@ -156,6 +156,15 @@ def test_debug_controls_in_debug_mode(setup):
     assert ("start_joint", 2, 1, "a") in app.calls
     assert ("start_cartesian", (0, -1, 0), "a") in app.calls
 
+    assert client.post("/api/control/speed", json={"percent": 35}).json() == {"percent": 35}
+    assert client.get("/api/status").json()["speed_percent"] == 35
+    assert ("speed", 35) in app.connections["a"].publisher.calls
+    assert client.post("/api/control/speed", json={"percent": 0}).status_code == 422
+    assert client.post("/api/control/enable").status_code == 200
+    assert ("enable",) in app.connections["a"].publisher.calls
+    assert client.post("/api/control/stop").status_code == 200
+    assert ("stop_all", "a") in app.calls
+
 
 def test_command_without_camera_is_conflict(setup):
     client, _ = setup(camera_1=None)

@@ -230,6 +230,38 @@ describe("Debug mode", () => {
     expect(callsTo("POST", "/control/jog-mode")[0].body).toEqual({ mode: "continuous" });
   });
 
+  it("jogs cartesian axes and joints, and sets operator speed", async () => {
+    const { user, callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    const rail = await screen.findByLabelText("Debug controls");
+
+    fireEvent.pointerDown(within(rail).getByRole("button", { name: "X +" }));
+    fireEvent.pointerUp(within(rail).getByRole("button", { name: "X +" }));
+    await waitFor(() => expect(callsTo("POST", "/control/cartesian/stop")).toHaveLength(1));
+    expect(callsTo("POST", "/control/cartesian/start")[0].body).toEqual({ x: 1, y: 0, z: 0 });
+
+    fireEvent.pointerDown(within(rail).getByRole("button", { name: "Y −" }));
+    await waitFor(() =>
+      expect(callsTo("POST", "/control/cartesian/start").at(-1)?.body).toEqual({ x: 0, y: -1, z: 0 }),
+    );
+
+    fireEvent.pointerDown(within(rail).getByRole("button", { name: "Elbow +" }));
+    fireEvent.pointerUp(within(rail).getByRole("button", { name: "Elbow +" }));
+    await waitFor(() => expect(callsTo("POST", "/control/joint/stop")).toHaveLength(1));
+    expect(callsTo("POST", "/control/joint/start")[0].body).toEqual({ axis: "elbow", direction: 1 });
+
+    await user.click(within(rail).getByRole("button", { name: "Enable control" }));
+    await waitFor(() => expect(callsTo("POST", "/control/enable")).toHaveLength(1));
+    await user.click(within(rail).getByRole("button", { name: "Stop" }));
+    await waitFor(() => expect(callsTo("POST", "/control/stop")).toHaveLength(1));
+
+    const speed = within(rail).getByRole("slider", { name: "Manual speed" });
+    expect(speed).toHaveValue("20");
+    expect(within(rail).getByText("not sent")).toBeInTheDocument();
+    fireEvent.change(speed, { target: { value: "45" } });
+    fireEvent.pointerUp(speed);
+    await waitFor(() => expect(callsTo("POST", "/control/speed")[0]?.body).toEqual({ percent: 45 }));
+  });
+
   it("shows the saved default size while no model is loaded", async () => {
     const status = makeStatus({ view: { ui_mode: "debug" } });
     setup({ ...status, tracking: { ...status.tracking, default_model: "yolo_medium" } });

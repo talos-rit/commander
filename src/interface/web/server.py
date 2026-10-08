@@ -68,6 +68,10 @@ class JogModeRequest(BaseModel):
     mode: Literal["discrete", "continuous"]
 
 
+class SpeedRequest(BaseModel):
+    percent: int = Field(ge=1, le=100)
+
+
 class ModelRequest(BaseModel):
     model: str | None = None
 
@@ -196,6 +200,20 @@ def create_web_app(
     def cartesian_stop():
         backend.cartesian(0, 0, 0, active=False)
         return {"ok": True}
+
+    @api.post("/control/stop")
+    def stop_motion():
+        backend.stop_motion()
+        return {"ok": True}
+
+    @api.post("/control/enable")
+    def enable_control():
+        backend.enable_control()
+        return {"ok": True}
+
+    @api.post("/control/speed")
+    def set_speed(req: SpeedRequest):
+        return {"percent": backend.set_speed_percent(req.percent)}
 
     @api.post("/control/jog-mode")
     def jog_mode(req: JogModeRequest):

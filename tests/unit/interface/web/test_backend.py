@@ -323,8 +323,25 @@ def test_jog_in_debug_mode_targets_selected_robot(web_config):
     backend.move("left", active=True)
     backend.move("left", active=False)
 
-    assert ("start_move", "LEFT", "b") in app.calls
-    assert ("stop_move", "LEFT", "b") in app.calls
+    assert ("start_move", "RIGHT", "b") in app.calls
+    assert ("stop_move", "RIGHT", "b") in app.calls
+
+
+def test_left_and_right_pan_match_the_operator_view(web_config):
+    backend, app, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+
+    backend.move("left", active=True)
+    backend.move("right", active=True)
+    backend.move("up", active=True)
+    backend.move("down", active=True)
+
+    assert [call[1] for call in app.calls if call[0] == "start_move"] == [
+        "RIGHT",
+        "LEFT",
+        "UP",
+        "DOWN",
+    ]
 
 
 def test_joint_and_cartesian_jog_target_the_selected_robot(web_config):
@@ -341,6 +358,39 @@ def test_joint_and_cartesian_jog_target_the_selected_robot(web_config):
     assert ("stop_joint", "b") in app.calls
     assert ("start_cartesian", (0, -1, 0), "b") in app.calls
     assert ("stop_cartesian", "b") in app.calls
+
+
+def test_speed_enable_and_stop_match_the_operator_panel(web_config):
+    backend, app, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+
+    assert backend.status()["speed_percent"] is None
+    assert backend.set_speed_percent(40) == 40
+    assert app.connections["a"].publisher.calls == [("speed", 40)]
+    assert backend.status()["speed_percent"] == 40
+
+    backend.enable_control()
+    assert ("enable",) in app.connections["a"].publisher.calls
+
+    backend.move("up", active=True)
+    backend.stop_motion()
+    assert ("stop_all", "a") in app.calls
+
+    with pytest.raises(BackendError) as err:
+        backend.set_speed_percent(0)
+    assert err.value.status == 422
+    assert backend.status()["speed_percent"] == 40
+
+
+def test_speed_and_enable_require_debug_mode(web_config):
+    backend, _, _ = make_backend(camera_1="a", ui_mode="simple")
+    backend.startup()
+    with pytest.raises(BackendError) as err:
+        backend.set_speed_percent(20)
+    assert err.value.status == 403
+    with pytest.raises(BackendError) as blocked:
+        backend.enable_control()
+    assert blocked.value.status == 403
 
 
 def test_joint_jog_rejects_unknown_axis(web_config):

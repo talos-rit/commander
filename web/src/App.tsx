@@ -84,11 +84,14 @@ export default function App() {
   );
   const onJointStop = useCallback(() => void run(() => api.jointStop()), [run]);
   const onCartesianStart = useCallback(
-    (y: -1 | 1) => void run(() => api.cartesianStart(0, y, 0)),
+    (x: -1 | 0 | 1, y: -1 | 0 | 1, z: -1 | 0 | 1) => void run(() => api.cartesianStart(x, y, z)),
     [run],
   );
   const onCartesianStop = useCallback(() => void run(() => api.cartesianStop()), [run]);
   const onJogMode = (mode: JogMode) => void run(() => api.setJogMode(mode));
+  const onStopMotion = useCallback(() => void run(() => api.stopMotion()), [run]);
+  const onEnableControl = useCallback(() => void run(() => api.enableControl()), [run]);
+  const onSpeed = useCallback((percent: number) => void run(() => api.setSpeed(percent)), [run]);
   const onModel = (model: string | null) => void run(() => api.setModel(model));
 
   const debug = status?.view.ui_mode === "debug";
@@ -128,7 +131,7 @@ export default function App() {
       }
       if (extensionSent.current !== arm.y) {
         if (arm.y === 0) onCartesianStop();
-        else onCartesianStart(arm.y);
+        else onCartesianStart(0, arm.y, 0);
         extensionSent.current = arm.y;
       }
     },
@@ -253,6 +256,13 @@ export default function App() {
                 status={status}
                 onMoveStart={onMoveStart}
                 onMoveStop={onMoveStop}
+                onCartesianStart={onCartesianStart}
+                onCartesianStop={onCartesianStop}
+                onJointStart={onJointStart}
+                onJointStop={onJointStop}
+                onStop={onStopMotion}
+                onEnableControl={onEnableControl}
+                onSpeed={onSpeed}
                 onJogMode={onJogMode}
                 onModel={onModel}
                 onHome={() => void onHome()}

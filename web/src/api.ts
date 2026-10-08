@@ -77,6 +77,9 @@ export const api = {
   cartesianStart: (x: -1 | 0 | 1, y: -1 | 0 | 1, z: -1 | 0 | 1) =>
     request<{ ok: boolean }>("POST", "/control/cartesian/start", { x, y, z }),
   cartesianStop: () => request<{ ok: boolean }>("POST", "/control/cartesian/stop"),
+  stopMotion: () => request<{ ok: boolean }>("POST", "/control/stop"),
+  enableControl: () => request<{ ok: boolean }>("POST", "/control/enable"),
+  setSpeed: (percent: number) => request<{ percent: number }>("POST", "/control/speed", { percent }),
   setJogMode: (mode: JogMode) => request<{ mode: JogMode }>("POST", "/control/jog-mode", { mode }),
   setModel: (model: string | null) => request<{ model: string | null }>("POST", "/control/model", { model }),
   setVirtualCamera: (enabled: boolean) =>

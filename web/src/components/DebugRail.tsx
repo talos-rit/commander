@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Box, Gauge, House, Radio } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Direction, JogMode, Status, Telemetry } from "../types";
 import { ModelSlider } from "./ModelSlider";
 import { Rocker, type RockerOption } from "./Rocker";
@@ -9,10 +9,20 @@ export const JOG_OPTIONS: readonly [RockerOption<JogMode>, RockerOption<JogMode>
   { value: "continuous", label: "Continuous", description: "Moves smoothly until you release" },
 ];
 
+type Axis = "x" | "y" | "z";
+type JointName = "shoulder" | "elbow";
+
 interface Props {
   status: Status;
   onMoveStart: (direction: Direction) => void;
   onMoveStop: (direction: Direction) => void;
+  onCartesianStart: (x: -1 | 0 | 1, y: -1 | 0 | 1, z: -1 | 0 | 1) => void;
+  onCartesianStop: () => void;
+  onJointStart: (axis: JointName, direction: -1 | 1) => void;
+  onJointStop: () => void;
+  onStop: () => void;
+  onEnableControl: () => void;
+  onSpeed: (percent: number) => void;
   onJogMode: (mode: JogMode) => void;
   onModel: (model: string | null) => void;
   onHome: () => void;
@@ -20,6 +30,87 @@ interface Props {
   heldDirections?: readonly Direction[];
   /** A pad is connected; the extra hint can mention it. */
   controllerConnected?: boolean;
+}
+
+const CARTESIAN: { axis: Axis; sign: -1 | 1; label: string }[] = [
+  { axis: "x", sign: -1, label: "X −" },
+  { axis: "x", sign: 1, label: "X +" },
+  { axis: "y", sign: -1, label: "Y −" },
+  { axis: "y", sign: 1, label: "Y +" },
+  { axis: "z", sign: -1, label: "Z −" },
+  { axis: "z", sign: 1, label: "Z +" },
+];
+
+const JOINTS: { axis: JointName; direction: -1 | 1; label: string }[] = [
+  { axis: "shoulder", direction: -1, label: "Shoulder −" },
+  { axis: "shoulder", direction: 1, label: "Shoulder +" },
+  { axis: "elbow", direction: -1, label: "Elbow −" },
+  { axis: "elbow", direction: 1, label: "Elbow +" },
+];
+
+function cartesianVector(axis: Axis, sign: -1 | 1): [-1 | 0 | 1, -1 | 0 | 1, -1 | 0 | 1] {
+  if (axis === "x") return [sign, 0, 0];
+  if (axis === "y") return [0, sign, 0];
+  return [0, 0, sign];
+}
+
+function HoldButton({
+  label,
+  disabled,
+  onStart,
+  onStop,
+}: {
+  label: string;
+  disabled: boolean;
+  onStart: () => void;
+  onStop: () => void;
+}) {
+  const down = useRef(false);
+  const stopRef = useRef(onStop);
+  stopRef.current = onStop;
+  useEffect(
+    () => () => {
+      if (!down.current) return;
+      down.current = false;
+      stopRef.current();
+    },
+    [],
+  );
+  const press = () => {
+    if (disabled || down.current) return;
+    down.current = true;
+    onStart();
+  };
+  const release = () => {
+    if (!down.current) return;
+    down.current = false;
+    onStop();
+  };
+  return (
+    <button
+      type="button"
+      className="axisbtn"
+      aria-label={label}
+      disabled={disabled}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        press();
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onLostPointerCapture={release}
+      onKeyDown={(event) => {
+        if (event.key !== " " && event.key !== "Enter") return;
+        event.preventDefault();
+        press();
+      }}
+      onKeyUp={(event) => {
+        if (event.key === " " || event.key === "Enter") release();
+      }}
+    >
+      {label}
+    </button>
+  );
 }
 
 const PAD: { direction: Direction; icon: React.ReactNode; area: string }[] = [
@@ -64,6 +155,13 @@ export function DebugRail({
   status,
   onMoveStart,
   onMoveStop,
+  onCartesianStart,
+  onCartesianStop,
+  onJointStart,
+  onJointStop,
+  onStop,
+  onEnableControl,
+  onSpeed,
   onJogMode,
   onModel,
   onHome,
@@ -73,7 +171,16 @@ export function DebugRail({
   const selected = status.view.selected_host;
   const host = selected ? status.connections[selected] : undefined;
   const held = useRef(new Set<Direction>());
-  const jogDisabled = !host?.open || host.auto_tracking;
+  const connected = Boolean(host?.open);
+  const jogDisabled = !connected || Boolean(host?.auto_tracking);
+  const reportedSpeed = status.speed_percent;
+  const [speed, setSpeed] = useState(reportedSpeed ?? 20);
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
+  useEffect(() => {
+    if (reportedSpeed != null) setSpeed(reportedSpeed);
+  }, [reportedSpeed]);
+  const commitSpeed = () => onSpeed(speedRef.current);
 
   const press = (direction: Direction) => {
     if (jogDisabled || held.current.has(direction)) return;
@@ -142,6 +249,76 @@ export function DebugRail({
           size="sm"
           options={JOG_OPTIONS}
         />
+
+        <div className="axisblock">
+          <h4>Cartesian</h4>
+          <div className="axisgrid">
+            {CARTESIAN.map(({ axis, sign, label }) => (
+              <HoldButton
+                key={label}
+                label={label}
+                disabled={jogDisabled}
+                onStart={() => onCartesianStart(...cartesianVector(axis, sign))}
+                onStop={onCartesianStop}
+              />
+            ))}
+          </div>
+          <p className="hint">Y − extends the arm. Y + retracts it.</p>
+        </div>
+
+        <div className="axisblock">
+          <h4>Joints</h4>
+          <div className="axisgrid">
+            {JOINTS.map(({ axis, direction, label }) => (
+              <HoldButton
+                key={label}
+                label={label}
+                disabled={jogDisabled}
+                onStart={() => onJointStart(axis, direction)}
+                onStop={onJointStop}
+              />
+            ))}
+          </div>
+          <button type="button" className="axisbtn axisbtn--line" disabled={!connected} onClick={onEnableControl}>
+            Enable control
+          </button>
+          <button type="button" className="axisbtn axisbtn--line" disabled={!connected} onClick={onStop}>
+            Stop
+          </button>
+        </div>
+
+        <div className="slider rail__speed">
+          <div className="slider__head">
+            <span>Speed</span>
+            <span className="slider__value">
+              {speed}%{reportedSpeed == null ? <code>not sent</code> : null}
+            </span>
+          </div>
+          <input
+            type="range"
+            className="slider__input"
+            aria-label="Manual speed"
+            aria-valuemin={1}
+            aria-valuemax={100}
+            aria-valuetext={`${speed} percent`}
+            min={1}
+            max={100}
+            step={1}
+            value={speed}
+            disabled={!connected}
+            style={{ "--fill": `${((speed - 1) / 99) * 100}%` } as React.CSSProperties}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              speedRef.current = next;
+              setSpeed(next);
+            }}
+            onPointerUp={commitSpeed}
+            onKeyUp={commitSpeed}
+            onBlur={commitSpeed}
+          />
+          <p className="hint">Operator speed for manual moves. Home keeps its own speed.</p>
+        </div>
+
         <p className="hint">
           {controllerConnected
             ? "Left stick aims. Right stick moves the shoulder and elbow. Triggers extend and retract. LB and RB switch cameras."

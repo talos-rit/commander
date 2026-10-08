@@ -955,6 +955,55 @@ button:disabled {
   color: var(--text-dim);
 }
 
+.axisblock {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.axisblock h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.axisgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.axisbtn {
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  touch-action: none;
+  user-select: none;
+}
+
+.axisbtn:active:not(:disabled),
+.axisbtn.is-held:not(:disabled) {
+  background: var(--signal);
+  color: var(--signal-ink);
+  border-color: var(--signal);
+}
+
+.axisbtn--line {
+  width: 100%;
+}
+
+.rail__speed {
+  margin-top: 14px;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
