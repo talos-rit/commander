@@ -174,3 +174,10 @@ config/**/*.backup*
 # VSCODE
 .vscode/mcp.json
 artifacts/*
+
+# Web UI
+web/node_modules/
+web/dist/
+web/coverage/
+web/*.tsbuildinfo
+

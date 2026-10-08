@@ -92,10 +92,11 @@ class Tracker:
             self.stop_frame_capture()
 
     def start_detection_process(self) -> None:
-        if self._detector.is_running():
-            return  # Already running
-        logger.info("Starting detection process...")
-        self._detector.start()
+        if not self._detector.is_running():
+            logger.info("Starting detection process...")
+            self._detector.start()
+        if self.is_pipeline_running():
+            return
         self._term_handler_id = add_termination_handler(self.stop)
         logger.info(
             f"Detection process started. bbox delay:{self.bbox_delay}ms, frame delay:{self.frame_delay}ms"
@@ -212,7 +213,7 @@ class Tracker:
     def swap_model(self, new_model: ObjectModel.__class__ | None):
         """This will stop the current detection process and start a new process on the new model"""
         self._detector.set_model(new_model)
-        if new_model is not None and not self._detector.is_running():
+        if new_model is not None and not self.is_pipeline_running():
             self.start_detection_process()
         if new_model is None and self.is_pipeline_running():
             self.stop()

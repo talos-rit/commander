@@ -30,7 +30,7 @@ def test_pyavcapture_read_returns_frame_and_time(monkeypatch, mocker):
     container.closed = False
     container.close.side_effect = lambda: setattr(container, "closed", True)
 
-    monkeypatch.setattr(connection_module.av, "open", lambda source, options=None: container)
+    monkeypatch.setattr(connection_module.av, "open", lambda source, options=None, **_: container)
     monkeypatch.setattr(connection_module.av.video.frame, "VideoFrame", DummyVideoFrame)
 
     term_ids = []
@@ -91,7 +91,7 @@ def test_video_connection_initializes_with_pyav(monkeypatch, mocker, no_terminat
     container.closed = False
     container.close.side_effect = lambda: setattr(container, "closed", True)
 
-    monkeypatch.setattr(connection_module.av, "open", lambda source, options=None: container)
+    monkeypatch.setattr(connection_module.av, "open", lambda source, options=None, **_: container)
     monkeypatch.setattr(connection_module.av.video.frame, "VideoFrame", DummyVideoFrame)
 
     no_termination_handlers(connection_module)
@@ -114,6 +114,125 @@ def test_video_connection_falls_back_when_no_frame(monkeypatch, mocker):
 
     vc = connection_module.VideoConnection(src="0")
     assert vc.shape is None
+
+
+def test_is_live_source_distinguishes_files(tmp_path):
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"")
+    assert connection_module.is_live_source(0) is True
+    assert connection_module.is_live_source("1") is True
+    assert connection_module.is_live_source("rtsp://cam/stream") is True
+    assert connection_module.is_live_source(str(video)) is False
+
+
+class _StreamingCap:
+    """Fake live camera that yields an increasing value on every read."""
+
+    def __init__(self):
+        self.reads = 0
+        self.released = False
+
+    def set(self, *_):
+        return True
+
+    def read(self):
+        if self.released:
+            return False, None
+        self.reads += 1
+        time.sleep(0.002)
+        return True, np.full((4, 4, 3), self.reads % 255, dtype=np.uint8)
+
+    def release(self):
+        self.released = True
+
+
+def test_background_capture_drains_and_capture_packet_does_not_advance(
+    monkeypatch, no_termination_handlers
+):
+    cap = _StreamingCap()
+    monkeypatch.setattr(connection_module.cv2, "VideoCapture", lambda source: cap)
+    no_termination_handlers(connection_module)
+
+    vc = connection_module.VideoConnection(src="0", background_capture=True)
+    try:
+        assert vc.shape == (4, 4, 3)
+        time.sleep(0.05)
+        packet = vc.capture_packet()
+        assert packet is not None
+        reads_before = cap.reads
+        time.sleep(0.05)
+        assert cap.reads > reads_before, "drain thread should keep reading"
+        assert vc.get_latest_packet().frame_sequence > packet.frame_sequence
+    finally:
+        vc.close()
+    assert cap.released is True
+    assert vc._thread is None
+
+
+def test_background_capture_reconnects_after_stream_loss(
+    monkeypatch, no_termination_handlers
+):
+    caps = []
+
+    class _DyingCap(_StreamingCap):
+        def read(self):
+            if self.reads >= 2:
+                return False, None
+            return super().read()
+
+    def factory(_source):
+        cap = _DyingCap() if not caps else _StreamingCap()
+        caps.append(cap)
+        return cap
+
+    monkeypatch.setattr(connection_module.cv2, "VideoCapture", factory)
+    no_termination_handlers(connection_module)
+
+    vc = connection_module.VideoConnection(
+        src="0", background_capture=True, reconnect_delay=0.01
+    )
+    try:
+        deadline = time.monotonic() + 2.0
+        while len(caps) < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert len(caps) >= 2
+        assert caps[0].released is True
+    finally:
+        vc.close()
+
+
+def test_background_close_never_releases_during_a_read(
+    monkeypatch, no_termination_handlers
+):
+    class _GuardedCap(_StreamingCap):
+        def __init__(self):
+            super().__init__()
+            self.in_read = False
+            self.released_mid_read = False
+
+        def read(self):
+            self.in_read = True
+            try:
+                time.sleep(0.01)
+                return super().read()
+            finally:
+                self.in_read = False
+
+        def release(self):
+            self.released_mid_read = self.in_read
+            super().release()
+
+    cap = _GuardedCap()
+    monkeypatch.setattr(connection_module.cv2, "VideoCapture", lambda source: cap)
+    no_termination_handlers(connection_module)
+
+    vc = connection_module.VideoConnection(src="0", background_capture=True)
+    time.sleep(0.03)
+    vc.close()
+
+    assert cap.released is True
+    assert cap.released_mid_read is False
+    assert vc._thread is None
 
 
 def test_connection_initializes_manual_flags(monkeypatch, mocker):

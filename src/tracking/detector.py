@@ -187,28 +187,42 @@ class Detector(DetectorInterface):
         self._last_sent_sequences: dict[str, int] = {}
         self._smm = smm
         self.observation_recorder = observation_recorder
+        self._pending_start = False
+        self._allocated_shape: tuple[int, int, int] | None = None
+        self.waiting_startup = False
         self._smm.start()
+
+    def is_pending_start(self) -> bool:
+        return self._pending_start
 
     def start(self):
         if self.model is None:
             logger.error("Model was not found please pass a model into Tracker to run.")
             return
+        if self.is_running():
+            logger.warning("Detection process is already running.")
+            return
+
+        self.frame_order = self._create_frame_order(self.connections)
+        total_shape = self.total_frame_shape(self.connections)
+        if not self.frame_order or total_shape[0] == 0 or total_shape[1] == 0:
+            self._pending_start = True
+            logger.warning("Waiting for a live camera frame before starting detection")
+            return
+
+        self._pending_start = False
         self.waiting_startup = True
         self._last_sent_sequences = {}
         self._bbox_queue = Queue(maxsize=2)
         self._frame_metadata_queue = Queue(maxsize=1)
         self._model_stopper = Event()
         self._frame_ready_event = Event()
-        total_shape = self.total_frame_shape(self.connections)
+        self._allocated_shape = total_shape
         # idk why but gc keeps deleting shared memory without me holding reference via "self."
         self._frame_memory = self._smm.SharedMemory(size=self.total_nbytes())
         self._frame_buf = np.ndarray(
             total_shape, np.uint8, buffer=self._frame_memory.buf
         )
-
-        if self._detection_process is not None and self._detection_process.is_alive():
-            logger.warning("Detection process is already running.")
-            return
 
         self._detection_process = Process(
             target=self._detect_person_worker,
@@ -239,9 +253,16 @@ class Detector(DetectorInterface):
             self._model_stopper.set()
             self._bbox_queue.close()
             self._frame_metadata_queue.close()
-            self._detection_process.join()
-            self._bbox_queue.join_thread()
-            self._frame_metadata_queue.join_thread()
+            self._detection_process.join(timeout=2)
+            if self._detection_process.is_alive():
+                logger.warning("Detection process did not stop; killing it")
+                self._detection_process.kill()
+                self._detection_process.join(timeout=1)
+                self._bbox_queue.cancel_join_thread()
+                self._frame_metadata_queue.cancel_join_thread()
+            else:
+                self._bbox_queue.join_thread()
+                self._frame_metadata_queue.join_thread()
         except Exception as e:
             logger.error(f"Exception occured: {e}")
             return False
@@ -261,11 +282,9 @@ class Detector(DetectorInterface):
         self._smm.shutdown()
 
     def restart(self):
-        if self._detection_process is None or not self._detection_process.is_alive():
-            logger.warning("Detection process is not running")
-            return False
-        self.waiting_startup = True
-        self.stop()
+        if self.is_running():
+            self.waiting_startup = True
+            self.stop()
         self.start()
         return True
 
@@ -285,6 +304,15 @@ class Detector(DetectorInterface):
             self.reset_frame_order()
 
     def send_input(self, packets: Mapping[str, FramePacket] | None = None):
+        if self._pending_start or not self.is_running():
+            if self.model is None:
+                raise DetectionWaitingForModel("No model selected")
+            if not self._create_frame_order(self.connections):
+                raise DetectionWaitingForModel("Waiting for a live camera frame")
+            logger.info("Camera frame available, starting detection process")
+            self.start()
+            raise DetectionWaitingForModel("Detection process is starting")
+
         if self._frame_ready_event.is_set():
             if not self.waiting_startup:
                 raise SendingFrameTooFast(
@@ -336,7 +364,12 @@ class Detector(DetectorInterface):
                 f"No frames available to update frame buffer. {self.frame_order=}"
             )
             raise SendingFrameTooFast("No frames available to update frame buffer.")
-        self._frame_metadata_queue.put_nowait(tuple(sources))
+        try:
+            self._frame_metadata_queue.put_nowait(tuple(sources))
+        except Full:
+            raise SendingFrameTooFast("Detector has not consumed the previous frame.")
+        except ValueError:
+            raise DetectionWaitingForModel("Detection process is restarting")
         self._last_sent_sequences.update(
             {source.connection_id: source.frame_sequence for source in sources}
         )
@@ -437,10 +470,13 @@ class Detector(DetectorInterface):
     def set_model(self, model: ObjectModel.__class__ | None):
         self.model = model
         logger.info(f"Model set to {model.__name__ if model is not None else 'None'}")
-        if self.is_running() and model is not None:
+        if model is None:
+            self._pending_start = False
+            if self.is_running():
+                self.stop()
+            return self.model
+        if self.is_running():
             self.restart()
-        if self.is_running() and model is None:
-            self.stop()
         return self.model
 
     @staticmethod
@@ -473,15 +509,24 @@ class Detector(DetectorInterface):
 
     def reset_frame_order(self):
         self.frame_order = self._create_frame_order(self.connections)
-        if self._detection_process is not None and self._detection_process.is_alive():
-            if len(self.connections) == 0:
+        if len(self.connections) == 0:
+            if self.is_running():
                 logger.debug(
                     "No more connections available, stopping detection process..."
                 )
                 self.stop()
-                return
-            logger.debug("Restarting detection process to update frame order...")
-            self.restart()
+            if self.model is not None:
+                self._pending_start = True
+            return
+        if self._pending_start and self.frame_order:
+            logger.info("Camera frame available, starting detection process")
+            self.start()
+            return
+        if self.is_running():
+            new_shape = self.total_frame_shape(self.connections)
+            if new_shape != self._allocated_shape:
+                logger.debug("Restarting detection process to update frame order...")
+                self.restart()
 
     @staticmethod
     def _detect_person_worker(

@@ -24,20 +24,27 @@ class PyVcamStreamController(StreamController):
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._term_id: int | None = None
+        self._camera: pyvcam.Camera | None = None
 
     def start(self) -> None:
-        self._is_running = True
-
         if self._term_id is None:
             self._term_id = add_termination_handler(self.stop)
 
-        first_frame = self._wait_for_frame()
-        height, width = first_frame.shape[:2]
+        # Open the device before returning so a missing virtual camera fails the
+        # caller immediately instead of dying inside the stream thread.
+        try:
+            first_frame = self._wait_for_frame()
+            height, width = first_frame.shape[:2]
+            self._camera = pyvcam.Camera(
+                width=width, height=height, fps=self._config.fps, fmt=pyvcam.PixelFormat.BGR
+            )
+        except Exception:
+            self._drop_termination_handler()
+            raise
 
-        fps = self._config.fps
+        self._is_running = True
         self._thread = threading.Thread(
             target=self._stream_loop,
-            args=(width, height, fps),
             name="pyvcam-stream",
             daemon=True,
         )
@@ -49,9 +56,16 @@ class PyVcamStreamController(StreamController):
         if self._thread:
             self._thread.join(timeout=timeout_s)
         self._stop_event.clear()
-        if self._term_id is not None:
-            remove_termination_handler(self._term_id)
-            self._term_id = None
+        camera, self._camera = self._camera, None
+        if camera is not None:
+            camera.close()
+        self._drop_termination_handler()
+
+    def _drop_termination_handler(self) -> None:
+        if self._term_id is None:
+            return
+        remove_termination_handler(self._term_id)
+        self._term_id = None
 
     def _wait_for_frame(self, timeout_s: float = 5.0) -> np.ndarray:
         deadline = time.monotonic() + timeout_s
@@ -62,16 +76,16 @@ class PyVcamStreamController(StreamController):
             time.sleep(0.05)
         raise RuntimeError("Timed out waiting for a video frame")
 
-    def _stream_loop(self, width: int, height: int, fps: int = 30) -> None:
-        logger.info(f"Entering pyvcam stream loop with frame size {width}x{height}")
-        with pyvcam.Camera(
-            width=width, height=height, fps=fps, fmt=pyvcam.PixelFormat.BGR
-        ) as cam:
-            while not self._stop_event.is_set():
-                frame = self._frame_getter()
-                if frame is not None:
-                    cam.send(frame)
-                    cam.sleep_until_next_frame()
+    def _stream_loop(self) -> None:
+        camera = self._camera
+        if camera is None:
+            return
+        logger.info(f"Entering pyvcam stream loop with frame size {camera.width}x{camera.height}")
+        while not self._stop_event.is_set():
+            frame = self._frame_getter()
+            if frame is not None:
+                camera.send(frame)
+                camera.sleep_until_next_frame()
 
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
