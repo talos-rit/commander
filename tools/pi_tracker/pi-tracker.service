@@ -1,0 +1,21 @@
+[Unit]
+Description=TALOS Raspberry Pi Edge Human Tracker
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/test/tracker
+Environment=MAX_OBSERVATION_AGE=1.0
+Environment=MIN_PULSE=0.14
+Environment=MAX_BASE_PULSE=0.36
+Environment=MIN_PITCH_PULSE=0.045
+Environment=MAX_PITCH_PULSE=0.070
+Environment=PITCH_MIN_COUNT=-250
+Environment=PITCH_MAX_COUNT=250
+Environment=POSE_MODEL=/home/pi/test/tracker/yolo11n-pose-320.onnx
+ExecStart=/home/pi/tracker_venv/bin/python3 /home/pi/test/tracker/main.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

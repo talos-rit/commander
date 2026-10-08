@@ -58,3 +58,43 @@ jobs:
         run: |
           echo "Pytest failed. See summary and artifacts for details."
           exit 1
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck and build
+        run: pnpm run build
+
+      - name: Run Vitest with coverage
+        run: pnpm run coverage
+
+      - name: Upload web coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          retention-days: 14
+          path: web/coverage/

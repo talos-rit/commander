@@ -1,4 +1,7 @@
+from dataclasses import dataclass
 from enum import IntEnum
+import threading
+import time
 
 from loguru import logger
 
@@ -16,6 +19,13 @@ DIRECTION_OFFSET_MAPPING: dict[int, tuple[int, int]] = {
     3: (1, 0),
     4: (1, -1),
 }
+
+@dataclass(frozen=True)
+class ERVTelemetrySnapshot:
+    encoder_counts: tuple[int, ...] | None
+    encoder_received_monotonic: float | None
+    joint_counts: tuple[int, ...] | None
+    joint_received_monotonic: float | None
 
 
 class Direction(IntEnum):
@@ -63,6 +73,12 @@ class Publisher:
         self.operator_connection = OperatorConnection(
             host=socket_host, port=socket_port, connect_on_init=start_connection
         )
+        self._erv_encoder_counts: tuple[int, ...] | None = None
+        self._erv_joint_counts: tuple[int, ...] | None = None
+        self._erv_encoder_received_monotonic: float | None = None
+        self._erv_joint_received_monotonic: float | None = None
+        self._telemetry_lock = threading.Lock()
+        self.operator_connection.add_message_listener(self._on_operator_message)
 
     def close(self):
         logger.debug("Closing publisher connection")
@@ -70,6 +86,58 @@ class Publisher:
 
     def handshake(self):
         self.operator_connection.publish(command=Command.HANDSHAKE, payload=b"")
+
+    def is_connected(self) -> bool:
+        return self.operator_connection.is_connected()
+
+    def get_erv_encoder_counts(self) -> tuple[int, ...] | None:
+        with self._telemetry_lock:
+            return self._erv_encoder_counts
+
+    def get_erv_joint_counts(self) -> tuple[int, ...] | None:
+        """Latest controller coordinates; new Operator frames include base first."""
+        with self._telemetry_lock:
+            return self._erv_joint_counts
+
+    def get_erv_telemetry_received_monotonic(self) -> float | None:
+        """Local receive time of the latest valid ER-V telemetry frame."""
+        with self._telemetry_lock:
+            return self._erv_joint_received_monotonic
+
+    def get_erv_telemetry_snapshot(self) -> ERVTelemetrySnapshot:
+        with self._telemetry_lock:
+            return ERVTelemetrySnapshot(self._erv_encoder_counts, self._erv_encoder_received_monotonic, self._erv_joint_counts, self._erv_joint_received_monotonic)
+
+    def _on_operator_message(self, message: str) -> None:
+        fields = message.split()
+        if not fields:
+            return
+        if fields[0] == "TELP":
+            if len(fields) not in (5, 6):
+                logger.warning(f"Ignoring malformed joint telemetry: {message}")
+                return
+            try:
+                counts = tuple(int(value) for value in fields[1:])
+            except ValueError:
+                logger.warning(f"Ignoring malformed joint telemetry: {message}")
+                return
+            with self._telemetry_lock:
+                self._erv_joint_counts = counts
+                self._erv_joint_received_monotonic = time.monotonic()
+            return
+        if fields[0] != "TEL":
+            return
+        if len(fields) != 12:
+            logger.warning(f"Ignoring malformed telemetry: {message}")
+            return
+        try:
+            counts = tuple(int(value) for value in fields[1:])
+        except ValueError:
+            logger.warning(f"Ignoring malformed telemetry: {message}")
+            return
+        with self._telemetry_lock:
+            self._erv_encoder_counts = counts
+            self._erv_encoder_received_monotonic = time.monotonic()
 
     def polar_pan_discrete(
         self,
@@ -386,3 +454,30 @@ class Publisher:
         self.operator_connection.publish(
             command=Command.EXECUTE_HARDWARE_OPERATION, payload=payload
         )
+
+    def erv_joint_jog_start(self, axis: int, direction: int):
+        """Start a supervised ER-V shoulder or elbow manual jog."""
+        assert axis in (2, 3), "ER-V joint jog axis must be shoulder (2) or elbow (3)"
+        assert direction in (-1, 1), "ER-V joint jog direction must be -1 or 1"
+        payload = toBytes(axis, CTypesInt.UINT8) + toBytes(direction, CTypesInt.INT8)
+        self.execute_hardware_operation(0x01, payload)
+
+    def erv_joint_jog_stop(self):
+        """Stop the current supervised ER-V manual joint jog."""
+        self.execute_hardware_operation(0x02, b"")
+
+    def erv_joint_move_relative(self, shoulder: int, elbow: int, wrist_pitch: int):
+        """Execute one bounded coordinated ER-V joint-space increment."""
+        # assert all(-500 <= value <= 500 for value in (shoulder, elbow, wrist_pitch))
+        payload = b"".join(toBytes(value, CTypesInt.INT32) for value in (shoulder, elbow, wrist_pitch))
+        self.execute_hardware_operation(0x03, payload)
+
+    def erv_enable_control(self):
+        """Request ACL ``CON`` to re-enable ER-V servo control."""
+        self.execute_hardware_operation(0x04, b"")
+
+    def erv_set_speed_percent(self, percent: int):
+        """Request ACL ``SPEED n`` for the ER-V's 1--100% speed setting."""
+        if not 1 <= percent <= 100:
+            raise ValueError("ER-V speed percent must be within 1..100")
+        self.execute_hardware_operation(0x05, toBytes(percent, CTypesInt.UINT8))

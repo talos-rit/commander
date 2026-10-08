@@ -3,7 +3,7 @@ import cv2
 from assets import join_paths
 from src.tracking.detector import ObjectModel
 
-from ..types import BBox
+from ..types import BBox, LocalDetection
 
 MODEL_FILE = join_paths("haarcascade_frontalface_default.xml")
 
@@ -19,4 +19,9 @@ class BasicModel(ObjectModel):
             frame, inHeight, inWidth, cvtColorCode=cv2.COLOR_BGR2GRAY
         )
         faces: list[BBox] = self.faceCascade.detectMultiScale(frameGray)  # pyright: ignore[reportAssignmentType]
-        return [self.fix_bbox_scale(self.xywh_to_xyxy(xywh), meta) for xywh in faces]
+        return [
+            LocalDetection(
+                bounding_box=self.fix_bbox_scale(self.xywh_to_xyxy(xywh), meta)
+            )
+            for xywh in faces
+        ]

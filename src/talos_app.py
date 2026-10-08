@@ -7,9 +7,15 @@ from src.streaming import StreamController, StreamControllerFactory
 
 from . import config
 from .config.schema.robot import ConnectionConfig
-from .connection.connection import Connection, ConnectionCollection, VideoConnection
+from .connection.connection import (
+    Connection,
+    ConnectionCollection,
+    VideoConnection,
+    is_live_source,
+)
 from .connection.publisher import Direction
 from .directors import BaseDirector, ContinuousDirector
+from .observations.replay import ObservationRecorder
 from .scheduler import IterativeTask, Scheduler
 from .streaming.streamer import Streamer
 from .thread_scheduler import ThreadScheduler
@@ -28,6 +34,11 @@ DIRECTION_MAP = {
     Direction.LEFT: (-10, 0),
     Direction.RIGHT: (10, 0),
 }
+
+# Operator drops a held joint jog after about 500 ms unless the start is repeated.
+JOINT_JOG_REFRESH_MS = 200
+# Discrete Cartesian steps, in the same units polar discrete uses for tenths of a degree.
+CARTESIAN_STEP = 10
 
 
 class App:
@@ -50,13 +61,24 @@ class App:
         scheduler: Scheduler = ThreadScheduler(),
         smm: SharedMemoryManager = SharedMemoryManager(),
         args=None,
+        observation_recorder: ObservationRecorder | None = None,
     ) -> None:
         self.scheduler = scheduler
         self.connections = ConnectionCollection()
-        self.tracker = Tracker(self.connections, scheduler=scheduler, smm=smm)
-        self.streamer = Streamer(
-            self.connections, draw_bboxes=args.draw_bboxes if args else False
+        tracker_options = (
+            {"observation_recorder": observation_recorder}
+            if observation_recorder is not None
+            else {}
         )
+        self.tracker = Tracker(
+            self.connections, scheduler=scheduler, smm=smm, **tracker_options
+        )
+        self._cli_draw_bboxes = bool(args.draw_bboxes) if args else False
+        self._joint_jog: tuple[int, int] | None = None
+        self._joint_jog_task: IterativeTask | None = None
+        self._cartesian: tuple[int, int, int] | None = None
+        self._cartesian_task: IterativeTask | None = None
+        self.streamer = Streamer(self.connections, draw_bboxes=self._cli_draw_bboxes)
         self.director = ContinuousDirector(
             self.tracker, self.connections, self.scheduler
         )
@@ -87,11 +109,19 @@ class App:
                 f"Connection hostname {hostname} not found in config, not opening connection"
             )
         try:
-            video_connection = VideoConnection(src=conf.camera_index)
+            video_connection = VideoConnection(
+                src=conf.camera_index,
+                background_capture=is_live_source(conf.camera_index),
+            )
         except Exception as exc:
             logger.warning(f"Failed to open video connection for {hostname}: {exc}")
             video_connection = None
-        conn = Connection(hostname, conf.socket_port, video_connection)
+        if isinstance(conf.pi_vision_url, str) and conf.pi_vision_url:
+            from .connection.edge_publisher import EdgePublisher
+            conn = Connection(hostname, conf.socket_port, video_connection,
+                              publisher_factory=lambda _host, _port: EdgePublisher(conf.pi_vision_url))
+        else:
+            conn = Connection(hostname, conf.socket_port, video_connection)
         self.connections[hostname] = conn
 
     def start_move(self, direction: Direction) -> None:
@@ -139,22 +169,140 @@ class App:
     def stop_move(self, direction: Direction) -> None:
         """Stops continuous movement if in continuous mode and no keys are pressed."""
         if self.control_mode == ControlMode.CONTINUOUS:
-            logger.debug(f"{self.control_mode} {self.current_continuous_directions}")
-            if direction in self.current_continuous_directions:
-                self.current_continuous_directions.remove(direction)
-            if len(self.current_continuous_directions) != 0:
-                return
-            if (connection := self.get_active_connection()) is None:
-                return logger.error("No connection found")
-            return connection.publisher.polar_pan_continuous_stop()
+            return self.stop_continuous_move(direction)
         if self.discrete_move_task.get(direction) is not None:
             return self.discrete_move_task.pop(direction).cancel()
 
-    def stop_all_movement(self) -> None:
-        """Stops all continuous and discrete movements."""
+    def stop_continuous_move(self, direction: Direction) -> None:
+        """Release one held polar direction and update the remaining vector."""
+        logger.debug(f"continuous {self.current_continuous_directions}")
+        self.current_continuous_directions.discard(direction)
         if (connection := self.get_active_connection()) is None:
             return logger.error("No connection found")
+        if self.current_continuous_directions:
+            return connection.publisher.polar_pan_continuous_direction_start(
+                sum(self.current_continuous_directions)
+            )
+        return connection.publisher.polar_pan_continuous_stop()
+
+    def start_joint_jog(self, axis: int, direction: int) -> None:
+        """Hold an ER-V shoulder (axis 2) or elbow (axis 3) jog. One joint at a time."""
+        if axis not in (2, 3) or direction not in (-1, 1):
+            return logger.error(f"Invalid joint jog {axis=} {direction=}")
+        if (publisher := self._manual_publisher()) is None:
+            return
+        if self._joint_jog == (axis, direction):
+            return
+        self._cancel_joint_jog_task()
+        if self._joint_jog is not None:
+            publisher.erv_joint_jog_stop()
+        logger.info(f"Joint jog axis {axis} direction {direction}")
+        publisher.erv_joint_jog_start(axis, direction)
+        self._joint_jog = (axis, direction)
+        self._joint_jog_task = self.scheduler.set_interval(
+            JOINT_JOG_REFRESH_MS, self._refresh_joint_jog
+        )
+
+    def stop_joint_jog(self) -> None:
+        """Stop a held shoulder or elbow jog."""
+        if self._joint_jog is None and self._joint_jog_task is None:
+            return
+        self._cancel_joint_jog_task()
+        self._joint_jog = None
+        if (connection := self.get_active_connection()) is None:
+            return logger.error("No connection found")
+        connection.publisher.erv_joint_jog_stop()
+
+    def _refresh_joint_jog(self) -> None:
+        if self._joint_jog is None:
+            return
+        if (connection := self.get_active_connection()) is None:
+            return
+        axis, direction = self._joint_jog
+        connection.publisher.erv_joint_jog_start(axis, direction)
+
+    def _cancel_joint_jog_task(self) -> None:
+        if self._joint_jog_task is not None:
+            self._joint_jog_task.cancel()
+            self._joint_jog_task = None
+
+    def start_cartesian(self, x: int, y: int, z: int) -> None:
+        """
+        Hold a Cartesian move. Each component is -1, 0, or 1.
+        Y- extends the arm (away from the base) and Y+ retracts it.
+        """
+        vector = (x, y, z)
+        if any(component not in (-1, 0, 1) for component in vector) or vector == (0, 0, 0):
+            return logger.error(f"Invalid cartesian jog {vector}")
+        if self._manual_publisher() is None:
+            return
+        if self._cartesian == vector:
+            return
+        self._cancel_cartesian_task()
+        self._cartesian = vector
+        logger.info(f"Cartesian jog x={x} y={y} z={z}")
         if self.control_mode == ControlMode.CONTINUOUS:
+            return self._publish_cartesian_continuous()
+        self._cartesian_task = self.scheduler.set_interval(
+            self.move_delay_ms, self._publish_cartesian_discrete
+        )
+
+    def stop_cartesian(self) -> None:
+        """Stop a held Cartesian move."""
+        if self._cartesian is None and self._cartesian_task is None:
+            return
+        was_continuous = self.control_mode == ControlMode.CONTINUOUS
+        self._cancel_cartesian_task()
+        self._cartesian = None
+        logger.info("Cartesian jog stop")
+        if not was_continuous:
+            return
+        if (connection := self.get_active_connection()) is None:
+            return logger.error("No connection found")
+        connection.publisher.cartesian_move_continuous_stop()
+
+    def _publish_cartesian_continuous(self) -> None:
+        if self._cartesian is None:
+            return
+        if (connection := self.get_active_connection()) is None:
+            return
+        connection.publisher.cartesian_move_continuous_start(*self._cartesian)
+
+    def _publish_cartesian_discrete(self) -> None:
+        if self._cartesian is None:
+            return
+        if (connection := self.get_active_connection()) is None:
+            return
+        x, y, z = self._cartesian
+        connection.publisher.cartesian_move_discrete(
+            x * CARTESIAN_STEP,
+            y * CARTESIAN_STEP,
+            z * CARTESIAN_STEP,
+            1000,
+            3000,
+        )
+
+    def _cancel_cartesian_task(self) -> None:
+        if self._cartesian_task is not None:
+            self._cartesian_task.cancel()
+            self._cartesian_task = None
+
+    def _manual_publisher(self):
+        if (connection := self.get_active_connection()) is None:
+            logger.error("No connection found")
+            return None
+        if not connection.is_manual:
+            logger.error(f"Active connection {connection.host} is not in manual mode")
+            return None
+        return connection.publisher
+
+    def stop_all_movement(self) -> None:
+        """Stops all continuous and discrete movements."""
+        self.stop_joint_jog()
+        self.stop_cartesian()
+        if (connection := self.get_active_connection()) is None:
+            return logger.error("No connection found")
+        if self.control_mode == ControlMode.CONTINUOUS or self.current_continuous_directions:
             publisher = connection.publisher
             self.current_continuous_directions.clear()
             return publisher.polar_pan_continuous_stop()
@@ -162,9 +310,14 @@ class App:
             task.cancel()
         self.discrete_move_task.clear()
 
-    def move_home(self) -> None:
-        """Moves the robotic arm from its current location to its home position"""
-        if (connection := self.get_active_connection()) is None:
+    def move_home(self, hostname: str | None = None) -> None:
+        """Moves the robotic arm (active connection, or `hostname`) to its home position"""
+        connection = (
+            self.get_active_connection()
+            if hostname is None
+            else self.connections.get(hostname)
+        )
+        if connection is None:
             return logger.error("No connection found")
         return connection.publisher.home(1000)
 
@@ -236,6 +389,7 @@ class App:
         if option is None:
             self.tracker.swap_model(None)
             self.model_selection = None
+            self.streamer.draw_bboxes = self._cli_draw_bboxes
             return True
         if option not in USABLE_MODELS:
             logger.error(
@@ -246,6 +400,7 @@ class App:
         self.tracker.swap_model(model_class)
         logger.info(f"Initialized {option} model")
         self.model_selection = option
+        self.streamer.draw_bboxes = True
         return True
 
     def is_manual_only(self) -> bool | None:
@@ -254,18 +409,23 @@ class App:
             return None
         return connection.manual_only
 
-    def get_manual_control(self) -> bool | None:
-        """Gets the active connection's manual/automatic control mode"""
+    def get_manual_control(self, hostname: str | None = None) -> bool | None:
+        """Gets the manual/automatic control mode of the active connection or `hostname`"""
         if self.director is None:
             return logger.error("No active director")
-        return self.director.get_manual_control()
+        if hostname is None:
+            return self.director.get_manual_control()
+        return self.director.get_manual_control(hostname=hostname)
 
-    def set_manual_control(self, manual: bool) -> None:
-        """Sets the active connection's manual/automatic control mode"""
+    def set_manual_control(self, manual: bool, hostname: str | None = None) -> None:
+        """Sets the manual/automatic control mode of the active connection or `hostname`"""
         if self.director is None:
             return logger.error("No active director")
-        logger.debug("Setting manual control to {}", manual)
-        self.director.set_manual_control(manual=manual)
+        logger.debug("Setting manual control to {} for {}", manual, hostname)
+        if hostname is None:
+            self.director.set_manual_control(manual=manual)
+            return
+        self.director.set_manual_control(hostname=hostname, manual=manual)
 
     def set_control_mode(self, ctrl_mode: ControlMode) -> ControlMode:
         """
@@ -292,7 +452,11 @@ class App:
         fps: int | None = None,
         stream_config: dict[str, int | bool | str | None] = {},
     ) -> None:
-        """Start streaming the active (or specified) connection via ffmpeg."""
+        """Start streaming the active (or specified) connection.
+
+        Raises RuntimeError when the streamer cannot open (for example, no
+        virtual camera device, or no frame yet).
+        """
         logger.info("Starting stream using {}", streamer_type)
         if hostname is None:
             frame_getter = self.streamer.get_active_frame  # pyright: ignore[reportAssignmentType]
@@ -320,6 +484,7 @@ class App:
         except RuntimeError as exc:
             logger.error("Failed to start stream: {}", exc)
             self._streamer = None
+            raise
 
     def stop_stream(self) -> None:
         """Stop an active ffmpeg stream if running."""

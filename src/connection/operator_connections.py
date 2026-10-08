@@ -21,6 +21,8 @@ class OperatorConnection:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setblocking(False)  # Set socket to non-blocking mode
+        self._message_buffer = b""
+        self._message_listeners = []
         if connect_on_init:
             # Start connection on a separate thread so it doesn't block
             self.connect_on_thread()
@@ -77,10 +79,25 @@ class OperatorConnection:
             self.socket.shutdown(socket.SHUT_RDWR)
         except OSError:
             pass
-        if self.thread is not None:
-            self.thread.join()
-        self.socket.close()
+        if self.thread is not None and self.thread is not threading.current_thread():
+            self.thread.join(timeout=2)
+            still_running = getattr(self.thread, "is_alive", lambda: False)
+            if still_running():
+                logger.warning(f"Operator thread for {self.host}:{self.port} did not stop")
+        try:
+            self.socket.close()
+        except OSError:
+            pass
         logger.debug(f"Socket closed cleanly {self.host}:{self.port}")
+
+    def is_connected(self) -> bool:
+        """Return whether the non-blocking socket has an established peer."""
+
+        try:
+            self.socket.getpeername()
+        except OSError:
+            return False
+        return True
 
     def xor_checksum(self, data: bytes) -> int:
         result = 0
@@ -138,6 +155,12 @@ class OperatorConnection:
     def listen(self):
         while self.is_running:
             try:
+                readable, _, _ = select.select([self.socket], [], [], 0.5)
+            except (OSError, ValueError):
+                break
+            if not readable or not self.is_running:
+                continue
+            try:
                 message = self.socket.recv(2048)
 
                 if not message:
@@ -153,5 +176,14 @@ class OperatorConnection:
                 break
 
     def _on_message(self, message: bytes):
-        logger.info(f"RECEIVED MESSAGE: {message.decode(errors='replace')}")
-        logger.info("subclass must implement on_message method")
+        self._message_buffer += message
+        while b"\n" in self._message_buffer:
+            line, self._message_buffer = self._message_buffer.split(b"\n", 1)
+            decoded = line.decode(errors="replace").rstrip("\0")
+            for listener in tuple(self._message_listeners):
+                listener(decoded)
+            if decoded:
+                logger.info(f"RECEIVED MESSAGE: {decoded}")
+
+    def add_message_listener(self, listener) -> None:
+        self._message_listeners.append(listener)
