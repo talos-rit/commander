@@ -2,7 +2,6 @@ import { LoaderCircle, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api";
 import type { AppSettings, RobotConfig, RobotInput } from "../types";
-import { JOG_OPTIONS } from "./DebugRail";
 import { ModelSlider } from "./ModelSlider";
 import { Rocker } from "./Rocker";
 
@@ -425,9 +424,9 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
 
               <h3>Tracking</h3>
               <div className="field">
-                <span>Tracking model</span>
+                <span>Tracking model (local)</span>
                 <ModelSlider
-                  label="Tracking model"
+                  label="Tracking model (local)"
                   options={modelOptions}
                   value={draft.default_model ?? null}
                   onChange={(model) => set("default_model", model)}
@@ -445,43 +444,6 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
                     { value: "simple", label: "Simple", description: "Only Home and Auto-Track" },
                     { value: "debug", label: "Debug", description: "Adds manual jog, the model slider and telemetry" },
                   ]}
-                />
-              </SwitchField>
-              <SwitchField label="Layout with two cameras">
-                <Rocker<AppSettings["display_mode"]>
-                  label="Layout with two cameras"
-                  value={draft.display_mode ?? "one_screen"}
-                  onChange={(v) => set("display_mode", v)}
-                  describe
-                  options={[
-                    { value: "one_screen", label: "One screen", description: "Show one camera at a time" },
-                    { value: "two_screen", label: "Two screen", description: "Show both cameras side by side" },
-                  ]}
-                />
-              </SwitchField>
-              <SwitchField label="One-screen switching">
-                <Rocker<AppSettings["one_screen_mode"]>
-                  label="One-screen switching"
-                  value={draft.one_screen_mode ?? "manual"}
-                  onChange={(v) => set("one_screen_mode", v)}
-                  describe
-                  options={[
-                    { value: "manual", label: "Manual", description: "You pick the camera" },
-                    {
-                      value: "dynamic",
-                      label: "Dynamic",
-                      description: "Commander picks the camera (coming in a later release)",
-                    },
-                  ]}
-                />
-              </SwitchField>
-              <SwitchField label="Jog style (debug)">
-                <Rocker<AppSettings["jog_mode"]>
-                  label="Jog style"
-                  value={draft.jog_mode ?? "discrete"}
-                  onChange={(v) => set("jog_mode", v)}
-                  describe
-                  options={JOG_OPTIONS}
                 />
               </SwitchField>
 

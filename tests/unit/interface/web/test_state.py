@@ -33,8 +33,8 @@ def test_single_camera_rejects_two_screen():
     assert state.displayed_hosts == ["bluey"]
 
 
-def test_saved_two_screen_preference_waits_for_second_camera():
-    state = WebOperatorState(camera_1="bluey", display_mode="two_screen")
+def test_assigned_cameras_are_shown_even_when_the_saved_layout_is_one_screen():
+    state = WebOperatorState(camera_1="bluey", display_mode="one_screen")
 
     assert state.effective_display_mode == "one_screen"
     state.assign_slots("bluey", "bingo")
@@ -49,44 +49,48 @@ def test_single_camera_cannot_select_camera_2():
         state.select_slot(2)
 
 
-def test_two_screen_keeps_both_feeds_and_selection_follows_clicked_pane():
+def test_two_cameras_keep_both_feeds_and_selection_follows_the_clicked_pane():
     state = WebOperatorState(camera_1="a", camera_2="b")
-    state.set_display_mode("two_screen")
 
     assert state.displayed_hosts == ["a", "b"]
     assert state.selected_host == "a"
     state.select_host("b")
     assert state.selected_host == "b"
+    assert state.manual_slot == 2
     assert state.displayed_hosts == ["a", "b"]
 
 
-def test_one_screen_manual_shows_chosen_camera_until_changed():
+def test_manual_mode_keeps_both_feeds_and_follows_the_chosen_camera():
     state = WebOperatorState(camera_1="a", camera_2="b", one_screen_mode="manual")
 
     state.select_slot(2)
-    assert state.displayed_hosts == ["b"]
+    assert state.displayed_hosts == ["a", "b"]
     assert state.selected_host == "b"
     state.set_one_screen_mode("manual")
-    assert state.displayed_hosts == ["b"]
+    assert state.selected_host == "b"
+    assert state.displayed_hosts == ["a", "b"]
 
 
-def test_one_screen_dynamic_stub_does_not_switch_on_its_own():
+def test_dynamic_mode_keeps_both_feeds_and_ignores_manual_selection():
     state = WebOperatorState(camera_1="a", camera_2="b")
     state.set_one_screen_mode("dynamic")
 
-    assert state.displayed_hosts == ["a"]
+    assert state.displayed_hosts == ["a", "b"]
+    assert state.selected_host == "a"
     state.select_slot(2)  # manual choice does not drive dynamic mode
-    assert state.displayed_hosts == ["a"]
+    assert state.selected_host == "a"
+    assert state.displayed_hosts == ["a", "b"]
     state.set_dynamic_slot(2)
-    assert state.displayed_hosts == ["b"]
+    assert state.displayed_hosts == ["a", "b"]
     assert state.selected_host == "b"
 
 
-def test_selecting_host_in_one_screen_switches_the_manual_feed():
+def test_selecting_host_controls_that_camera():
     state = WebOperatorState(camera_1="a", camera_2="b")
 
     state.select_host("b")
-    assert state.displayed_hosts == ["b"]
+    assert state.displayed_hosts == ["a", "b"]
+    assert state.selected_host == "b"
 
 
 def test_select_unknown_host_raises():

@@ -144,14 +144,14 @@ def test_explicit_host_overrides_selection(web_config):
     assert ("home", "b") in app.calls
 
 
-def test_select_slot_in_manual_one_screen_switches_feed_and_active(web_config):
+def test_select_slot_keeps_both_feeds_and_switches_the_active_camera(web_config):
     backend, app, _ = make_backend(camera_1="a", camera_2="b")
     backend.startup()
 
     backend.select(slot=2)
 
     view = backend.status()["view"]
-    assert view["displayed_hosts"] == ["b"]
+    assert view["displayed_hosts"] == ["a", "b"]
     assert view["selected_host"] == "b"
     assert app.active == "b"
 

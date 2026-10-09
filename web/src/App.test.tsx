@@ -14,19 +14,18 @@ function setup(initial: Status, routes: Record<string, unknown> = {}) {
       return current;
     },
     "POST /cameras/select": ({ body }: { body: unknown }) => {
-      const { slot, host } = body as { slot?: 1 | 2; host?: string };
-      if (host) {
-        current = { ...current, view: { ...current.view, selected_host: host } };
-      } else if (slot) {
-        const host = slot === 1 ? current.view.camera_1! : current.view.camera_2!;
-        const two = current.view.display_mode === "two_screen";
+      const { slot, host: requested } = body as { slot?: 1 | 2; host?: string };
+      const feeds = [current.view.camera_1, current.view.camera_2].filter((host): host is string => Boolean(host));
+      const nextSlot = requested ? (requested === current.view.camera_2 ? 2 : 1) : slot;
+      const selected = requested ?? (nextSlot === 2 ? current.view.camera_2 : current.view.camera_1);
+      if (selected && nextSlot) {
         current = {
           ...current,
           view: {
             ...current.view,
-            displayed_slot: slot,
-            selected_host: host,
-            displayed_hosts: two ? current.view.displayed_hosts : [host],
+            displayed_slot: nextSlot,
+            selected_host: selected,
+            displayed_hosts: feeds,
           },
         };
       }
@@ -65,17 +64,13 @@ afterEach(() => {
 });
 
 describe("App with one camera", () => {
-  it("shows the single feed with Home and Auto-Track and a disabled two-screen switch", async () => {
+  it("shows the single feed with Home and Auto-Track and no camera switch", async () => {
     setup(makeStatus());
     expect(await screen.findByTestId("pane-bluey.local")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /home/i })).toBeEnabled();
     expect(screen.getByRole("button", { name: /auto-track/i })).toHaveAttribute("aria-pressed", "false");
-    const layout = screen.getByRole("radiogroup", { name: "Screen layout" });
-    expect(within(layout).getByRole("radio", { name: /one screen/i })).toHaveAttribute("aria-checked", "true");
-    expect(within(layout).getByRole("radio", { name: /two screen/i })).toBeDisabled();
-    expect(layout.parentElement).toHaveAttribute("data-tooltip", expect.stringMatching(/needs two cameras/));
-    expect(layout).toHaveAccessibleDescription(/pick a Camera 2 in Settings/);
-    expect(screen.queryByRole("radiogroup", { name: "Camera shown" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Screen layout" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Controlled camera" })).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Camera switching" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Debug controls")).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Interface mode" })).not.toBeInTheDocument();
@@ -159,41 +154,41 @@ describe("App with no cameras", () => {
 describe("App with two cameras", () => {
   const hosts = ["bluey.local", "raspberrypi.local"];
 
-  it("switches the shown camera in one-screen manual mode", async () => {
+  it("shows both feeds and switches the controlled camera", async () => {
     const { user, callsTo } = setup(makeStatus({ hosts }));
-    expect(await screen.findByRole("radiogroup", { name: "Screen layout" })).toBeInTheDocument();
-    expect(screen.getByTestId("pane-bluey.local")).toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: "Cam 2" }));
-    expect(callsTo("POST", "/cameras/select")[0].body).toEqual({ slot: 2 });
-    expect(await screen.findByTestId("pane-raspberrypi.local")).toBeInTheDocument();
-    expect(screen.queryByTestId("pane-bluey.local")).not.toBeInTheDocument();
-  });
-
-  it("shows both feeds side by side in two-screen mode and selects a pane", async () => {
-    const { user, callsTo } = setup(makeStatus({ hosts, view: { display_mode: "two_screen" } }));
     expect(await screen.findByTestId("pane-bluey.local")).toBeInTheDocument();
     expect(screen.getByTestId("pane-raspberrypi.local")).toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup", { name: "Camera switching" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /control camera 2/i }));
-    expect(callsTo("POST", "/cameras/select")[0].body).toEqual({ host: "raspberrypi.local" });
+    expect(screen.queryByRole("radiogroup", { name: "Screen layout" })).not.toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Camera switching" })).toBeInTheDocument();
+    expect(screen.getByTestId("pane-bluey.local")).toHaveClass("pane--selected");
+
+    await user.click(screen.getByRole("radio", { name: "Cam 2" }));
+    expect(callsTo("POST", "/cameras/select")[0].body).toEqual({ slot: 2 });
+    expect(screen.getByTestId("pane-bluey.local")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("pane-raspberrypi.local")).toHaveClass("pane--selected"));
+
+    await user.click(screen.getByRole("button", { name: /control camera 1/i }));
+    expect(callsTo("POST", "/cameras/select")[1].body).toEqual({ host: "bluey.local" });
+    await waitFor(() => expect(screen.getByTestId("pane-bluey.local")).toHaveClass("pane--selected"));
   });
 
-  it("changes layout and switching mode through the rocker switches", async () => {
+  it("switches between manual and dynamic without hiding a feed", async () => {
     const { user, callsTo } = setup(makeStatus({ hosts }));
     await user.click(await screen.findByRole("radio", { name: /dynamic/i }));
     expect(callsTo("POST", "/view")[0].body).toEqual({ one_screen_mode: "dynamic" });
     expect(await screen.findByText(/auto-switch coming soon/)).toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: /two screen/i }));
-    expect(callsTo("POST", "/view")[1].body).toEqual({ display_mode: "two_screen" });
+    expect(screen.queryByRole("radiogroup", { name: "Controlled camera" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("pane-bluey.local")).toBeInTheDocument();
+    expect(screen.getByTestId("pane-raspberrypi.local")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /control camera/i })).not.toBeInTheDocument();
   });
 
-  it("flips the layout by clicking the switch track", async () => {
+  it("flips manual and dynamic by clicking the switch track", async () => {
     const { user, callsTo } = setup(makeStatus({ hosts }));
-    const layout = await screen.findByRole("radiogroup", { name: "Screen layout" });
-    await user.click(layout.querySelector(".rocker__track")!);
-    expect(callsTo("POST", "/view")[0].body).toEqual({ display_mode: "two_screen" });
-    await waitFor(() => expect(layout).toHaveAttribute("data-side", "right"));
+    const switching = await screen.findByRole("radiogroup", { name: "Camera switching" });
+    await user.click(switching.querySelector(".rocker__track")!);
+    expect(callsTo("POST", "/view")[0].body).toEqual({ one_screen_mode: "dynamic" });
+    await waitFor(() => expect(switching).toHaveAttribute("data-side", "right"));
   });
 
   it("uses number keys to pick the camera", async () => {
@@ -698,15 +693,10 @@ describe("Controller", () => {
     await step();
     pads[0] = press(fakePad(), 1);
     await step();
-    await waitFor(() => expect(callsTo("POST", "/view").some((call) => (call.body as { display_mode?: string }).display_mode === "two_screen")).toBe(true));
-    pads[0] = fakePad();
-    await step();
-    pads[0] = press(fakePad(), 1);
-    await step();
-    await waitFor(() => expect(callsTo("POST", "/view").some((call) => (call.body as { display_mode?: string }).display_mode === "one_screen")).toBe(true));
+    expect(callsTo("POST", "/view").some((call) => "display_mode" in (call.body as object))).toBe(false);
   });
 
-  it("does not change the layout from B when only one camera is assigned", async () => {
+  it("does not change the view from B", async () => {
     const { calls } = setup(makeStatus());
     await screen.findByTestId("pane-bluey.local");
     pads[0] = press(fakePad(), 1);

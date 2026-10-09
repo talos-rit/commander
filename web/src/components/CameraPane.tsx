@@ -27,7 +27,7 @@ export function CameraPane({ host, slot, status, selected, selectable, onSelect 
   const className = [
     "pane",
     selectable ? "pane--selectable" : "",
-    selected && selectable ? "pane--selected" : "",
+    selected ? "pane--selected" : "",
     tracking ? "pane--tracking" : "",
   ]
     .filter(Boolean)
@@ -63,7 +63,7 @@ export function CameraPane({ host, slot, status, selected, selectable, onSelect 
         <span className="pane__label">
           <span className="pane__slot">{slot ? `CAM ${slot}` : "CAM"}</span>
           <span className="pane__host">{host}</span>
-          {selectable && selected && <span className="pane__controlling">Controlling</span>}
+          {selected && <span className="pane__controlling">Controlling</span>}
         </span>
         {tracking && (
           <span className="pane__badge" title="Auto-tracking is steering this camera">

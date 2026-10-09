@@ -30,17 +30,18 @@ export function VideoStage({ status, onSelectHost, onOpenSettings }: Props) {
     );
   }
 
-  const twoScreen = view.display_mode === "two_screen";
+  const multi = view.displayed_hosts.length > 1;
+  const manual = view.one_screen_mode === "manual";
   return (
-    <section className={`stage ${twoScreen ? "stage--two" : "stage--one"}`} aria-label="Camera feeds">
+    <section className={`stage ${multi ? "stage--two" : "stage--one"}`} aria-label="Camera feeds">
       {view.displayed_hosts.map((host) => (
         <CameraPane
           key={host}
           host={host}
           slot={connections[host]?.slot ?? null}
           status={connections[host]}
-          selected={view.selected_host === host}
-          selectable={twoScreen}
+          selected={multi && view.selected_host === host}
+          selectable={multi && manual}
           onSelect={() => onSelectHost(host)}
         />
       ))}

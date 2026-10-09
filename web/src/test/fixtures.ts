@@ -29,23 +29,20 @@ export function makeStatus({
 } & Partial<Omit<Status, "view" | "connections">> = {}): Status {
   const [camera_1 = null, camera_2 = null] = hosts;
   const available = hosts.length as 0 | 1 | 2;
-  const display_mode = view.display_mode ?? "one_screen";
   const displayed_slot = available ? (view.displayed_slot ?? 1) : null;
-  const displayed_hosts =
-    view.displayed_hosts ??
-    (available === 0 ? [] : display_mode === "two_screen" ? hosts : [hosts[(displayed_slot ?? 1) - 1]]);
+  const displayed_hosts = view.displayed_hosts ?? hosts;
   return {
     view: {
       camera_1,
       camera_2,
       available_slots: available,
-      display_mode,
-      preferred_display_mode: display_mode,
+      display_mode: available === 2 ? "two_screen" : "one_screen",
+      preferred_display_mode: available === 2 ? "two_screen" : "one_screen",
       one_screen_mode: "manual",
       ui_mode: "simple",
       displayed_slot,
       displayed_hosts,
-      selected_host: displayed_hosts[0] ?? null,
+      selected_host: displayed_slot === 2 ? camera_2 : camera_1,
       ...view,
     },
     connections: Object.fromEntries(

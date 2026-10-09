@@ -374,8 +374,8 @@ class CommanderWebBackend:
     def set_virtual_camera(self, enabled: bool) -> bool:
         """Stream the selected camera out as a virtual webcam, or stop doing so.
 
-        The stream follows whichever robot is selected, so switching cameras in
-        one-screen mode switches the virtual camera too. Both cameras are
+        The stream follows whichever robot is selected, so changing the
+        controlled camera switches the virtual camera too. Both cameras are
         assumed to share a resolution; the device is sized from the first frame.
         """
         with self._lock:

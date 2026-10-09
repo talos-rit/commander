@@ -50,7 +50,7 @@ export function describeController(gate: ControllerGate): string {
     case "offline":
       return "Controller connected. The selected robot isn't ready to move.";
     case "ready":
-      return "Left stick and D-pad aim. Right stick jogs the shoulder and elbow, one joint at a time. Triggers extend and retract the arm. LB and RB switch cameras. Menu toggles Debug, Back homes, A toggles Auto-Track, B the layout, X Virtual Cam, and Y Manual or Dynamic.";
+      return "Left stick and D-pad aim. Right stick jogs the shoulder and elbow, one joint at a time. Triggers extend and retract the arm. LB and RB switch cameras in Manual. Menu toggles Debug, Back homes, A toggles Auto-Track, X Virtual Cam, and Y Manual or Dynamic.";
   }
 }
 

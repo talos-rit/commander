@@ -96,9 +96,8 @@ uv run commander-web
 
 Pass `--connection <host>` to open a robot from `robot_configs.local.yaml` as Camera 1 on startup, or pick it in **Settings**.
 
-- **One robot is enough.** Camera 1 is the only required slot. Assign a Camera 2 in Settings to unlock the _One screen / Two screen_ tabs.
-- **One screen** shows a single feed. _Manual_ lets you pick Cam 1 / Cam 2 (keys `1` / `2`); _Dynamic_ will switch automatically (switching logic is still a stub and currently holds the camera you last chose).
-- **Two screen** shows both feeds side by side; click a feed to choose which robot the controls act on.
+- **One robot is enough.** Camera 1 is the only required slot. Assign a Camera 2 in Settings and both feeds appear side by side. With one camera the view stays a single feed, and Manual / Dynamic stays hidden.
+- **Manual** lets you pick which camera the controls act on (click a feed, Cam 1 / Cam 2, or keys `1` / `2`). **Dynamic** will switch that choice automatically (switching logic is still a stub and currently holds the camera you last chose). Both feeds stay on screen either way.
 - **Simple** mode shows _Home_ (`H`), _Auto-Track_ (`T`), and _Virtual Cam_ (`V`). Virtual Cam sends the selected camera to a virtual webcam (OBS Virtual Camera) so OBS, Zoom, or any recorder can capture it. It follows the camera you select, and it needs a frame before it can start. **Debug** mode adds the jog pad (arrow keys or an Xbox-layout controller), the detection model picker, and live Operator telemetry. Manual jog stays in Debug mode with Auto-Track off.
 - **Controller.** An Xbox-layout pad (or a third-party pad that uses the same layout) is picked up after you press any button once. Open the UI at `http://127.0.0.1` or over HTTPS; a LAN `http://` address is not a secure context, so the browser hides the pad. Wrist roll (the claw) is not bound.
 
@@ -107,16 +106,15 @@ Pass `--connection <host>` to open a robot from `robot_configs.local.yaml` as Ca
   | Left stick, D-pad, arrow keys | Aim (base and wrist pitch). Debug mode, Auto-Track off.                                                                                           |
   | Right stick                   | Shoulder (sideways) and elbow (up/down), one joint at a time. Same jog gate as the left stick.                                                    |
   | Left / right trigger          | Retract / extend the arm. Same jog gate.                                                                                                          |
-  | LB / RB                       | Previous / next camera, wrapping at either end, when two cameras are assigned and you are choosing the camera (one-screen Manual, or two-screen). |
+  | LB / RB                       | Previous / next camera, wrapping at either end, when two cameras are assigned and switching is Manual.                                            |
   | Menu                          | Toggle Simple / Debug.                                                                                                                            |
   | Back                          | Home the selected robot.                                                                                                                          |
   | A                             | Toggle Auto-Track.                                                                                                                                |
-  | B                             | Toggle one-screen / two-screen, when two cameras are assigned.                                                                                    |
   | X                             | Toggle Virtual Cam.                                                                                                                               |
-  | Y                             | Toggle Manual / Dynamic.                                                                                                                          |
+  | Y                             | Toggle Manual / Dynamic, when two cameras are assigned.                                                                                           |
 
 - Tracking uses a YOLO model (`yolo_nano` unless you pick another). That needs the optional extra: `uv sync --extra yolo`. Haar (`basic`) and MediaPipe are not offered in this UI.
-- **Settings** add/edit/remove robots (`config/robot_configs.local.yaml`) and save defaults such as camera slots, layout, interface mode, tracking model and web host/port (`config/app_settings.local.yaml`).
+- **Settings** add/edit/remove robots (`config/robot_configs.local.yaml`) and save defaults such as camera slots, interface mode, the local tracking model and web host/port (`config/app_settings.local.yaml`).
 
 For frontend development, run the backend and the Vite dev server (proxies `/api` to `COMMANDER_API`, default `http://127.0.0.1:8000`):
 
