@@ -323,11 +323,11 @@ def test_jog_in_debug_mode_targets_selected_robot(web_config):
     backend.move("left", active=True)
     backend.move("left", active=False)
 
-    assert ("start_move", "RIGHT", "b") in app.calls
-    assert ("stop_move", "RIGHT", "b") in app.calls
+    assert ("start_move", "LEFT", "b") in app.calls
+    assert ("stop_move", "LEFT", "b") in app.calls
 
 
-def test_left_and_right_pan_match_the_operator_view(web_config):
+def test_left_and_right_pan_follow_the_button(web_config):
     backend, app, _ = make_backend(camera_1="a", ui_mode="debug")
     backend.startup()
 
@@ -337,8 +337,8 @@ def test_left_and_right_pan_match_the_operator_view(web_config):
     backend.move("down", active=True)
 
     assert [call[1] for call in app.calls if call[0] == "start_move"] == [
-        "RIGHT",
         "LEFT",
+        "RIGHT",
         "UP",
         "DOWN",
     ]

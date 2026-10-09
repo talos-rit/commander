@@ -19,10 +19,6 @@ from .state import ViewStateError, WebOperatorState
 DEFAULT_TRACKING_MODEL = "yolo_nano"
 JOG_MODES = ("discrete", "continuous")
 JOINT_AXES = {"shoulder": 2, "elbow": 3}
-# Direction.LEFT sends a negative azimuth, and that slews the camera to the
-# operator's right. The jog pad, arrow keys, and gamepad all use these names,
-# so swapping here keeps every control pointing the way the camera moves.
-_OPERATOR_PAN = {Direction.LEFT: Direction.RIGHT, Direction.RIGHT: Direction.LEFT}
 
 
 class BackendError(Exception):
@@ -421,7 +417,6 @@ class CommanderWebBackend:
                 parsed = Direction[direction.upper()]
             except KeyError as exc:
                 raise BackendError(f"Unknown direction {direction!r}") from exc
-            parsed = _OPERATOR_PAN.get(parsed, parsed)
             self._target(None)
             self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
