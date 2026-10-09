@@ -1,6 +1,6 @@
 import { Crosshair, Gamepad2, House, Link2, Link2Off, LoaderCircle, ScanFace, Video, VideoOff, Webcam } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { HostStatus, Status } from "../types";
+import { useState } from "react";
+import type { CommandReceipt, HostStatus, Status } from "../types";
 import { CenteringTolerance } from "./CenteringTolerance";
 
 interface Props {
@@ -15,7 +15,68 @@ interface Props {
   controller?: { label: string; driving: boolean; title: string } | null;
 }
 
-const HOMING_FEEDBACK_MS = 2000;
+const RECEIPT_VISIBLE_S = 8;
+const RECEIPT_WAIT_S = 1.5;
+
+/** Operator's ACK means the frame was queued. Hide it once that moment has passed. */
+export function commandReceiptChip(receipt: CommandReceipt | null | undefined): { text: string; tone: string; title: string } | null {
+  if (!receipt || (receipt.sent === 0 && !receipt.last_failed)) return null;
+  const name = receipt.last_command;
+  const sentAge = receipt.last_sent_age_s;
+  const ackAge = receipt.last_ack_age_s;
+  const pending = receipt.acked !== null && receipt.acked < receipt.sent;
+  const failed = receipt.last_failed && !pending && (ackAge == null || (sentAge != null && sentAge <= ackAge));
+  const withName = (label: string) => (name ? `${name} · ${label}` : label);
+
+  if (failed) {
+    if (sentAge != null && sentAge > RECEIPT_VISIBLE_S) return null;
+    return { text: withName("Not sent"), tone: "chip--danger", title: "The command did not leave this machine." };
+  }
+  if (receipt.acked === null) {
+    if (sentAge == null || sentAge > RECEIPT_VISIBLE_S) return null;
+    return {
+      text: withName("Sent"),
+      tone: "chip--ok",
+      title: "The Pi accepted the command. This link does not report Operator's acknowledgement.",
+    };
+  }
+  if (pending) {
+    if (sentAge == null || sentAge > RECEIPT_VISIBLE_S) return null;
+    if (sentAge < RECEIPT_WAIT_S) {
+      return {
+        text: withName("Waiting"),
+        tone: "chip--warn",
+        title: "Waiting for Operator to acknowledge this command. The acknowledgement means the frame was queued.",
+      };
+    }
+    return {
+      text: withName("No receipt"),
+      tone: "chip--warn",
+      title: "The command was written out. Operator sent no acknowledgement.",
+    };
+  }
+  if (ackAge != null && ackAge <= RECEIPT_VISIBLE_S) {
+    return {
+      text: withName("Received"),
+      tone: "chip--ok",
+      title: "Operator queued this command. The arm may still be moving.",
+    };
+  }
+  return null;
+}
+
+/** Floats over the bottom of the debug column so the status chips never reflow. */
+export function CommandReceipt({ status }: { status: Status }) {
+  const host = status.view.selected_host ? status.connections[status.view.selected_host] : undefined;
+  const receipt = commandReceiptChip(host?.command);
+  if (!receipt) return null;
+  const tone = receipt.tone === "chip--danger" ? "error" : receipt.tone === "chip--warn" ? "warn" : "ok";
+  return (
+    <div className={`receipt-toast toast toast--${tone}`} role="status" title={receipt.title}>
+      <span>{receipt.text}</span>
+    </div>
+  );
+}
 
 function StatusChip({ ok, on, off, label }: { ok: boolean; on: React.ReactNode; off: React.ReactNode; label: string }) {
   return (
@@ -28,16 +89,10 @@ function StatusChip({ ok, on, off, label }: { ok: boolean; on: React.ReactNode; 
 export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVision, onPiTolerance, onVirtualCamera, controller = null }: Props) {
   const selected = status.view.selected_host;
   const host: HostStatus | undefined = selected ? status.connections[selected] : undefined;
-  const [homing, setHoming] = useState(false);
+  const [sendingHome, setSendingHome] = useState(false);
   const [pendingTrack, setPendingTrack] = useState(false);
   const [pendingCamera, setPendingCamera] = useState(false);
   const [clearingError, setClearingError] = useState(false);
-
-  useEffect(() => {
-    if (!homing) return;
-    const id = window.setTimeout(() => setHoming(false), HOMING_FEEDBACK_MS);
-    return () => window.clearTimeout(id);
-  }, [homing]);
 
   const ready = Boolean(host?.open);
   const tracking = host?.auto_tracking ?? false;
@@ -49,8 +104,12 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
       : "Start auto-tracking the subject (T)";
 
   const home = async () => {
-    setHoming(true);
-    await onHome();
+    setSendingHome(true);
+    try {
+      await onHome();
+    } finally {
+      setSendingHome(false);
+    }
   };
 
   const toggleTracking = async () => {
@@ -159,11 +218,11 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
           type="button"
           className="action action--home"
           onClick={home}
-          disabled={!ready || homing}
+          disabled={!ready || sendingHome}
           title="Send the robot to its home position (H)"
         >
-          {homing ? <LoaderCircle className="spin" size={26} /> : <House size={26} />}
-          <span>{homing ? "Homing…" : "Home"}</span>
+          {sendingHome ? <LoaderCircle className="spin" size={26} /> : <House size={26} />}
+          <span>{sendingHome ? "Sending…" : "Home"}</span>
         </button>
         <button
           type="button"

@@ -104,6 +104,10 @@ class Publisher:
         with self._telemetry_lock:
             return self._erv_joint_received_monotonic
 
+    def get_command_receipt(self) -> dict | None:
+        getter = getattr(self.operator_connection, "command_receipt", None)
+        return getter() if callable(getter) else None
+
     def get_erv_telemetry_snapshot(self) -> ERVTelemetrySnapshot:
         with self._telemetry_lock:
             return ERVTelemetrySnapshot(self._erv_encoder_counts, self._erv_encoder_received_monotonic, self._erv_joint_counts, self._erv_joint_received_monotonic)

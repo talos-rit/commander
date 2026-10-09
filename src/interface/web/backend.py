@@ -227,6 +227,7 @@ class CommanderWebBackend:
                 "has_video": False,
                 "auto_tracking": False,
                 "telemetry": None,
+                "command": None,
             }
         video = conn.video_connection
         publisher = conn.publisher
@@ -239,7 +240,16 @@ class CommanderWebBackend:
             "subjects": self._pi_vision[host].status()["subjects"] if host in self._pi_vision else len(conn.get_bboxes() or []),
             "pi_vision": self._pi_vision[host].status() if host in self._pi_vision else None,
             "telemetry": self._telemetry(publisher),
+            "command": self._command_receipt(publisher),
         }
+
+    @staticmethod
+    def _command_receipt(publisher: Any) -> dict[str, Any] | None:
+        getter = getattr(publisher, "get_command_receipt", None)
+        if not callable(getter):
+            return None
+        receipt = getter()
+        return receipt if isinstance(receipt, dict) else None
 
     @staticmethod
     def _telemetry(publisher: Any) -> dict[str, Any] | None:

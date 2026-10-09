@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Box, Gauge, House, Radio } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Direction, JogMode, Status, Telemetry } from "../types";
+import { CommandReceipt } from "./ActionBar";
 import { ModelSlider } from "./ModelSlider";
 import { Rocker, type RockerOption } from "./Rocker";
 
@@ -202,6 +203,7 @@ export function DebugRail({
   }, [onMoveStop]);
 
   return (
+    <div className="rail-dock">
     <aside className="rail" aria-label="Debug controls">
       <section className="rail__section">
         <h3>
@@ -377,5 +379,7 @@ export function DebugRail({
         <p className="muted">3D twin view will live here.</p>
       </section>
     </aside>
+    <CommandReceipt status={status} />
+    </div>
   );
 }

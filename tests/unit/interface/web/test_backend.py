@@ -480,6 +480,10 @@ def test_status_reports_twin_telemetry(web_config):
     assert status["tracking"]["model_options"] == ["yolo_nano"]
     assert status["tracking"]["default_model"] == "yolo_nano"
     assert status["robots"] == ["a", "b"]
+    app.connections["a"].publisher.get_command_receipt = lambda: {
+        "sent": 1, "acked": 1, "last_command": "Home", "last_sent_age_s": 0.1, "last_ack_age_s": 0.05, "last_failed": False,
+    }
+    assert backend.status()["connections"]["a"]["command"]["last_command"] == "Home"
 
 
 def test_status_for_unopened_slot(web_config):

@@ -76,6 +76,7 @@ button:disabled {
 }
 
 .main {
+  position: relative;
   display: flex;
   min-height: 0;
   gap: 12px;
@@ -880,10 +881,19 @@ button:disabled {
   }
 }
 
-/* Debug rail */
-.rail {
+/* Debug rail. The dock stays put; only the rail inside it scrolls. */
+.rail-dock {
+  position: relative;
   width: 300px;
   flex-shrink: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rail {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1316,7 +1326,8 @@ button:disabled {
 /* Toasts */
 .toasts {
   position: fixed;
-  bottom: 96px;
+  /* Clear the action bar, which grows when PiVision controls are shown. */
+  bottom: 196px;
   left: 50%;
   transform: translateX(-50%);
   display: grid;
@@ -1343,6 +1354,42 @@ button:disabled {
   color: #ffc2bc;
 }
 
+/* Command receipt stays at the bottom of the visible debug rail while that rail scrolls. */
+.receipt-toast {
+  z-index: 6;
+  justify-content: center;
+  margin: 0;
+  pointer-events: none;
+}
+
+.rail-dock .receipt-toast {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  width: auto;
+}
+
+.main > .receipt-toast {
+  position: absolute;
+  right: 24px;
+  bottom: 20px;
+  width: 276px;
+  max-width: calc(100% - 36px);
+}
+
+.receipt-toast.toast--ok {
+  border-color: rgb(184 232 74 / 0.45);
+}
+
+.receipt-toast.toast--warn {
+  border-color: rgb(242 184 75 / 0.55);
+}
+
+.receipt-toast.toast--warn span {
+  color: var(--warn);
+}
+
 /* Narrow screens */
 @media (max-width: 900px) {
   .main {
@@ -1358,6 +1405,7 @@ button:disabled {
     min-height: 50vh;
   }
 
+  .rail-dock,
   .rail {
     width: 100%;
     overflow: visible;

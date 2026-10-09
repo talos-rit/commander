@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import { ActionBar } from "./components/ActionBar";
+import { ActionBar, CommandReceipt } from "./components/ActionBar";
 import { DebugRail } from "./components/DebugRail";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TopBar } from "./components/TopBar";
@@ -242,6 +242,7 @@ export default function App() {
         <>
           <main className="main">
             <VideoStage status={status} onSelectHost={onSelectHost} onOpenSettings={() => setSettingsOpen(true)} />
+            {!debug && <CommandReceipt status={status} />}
             {debug && (
               <DebugRail
                 status={status}

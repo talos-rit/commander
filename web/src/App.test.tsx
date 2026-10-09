@@ -91,7 +91,7 @@ describe("App with one camera", () => {
     const { user, callsTo } = setup(makeStatus());
     await user.click(await screen.findByRole("button", { name: /home/i }));
     expect(callsTo("POST", "/control/home")[0].body).toEqual({ host: "bluey.local" });
-    expect(screen.getByText("Homing…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^home$/i })).toBeEnabled();
   });
 
   it("toggles the virtual camera once the feed has a frame", async () => {

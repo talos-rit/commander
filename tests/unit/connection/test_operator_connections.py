@@ -101,7 +101,23 @@ def test_publish_builds_expected_packet_and_increments_command_id(operator_conne
     assert operator_connection.socket.sent == expected_message + expected_crc
 
 
-def test_publish_handles_socket_error(operator_connection, monkeypatch):
+def test_publish_records_a_send_and_ack_does_not_corrupt_telemetry(operator_connection):
+    heard = []
+    operator_connection.add_message_listener(heard.append)
+
+    assert operator_connection.publish(command=2, payload=b"\x00\x00\x00\x00") == 0
+    operator_connection._on_message(b"ACK\x00TEL 1 2 3 4 5 6 7 8 9 10 11\nACK")
+    operator_connection._on_message(b"\x00")
+
+    receipt = operator_connection.command_receipt()
+    assert receipt["sent"] == 1
+    assert receipt["acked"] == 2
+    assert receipt["last_command"] == "Home"
+    assert receipt["last_failed"] is False
+    assert heard == ["TEL 1 2 3 4 5 6 7 8 9 10 11"]
+
+
+def test_publish_records_a_failed_send(operator_connection, monkeypatch):
     class BadSocket(DummySocket):
         def sendall(self, _: bytes):
             raise OSError("fail")
@@ -110,6 +126,10 @@ def test_publish_handles_socket_error(operator_connection, monkeypatch):
     operator_connection.socket = bad_socket
 
     assert operator_connection.publish(command=1, payload=b"") == -1
+    receipt = operator_connection.command_receipt()
+    assert receipt["sent"] == 0
+    assert receipt["last_failed"] is True
+    assert receipt["last_command"] == "Aim"
 
 
 def test_close_shuts_down_socket_and_joins_thread(operator_connection):
