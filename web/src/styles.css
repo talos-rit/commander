@@ -933,9 +933,9 @@ button:disabled {
 .jogpad {
   display: grid;
   grid-template-areas:
-    ". up ."
+    "sh-neg up sh-pos"
     "left home right"
-    ". down .";
+    "el-neg down el-pos";
   grid-template-columns: repeat(3, 56px);
   grid-template-rows: repeat(3, 56px);
   gap: 6px;
@@ -943,6 +943,19 @@ button:disabled {
   margin-bottom: 12px;
   touch-action: none;
   user-select: none;
+}
+
+.armmark {
+  display: block;
+  width: 36px;
+  height: 36px;
+  background: currentColor;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
 }
 
 .jogpad__btn {
@@ -1008,6 +1021,10 @@ button:disabled {
 
 .axisbtn--line {
   width: 100%;
+}
+
+.rail__ops {
+  margin-top: 14px;
 }
 
 .rail__speed {

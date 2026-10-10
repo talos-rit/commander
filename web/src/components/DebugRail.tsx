@@ -1,5 +1,9 @@
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Box, Gauge, House, Radio } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import elbowMinus from "../assets/elbow_-.svg";
+import elbowPlus from "../assets/elbow_+.svg";
+import shoulderMinus from "../assets/shoulder_-.svg";
+import shoulderPlus from "../assets/shoulder_+.svg";
 import type { Direction, JogMode, Status, Telemetry } from "../types";
 import { CommandReceipt } from "./ActionBar";
 import { ModelSlider } from "./ModelSlider";
@@ -42,11 +46,41 @@ const CARTESIAN: { axis: Axis; sign: -1 | 1; label: string }[] = [
   { axis: "z", sign: 1, label: "Z +" },
 ];
 
-const JOINTS: { axis: JointName; direction: -1 | 1; label: string }[] = [
-  { axis: "shoulder", direction: -1, label: "Shoulder −" },
-  { axis: "shoulder", direction: 1, label: "Shoulder +" },
-  { axis: "elbow", direction: -1, label: "Elbow −" },
-  { axis: "elbow", direction: 1, label: "Elbow +" },
+const CORNER_JOGS: {
+  axis: JointName;
+  direction: -1 | 1;
+  label: string;
+  title: string;
+  area: string;
+}[] = [
+  {
+    axis: "shoulder",
+    direction: -1,
+    label: "Shoulder −",
+    title: "Shoulder −. Lower the arm back toward the base.",
+    area: "sh-neg",
+  },
+  {
+    axis: "shoulder",
+    direction: 1,
+    label: "Shoulder +",
+    title: "Shoulder +. Raise the arm up at 45°.",
+    area: "sh-pos",
+  },
+  {
+    axis: "elbow",
+    direction: -1,
+    label: "Elbow −",
+    title: "Elbow −. Close the bend. The upper link swings down.",
+    area: "el-neg",
+  },
+  {
+    axis: "elbow",
+    direction: 1,
+    label: "Elbow +",
+    title: "Elbow +. Open the bend. The upper link swings up.",
+    area: "el-pos",
+  },
 ];
 
 function cartesianVector(axis: Axis, sign: -1 | 1): [-1 | 0 | 1, -1 | 0 | 1, -1 | 0 | 1] {
@@ -57,11 +91,19 @@ function cartesianVector(axis: Axis, sign: -1 | 1): [-1 | 0 | 1, -1 | 0 | 1, -1 
 
 function HoldButton({
   label,
+  title,
+  icon,
+  className = "axisbtn",
+  style,
   disabled,
   onStart,
   onStop,
 }: {
   label: string;
+  title?: string;
+  icon?: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
   disabled: boolean;
   onStart: () => void;
   onStop: () => void;
@@ -90,8 +132,10 @@ function HoldButton({
   return (
     <button
       type="button"
-      className="axisbtn"
+      className={className}
+      style={style}
       aria-label={label}
+      title={title ?? label}
       disabled={disabled}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -109,8 +153,23 @@ function HoldButton({
         if (event.key === " " || event.key === "Enter") release();
       }}
     >
-      {label}
+      {icon ?? label}
     </button>
+  );
+}
+
+const JOINT_MARKS = {
+  shoulder: { "-1": shoulderMinus, "1": shoulderPlus },
+  elbow: { "-1": elbowMinus, "1": elbowPlus },
+} as const;
+
+function ArmMark({ axis, direction }: { axis: JointName; direction: -1 | 1 }) {
+  const src = JOINT_MARKS[axis][direction];
+  return (
+    <span
+      className="armmark"
+      style={{ maskImage: `url("${src}")`, WebkitMaskImage: `url("${src}")` }}
+    />
   );
 }
 
@@ -211,6 +270,19 @@ export function DebugRail({
         </h3>
         {host?.auto_tracking && <p className="muted">Turn off Auto-Track to jog manually.</p>}
         <div className="jogpad" aria-label="Jog pad">
+          {CORNER_JOGS.map((joint) => (
+            <HoldButton
+              key={joint.label}
+              label={joint.label}
+              title={joint.title}
+              icon={<ArmMark axis={joint.axis} direction={joint.direction} />}
+              className="jogpad__btn"
+              style={{ gridArea: joint.area }}
+              disabled={jogDisabled}
+              onStart={() => onJointStart(joint.axis, joint.direction)}
+              onStop={onJointStop}
+            />
+          ))}
           {PAD.map(({ direction, icon, area }) => (
             <button
               key={direction}
@@ -268,23 +340,11 @@ export function DebugRail({
           <p className="hint">Y − extends the arm. Y + retracts it.</p>
         </div>
 
-        <div className="axisblock">
-          <h4>Joints</h4>
-          <div className="axisgrid">
-            {JOINTS.map(({ axis, direction, label }) => (
-              <HoldButton
-                key={label}
-                label={label}
-                disabled={jogDisabled}
-                onStart={() => onJointStart(axis, direction)}
-                onStop={onJointStop}
-              />
-            ))}
-          </div>
-          <button type="button" className="axisbtn axisbtn--line" disabled={!connected} onClick={onEnableControl}>
+        <div className="axisgrid rail__ops">
+          <button type="button" className="axisbtn" disabled={!connected} onClick={onEnableControl}>
             Enable control
           </button>
-          <button type="button" className="axisbtn axisbtn--line" disabled={!connected} onClick={onStop}>
+          <button type="button" className="axisbtn" disabled={!connected} onClick={onStop}>
             Stop
           </button>
         </div>
