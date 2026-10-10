@@ -67,6 +67,7 @@ def test_start_registers_termination_handler_and_starts_thread(mocker, one_frame
     mock_thread_cls = mocker.patch(
         "src.streaming.pyvcam_streamer.threading.Thread", return_value=mock_thread
     )
+    mock_camera = mocker.patch("src.streaming.pyvcam_streamer.pyvcam.Camera")
 
     config = PyVcamStreamConfig(fps=12)
     controller = PyVcamStreamController(frame_getter=one_frame_getter, config=config)
@@ -76,10 +77,10 @@ def test_start_registers_termination_handler_and_starts_thread(mocker, one_frame
     assert controller._is_running is True
     assert controller._term_id == term_id
     mock_add.assert_called_once_with(controller.stop)
+    mock_camera.assert_called_once_with(width=3, height=2, fps=12, fmt=mocker.ANY)
     mock_thread.start.assert_called_once()
     mock_thread_cls.assert_called_once_with(
         target=controller._stream_loop,
-        args=(3, 2, 12),
         name="pyvcam-stream",
         daemon=True,
     )
@@ -91,28 +92,45 @@ def test_stop_joins_thread_and_removes_termination_handler(mocker):
 
     controller = PyVcamStreamController(frame_getter=lambda: None, config=PyVcamStreamConfig())
     mock_thread = mocker.Mock(spec=threading.Thread)
+    camera = mocker.Mock()
     controller._thread = mock_thread
     controller._term_id = 42
+    controller._camera = camera
 
     controller.stop(timeout_s=0.5)
 
     mock_thread.join.assert_called_once_with(timeout=0.5)
+    camera.close.assert_called_once()
     mock_remove.assert_called_once_with(42)
     assert controller._term_id is None
+    assert controller._camera is None
+
+
+def test_start_closes_nothing_and_drops_handler_when_camera_fails(mocker, one_frame_getter):
+    mock_remove = mocker.patch("src.streaming.pyvcam_streamer.remove_termination_handler")
+    mocker.patch("src.streaming.pyvcam_streamer.add_termination_handler", return_value=7)
+    mocker.patch(
+        "src.streaming.pyvcam_streamer.pyvcam.Camera",
+        side_effect=RuntimeError("obs backend: virtual camera is not installed"),
+    )
+    mock_thread = mocker.patch("src.streaming.pyvcam_streamer.threading.Thread")
+
+    controller = PyVcamStreamController(frame_getter=one_frame_getter, config=PyVcamStreamConfig())
+
+    with pytest.raises(RuntimeError, match="virtual camera is not installed"):
+        controller.start()
+
+    mock_thread.assert_not_called()
+    mock_remove.assert_called_once_with(7)
+    assert controller._term_id is None
+    assert controller.is_running() is False
 
 
 def test_stream_loop_sends_frame_and_exits(mocker, sample_frame):
 
     mock_cam = mocker.Mock()
-    mock_cam.send = mocker.Mock()
-    mock_cam.sleep_until_next_frame = mocker.Mock()
-
-    context_manager = mocker.MagicMock()
-    context_manager.__enter__.return_value = mock_cam
-    context_manager.__exit__.return_value = False
-
-    mocker.patch("src.streaming.pyvcam_streamer.pyvcam.Camera", return_value=context_manager)
-
+    mock_cam.width = 3
+    mock_cam.height = 2
     stop_event = threading.Event()
 
     def frame_getter():
@@ -123,8 +141,9 @@ def test_stream_loop_sends_frame_and_exits(mocker, sample_frame):
 
     controller = PyVcamStreamController(frame_getter=frame_getter, config=PyVcamStreamConfig())
     controller._stop_event = stop_event
+    controller._camera = mock_cam
 
-    controller._stream_loop(width=3, height=2, fps=7)
+    controller._stream_loop()
 
     mock_cam.send.assert_called_once_with(sample_frame)
     mock_cam.sleep_until_next_frame.assert_called_once()

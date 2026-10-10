@@ -31,6 +31,20 @@ class ConnectionConfig(BaseModel):
     )
 
     # Tracking parameters
+    pi_vision_url: Optional[str] = Field(default=None, description="PiVision local tracking and manual gateway URL; Commander supervises control")
+    pi_vision_max_age_s: float = Field(default=0.35, ge=0.05, le=1.0)
+    pi_vision_speed_percent: int = Field(default=20, ge=1, le=100)
+
+    @field_validator("pi_vision_url")
+    @classmethod
+    def validate_pi_vision_url(cls, value):
+        if value is not None:
+            from urllib.parse import urlsplit
+            parsed = urlsplit(value)
+            if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise ValueError("PiVision URL must be an HTTP(S) service URL without credentials, query or fragment")
+        return value
+
     acceptable_box_percent: float = Field(
         default=0.4,
         description="Percentage of frame used for acceptable box (0.0 to 1.0)",
