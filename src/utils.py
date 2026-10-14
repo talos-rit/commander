@@ -83,6 +83,12 @@ def _ensure_termination_handlers() -> list[TerminationHandler]:
     return TERMINATION_HANDLERS
 
 
+def ensure_termination_guard() -> None:
+    """Install the SIGINT cleanup handler if needed. signal.signal only works on
+    the main thread, so call this before registering handlers from other threads."""
+    _ensure_termination_handlers()
+
+
 def start_termination_guard():
     logger.debug("Setting up cleanup handlers")
     global TERMINATION_HANDLERS
