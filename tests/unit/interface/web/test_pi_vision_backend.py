@@ -170,3 +170,33 @@ def test_enable_tracking_transport_failure_is_not_reported_as_conflict(web_confi
     response = client.post("/api/control/auto-track", json={"enabled": True})
     assert response.status_code == 502
     assert response.json()["detail"] == "PiVision unreachable: connection timed out"
+
+
+def test_pi_subjects_are_scaled_to_the_video_and_can_be_zoomed(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    backend._pi_vision["a"] = Control()
+    app.connections["a"].video_connection.shape = (240, 320, 3)
+
+    backend._on_pi_observations("a", [{"box": [100, 40, 200, 400], "confidence": 0.8, "id": 4}], (640, 480))
+
+    host = backend.status()["connections"]["a"]
+    assert host["subject_list"] == [{"id": 4, "confidence": 0.8, "box": [50, 20, 100, 200]}]
+    assert backend.set_zoom_target(4) == 4
+    assert app.connections["a"].focus_track_id == 4
+
+    backend._on_pi_observations("a", None, None)
+    assert backend.status()["connections"]["a"]["subject_list"] == []
+
+
+def test_pi_overlay_is_drawn_before_the_zoom(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    drawn = []
+    control = Control()
+    control.annotate_frame = lambda frame: drawn.append(frame) or frame
+    backend._pi_vision["a"] = control
+
+    backend.get_frame("a")
+
+    assert len(drawn) == 1

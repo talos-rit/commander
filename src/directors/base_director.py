@@ -54,7 +54,7 @@ class BaseDirector(ABC):
 
     def track_obj(self) -> Any | None:
         for host, conn in self.connections.items():
-            bbox = conn.get_bboxes()
+            bbox = conn.get_tracking_bboxes()
             if host in self.connections and bbox is not None and len(bbox) > 0:
                 video_conn = conn.video_connection
                 if (

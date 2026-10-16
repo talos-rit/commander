@@ -11,6 +11,7 @@ from src.config.save import remove_config, save_app_settings, update_config
 from src.config.schema.app import AppSettingsFields
 from src.config.schema.robot import ConnectionConfig
 from src.connection.publisher import Direction
+from src.observations.types import PersonObservation
 from src.talos_app import ControlMode
 from src.tracking.pi_vision import PiVisionControl
 
@@ -137,9 +138,41 @@ class CommanderWebBackend:
         robot = config.ROBOT_CONFIGS.get(host)
         if robot and robot.pi_vision_url and host in self.app.connections and host not in self._pi_vision:
             self.app.set_manual_control(True, hostname=host)
-            control = PiVisionControl(self.app.connections[host].publisher, robot)
+            control = PiVisionControl(
+                self.app.connections[host].publisher,
+                robot,
+                on_observations=lambda detections, size, h=host: self._on_pi_observations(h, detections, size),
+            )
             self._pi_vision[host] = control
             control.start()
+
+    def _on_pi_observations(self, host: str, detections: list[dict] | None, size: tuple[int, int] | None) -> None:
+        """Store PiVision subjects on the connection, in video-frame pixels, so zoom can use them.
+
+        Runs on the PiVision polling thread; takes no backend lock because
+        closing a control joins that thread while holding it.
+        """
+        conn = self.app.connections.get(host)
+        if conn is None:
+            return
+        shape = getattr(conn.video_connection, "shape", None)
+        if detections is None or size is None or shape is None:
+            conn.set_observations(None)
+            return
+        sx, sy = shape[1] / size[0], shape[0] / size[1]
+        conn.set_observations(
+            [
+                PersonObservation(
+                    camera_id=host,
+                    frame_sequence=0,
+                    capture_timestamp=0.0,
+                    bounding_box=(d["box"][0] * sx, d["box"][1] * sy, d["box"][2] * sx, d["box"][3] * sy),
+                    detection_confidence=float(d["confidence"]),
+                    local_track_id=d.get("id"),
+                )
+                for d in detections
+            ]
+        )
 
     def _stop_pi_vision(self, host: str | None, close: bool = False) -> None:
         control = self._pi_vision.get(host)
@@ -234,10 +267,32 @@ class CommanderWebBackend:
             "has_video": video is not None and video.shape is not None,
             "auto_tracking": self._pi_vision[host].status()["enabled"] if host in self._pi_vision else not conn.is_manual,
             "subjects": self._pi_vision[host].status()["subjects"] if host in self._pi_vision else len(conn.get_bboxes() or []),
+            "subject_list": self._subject_list(conn),
+            "zoom": self._zoom_status(host, conn),
             "pi_vision": self._pi_vision[host].status() if host in self._pi_vision else None,
             "telemetry": self._telemetry(publisher),
             "command": self._command_receipt(publisher),
         }
+
+    @staticmethod
+    def _subject_list(conn: Any) -> list[dict[str, Any]]:
+        observations = conn.get_observations() or []
+        subjects = [
+            {
+                "id": observation.local_track_id,
+                "confidence": round(observation.detection_confidence, 3)
+                if observation.detection_confidence is not None
+                else None,
+                "box": [int(v) for v in observation.bounding_box],
+            }
+            for observation in observations
+        ]
+        return sorted(subjects, key=lambda subject: (subject["id"] is None, subject["id"] or 0))
+
+    def _zoom_status(self, host: str, conn: Any) -> dict[str, Any]:
+        # The zoom only learns a new target when it renders a frame, so report
+        # the connection's focus directly.
+        return {**self.app.streamer.zoom(host).status(), "target": conn.focus_track_id}
 
     @staticmethod
     def _command_receipt(publisher: Any) -> dict[str, Any] | None:
@@ -406,6 +461,27 @@ class CommanderWebBackend:
                 raise BackendError("Could not start the virtual camera", 500)
             return True
 
+    def set_zoom_target(self, track_id: int | None, host: str | None = None) -> int | None:
+        """Zoom on, and follow, the subject with this tracker ID. None shows the full frame."""
+        with self._lock:
+            target = self._target(host)
+            conn = self.app.connections[target]
+            if track_id is not None:
+                visible = {o.local_track_id for o in conn.get_observations() or []}
+                if track_id not in visible:
+                    raise BackendError(f"Subject #{track_id} is no longer in view", 404)
+            conn.focus_track_id = track_id
+            return track_id
+
+    def set_zoom_fill(self, fill: float, host: str | None = None) -> float:
+        """How much of the zoomed frame the subject should take up, from 0.2 to 0.9."""
+        with self._lock:
+            target = self._target(host)
+            try:
+                return self.app.streamer.zoom(target).set_fill(fill)
+            except ValueError as exc:
+                raise BackendError(str(exc), 422) from exc
+
     def _require_debug(self) -> None:
         if self.state.ui_mode != "debug":
             raise BackendError("Manual controls are only available in debug mode", 403)
@@ -541,9 +617,9 @@ class CommanderWebBackend:
     def get_frame(self, host: str) -> np.ndarray | None:
         if host not in self.app.connections:
             return None
-        frame = self.app.streamer.get_frame(host)
         control = self._pi_vision.get(host)
-        return control.annotate_frame(frame) if control is not None and frame is not None else frame
+        # The overlay is drawn before the zoom crops, so it stays aligned.
+        return self.app.streamer.get_frame(host, annotate=control.annotate_frame if control else None)
 
     def frame_sequence(self, host: str) -> int | None:
         conn = self.app.connections.get(host)

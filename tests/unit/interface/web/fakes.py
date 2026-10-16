@@ -8,6 +8,7 @@ from src.config.schema.app import AppSettingsFields
 from src.config.schema.robot import ConnectionConfig
 from src.connection.publisher import ERVTelemetrySnapshot
 from src.observations.types import FramePacket
+from src.streaming.zoom import DigitalZoom
 from src.talos_app import ControlMode
 
 
@@ -49,9 +50,17 @@ class FakeConnection:
         self.publisher = FakePublisher()
         self.video_connection = FakeVideo(frame)
         self.bboxes = []
+        self.observations = []
+        self.focus_track_id = None
 
     def get_bboxes(self):
         return self.bboxes
+
+    def get_observations(self):
+        return self.observations
+
+    def set_observations(self, observations):
+        self.observations = observations or []
 
 
 class FakeApp:
@@ -65,13 +74,18 @@ class FakeApp:
         self.model: str | None = None
         self.change_model_result = True
         self.control_mode = ControlMode.DISCRETE
-        self.streamer = SimpleNamespace(get_frame=self._get_frame)
+        self.zooms: dict[str, DigitalZoom] = {}
+        self.streamer = SimpleNamespace(
+            get_frame=self._get_frame,
+            zoom=lambda host: self.zooms.setdefault(host, DigitalZoom()),
+        )
         self.streaming = False
         self.stream_error: Exception | None = None
 
-    def _get_frame(self, host):
+    def _get_frame(self, host, annotate=None):
         conn = self.connections.get(host)
-        return conn.video_connection.frame if conn else None
+        frame = conn.video_connection.frame if conn else None
+        return annotate(frame) if annotate is not None and frame is not None else frame
 
     def open_connection(self, host):
         self.calls.append(("open", host))

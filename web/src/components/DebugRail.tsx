@@ -8,6 +8,7 @@ import type { Direction, JogMode, Status, Telemetry } from "../types";
 import { CommandReceipt } from "./ActionBar";
 import { ModelSlider } from "./ModelSlider";
 import { Rocker, type RockerOption } from "./Rocker";
+import { ZoomPanel } from "./ZoomPanel";
 
 export const JOG_OPTIONS: readonly [RockerOption<JogMode>, RockerOption<JogMode>] = [
   { value: "discrete", label: "Discrete", description: "Sends repeated step commands while held" },
@@ -31,6 +32,8 @@ interface Props {
   onJogMode: (mode: JogMode) => void;
   onModel: (model: string | null) => void;
   onHome: () => void;
+  onZoomTarget: (trackId: number | null) => void;
+  onZoomFill: (fill: number) => void;
   /** Directions currently held by a controller. */
   heldDirections?: readonly Direction[];
   /** A pad is connected; the extra hint can mention it. */
@@ -225,6 +228,8 @@ export function DebugRail({
   onJogMode,
   onModel,
   onHome,
+  onZoomTarget,
+  onZoomFill,
   heldDirections = [],
   controllerConnected = false,
 }: Props) {
@@ -433,6 +438,14 @@ export function DebugRail({
         </h3>
         <TelemetryCard telemetry={host?.telemetry ?? null} />
       </section>
+
+      <ZoomPanel
+        host={host}
+        modelLoaded={Boolean(host?.pi_vision ? host.pi_vision.perception_enabled : status.tracking.model)}
+        piVision={Boolean(host?.pi_vision)}
+        onTarget={onZoomTarget}
+        onFill={onZoomFill}
+      />
 
       <section className="rail__section rail__section--placeholder">
         <h3>Digital twin</h3>

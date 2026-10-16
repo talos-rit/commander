@@ -101,10 +101,55 @@ def validate_observations(payload):
     return sample
 
 
+class SubjectIds:
+    """IDs for Pi detections that persist across samples.
+
+    The Pi sends boxes without tracker IDs, so each new box takes the ID of the
+    nearest box from recent samples, within `max_jump` of the image width.
+    """
+
+    def __init__(self, max_jump=0.2, forget_s=1.5):
+        self.max_jump, self.forget_s = max_jump, forget_s
+        self._tracks = {}  # id -> (center_x, center_y, last_seen)
+        self._next = 1
+
+    def reset(self):
+        self._tracks.clear()
+
+    def assign(self, boxes, width, now):
+        self._tracks = {i: t for i, t in self._tracks.items() if now - t[2] <= self.forget_s}
+        centers = [((x1 + x2) / 2, (y1 + y2) / 2) for x1, y1, x2, y2 in boxes]
+        pairs = sorted(
+            (math.dist(center, track[:2]), index, track_id)
+            for index, center in enumerate(centers)
+            for track_id, track in self._tracks.items()
+        )
+        matched, used = {}, set()
+        for distance, index, track_id in pairs:
+            if distance > self.max_jump * width:
+                break
+            if index not in matched and track_id not in used:
+                matched[index] = track_id
+                used.add(track_id)
+        ids = []
+        for index, center in enumerate(centers):
+            track_id = matched.get(index)
+            if track_id is None:
+                track_id, self._next = self._next, self._next + 1
+            self._tracks[track_id] = (*center, now)
+            ids.append(track_id)
+        return ids
+
+
 class PiVisionControl:
     """Commander supervision only. Every detection-to-motion step stays on Pi."""
-    def __init__(self, publisher, robot_config, request=request_json, clock=time.monotonic):
+    def __init__(self, publisher, robot_config, request=request_json, clock=time.monotonic,
+                 on_observations=None):
         self.config, self.request, self.clock = robot_config, request, clock
+        # Called with (detections with "id" added, (width, height)) per sample, or
+        # (None, None) once observations stop. Runs on the polling thread.
+        self.on_observations = on_observations
+        self._ids = SubjectIds()
         self.owner = uuid.uuid4().hex
         self._lock = threading.RLock()
         self._quit = threading.Event()
@@ -140,8 +185,15 @@ class PiVisionControl:
             identity = (payload["session_id"], sample["sequence"])
             if self._identity is not None and identity[0] != self._identity[0]:
                 self._enabled = False  # Pi restart requires explicit rearming.
+                self._ids.reset()
+            if identity == self._identity:
+                return  # Same sample polled again; keep its IDs.
+            ids = self._ids.assign([d["box"] for d in sample["detections"]], sample["width"], self.clock())
+            sample = {**sample, "detections": [{**d, "id": i} for d, i in zip(sample["detections"], ids)]}
             self._identity, self._sample = identity, sample
             self._capture = request_started - sample["age_s"]
+        if self.on_observations is not None:
+            self.on_observations(sample["detections"], (sample["width"], sample["height"]))
 
     def _poll(self):
         while not self._quit.is_set():
@@ -182,6 +234,9 @@ class PiVisionControl:
             except Exception as error:
                 with self._lock:
                     self._observation_error = str(error)
+                    stale = self._sample is None or self.clock() - self._capture > 1.0
+                if stale and self.on_observations is not None:
+                    self.on_observations(None, None)
             self._quit.wait(0.1)
 
     def set_enabled(self, enabled):
@@ -271,6 +326,10 @@ class PiVisionControl:
                     if confidence >= .3:
                         cv2.circle(canvas, point(x, y), 3, (255, 255, 0), -1)
             cv2.circle(canvas, point(*detection["aim_point"]), 5, (0, 165, 255), -1)
+            if detection.get("id") is not None:
+                left, top = point(x1, y1)
+                cv2.putText(canvas, f"#{detection['id']}", (left + 4, max(16, top - 6)),
+                            cv2.FONT_HERSHEY_SIMPLEX, .6, (0, 255, 0), 2)
         label = "PiVision | AUTO ON" if enabled else "PiVision | AUTO OFF"
         cv2.putText(canvas, label, (12, 26), cv2.FONT_HERSHEY_SIMPLEX, .65, (0, 0, 0), 4)
         cv2.putText(canvas, label, (12, 26), cv2.FONT_HERSHEY_SIMPLEX, .65, (0, 255, 255), 2)

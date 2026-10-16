@@ -628,3 +628,63 @@ def test_delete_unknown_robot(web_config):
 def test_list_robots(web_config):
     backend, _, _ = make_backend()
     assert list(backend.list_robots()) == ["a", "b"]
+
+
+# --- zoom -----------------------------------------------------------------------
+
+
+def _person(track_id, box, confidence=0.9):
+    from src.observations.types import PersonObservation
+
+    return PersonObservation("a", 0, 0.0, box, confidence, track_id)
+
+
+def test_status_lists_subjects_sorted_by_id(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].observations = [
+        _person(7, (1, 2, 3, 4), 0.81234),
+        _person(2, (5, 6, 7, 8)),
+    ]
+
+    host = backend.status()["connections"]["a"]
+
+    assert [s["id"] for s in host["subject_list"]] == [2, 7]
+    assert host["subject_list"][1] == {"id": 7, "confidence": 0.812, "box": [1, 2, 3, 4]}
+    assert host["zoom"]["target"] is None
+    assert host["zoom"]["fill"] == pytest.approx(0.6)
+
+
+def test_zoom_target_sets_focus_on_selected_robot(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].observations = [_person(3, (1, 2, 3, 4))]
+
+    assert backend.set_zoom_target(3) == 3
+    assert app.connections["a"].focus_track_id == 3
+    assert backend.status()["connections"]["a"]["zoom"]["target"] == 3
+
+    assert backend.set_zoom_target(None) is None
+    assert app.connections["a"].focus_track_id is None
+
+
+def test_zoom_target_must_be_in_view(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+
+    with pytest.raises(BackendError) as err:
+        backend.set_zoom_target(9)
+
+    assert err.value.status == 404
+    assert app.connections["a"].focus_track_id is None
+
+
+def test_zoom_fill_is_validated(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+
+    assert backend.set_zoom_fill(0.8) == pytest.approx(0.8)
+    assert app.streamer.zoom("a").fill == pytest.approx(0.8)
+    with pytest.raises(BackendError) as err:
+        backend.set_zoom_fill(1.5)
+    assert err.value.status == 422

@@ -264,3 +264,16 @@ def test_encode_jpeg_downscales():
 
     decoded = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     assert decoded.shape[:2] == (25, 50)
+
+
+def test_zoom_endpoints(setup):
+    from src.observations.types import PersonObservation
+
+    client, app = setup()
+    app.connections["a"].observations = [PersonObservation("a", 0, 0.0, (1, 2, 3, 4), 0.9, 5)]
+
+    assert client.post("/api/control/zoom/target", json={"track_id": 5}).json() == {"track_id": 5}
+    assert client.post("/api/control/zoom/target", json={"track_id": 6}).status_code == 404
+    assert client.post("/api/control/zoom/target", json={}).json() == {"track_id": None}
+    assert client.post("/api/control/zoom/fill", json={"fill": 0.5}).json() == {"fill": 0.5}
+    assert client.post("/api/control/zoom/fill", json={"fill": 0.95}).status_code == 422

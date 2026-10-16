@@ -36,6 +36,28 @@ export interface CommandReceipt {
   last_failed: boolean;
 }
 
+/** A person the local detector sees, keyed by its tracker ID. */
+export interface Subject {
+  /** Tracker ID. Null when the model does not track, so it cannot be zoomed on. */
+  id: number | null;
+  confidence: number | null;
+  /** x1, y1, x2, y2 in source-frame pixels. */
+  box: [number, number, number, number];
+}
+
+export interface ZoomStatus {
+  /** Subject being zoomed on and followed. Null shows the full frame. */
+  target: number | null;
+  /** The target is in the latest detections. */
+  locked: boolean;
+  /** The target just dropped out; the last framing is held briefly. */
+  holding: boolean;
+  /** Current magnification, 1 at full frame. */
+  level: number;
+  /** Share of the zoomed frame the subject takes up. */
+  fill: number;
+}
+
 export interface HostStatus {
   host: string;
   slot: Slot | null;
@@ -46,6 +68,9 @@ export interface HostStatus {
   has_video: boolean;
   auto_tracking: boolean;
   subjects?: number;
+  /** Not reported for PiVision robots, which detect on the Pi. */
+  subject_list?: Subject[];
+  zoom?: ZoomStatus | null;
   telemetry: Telemetry | null;
   /** Latest command handed toward Operator, when one has been attempted. */
   command?: CommandReceipt | null;

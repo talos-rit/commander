@@ -92,6 +92,8 @@ export default function App() {
   const onEnableControl = useCallback(() => void run(() => api.enableControl()), [run]);
   const onSpeed = useCallback((percent: number) => void run(() => api.setSpeed(percent)), [run]);
   const onModel = (model: string | null) => void run(() => api.setModel(model));
+  const onZoomTarget = (trackId: number | null) => void run(() => api.setZoomTarget(trackId, selectedHost));
+  const onZoomFill = (fill: number) => void run(() => api.setZoomFill(fill, selectedHost));
 
   const debug = status?.view.ui_mode === "debug";
   const robotReady = Boolean(selected?.open);
@@ -258,6 +260,8 @@ export default function App() {
                 onJogMode={onJogMode}
                 onModel={onModel}
                 onHome={() => void onHome()}
+                onZoomTarget={onZoomTarget}
+                onZoomFill={onZoomFill}
                 heldDirections={gamepad.held}
                 controllerConnected={Boolean(gamepad.pad)}
               />

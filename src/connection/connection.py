@@ -344,6 +344,8 @@ class Connection:
     _bboxes: list[BBox] | None = field(init=False, default=None)
     _observations: list[PersonObservation] | None = field(init=False, default=None)
     _bboxes_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
+    focus_track_id: int | None = field(init=False, default=None)
+    """Tracker ID of the subject to zoom on and follow. None follows anyone."""
 
     def __post_init__(self):
         self.publisher = self.publisher_factory(self.host, self.port)
@@ -368,6 +370,22 @@ class Connection:
     def get_observations(self) -> list[PersonObservation] | None:
         with self._bboxes_lock:
             return self._observations
+
+    def get_tracking_bboxes(self) -> list[BBox] | None:
+        """Boxes a director should follow.
+
+        While a focus subject is set, only that subject's box, so the arm does
+        not chase someone else when the subject is briefly lost.
+        """
+        with self._bboxes_lock:
+            focus = self.focus_track_id
+            if focus is None:
+                return self._bboxes
+            return [
+                observation.bounding_box
+                for observation in self._observations or []
+                if observation.local_track_id == focus
+            ]
 
     def set_observations(
         self, observations: list[PersonObservation] | None

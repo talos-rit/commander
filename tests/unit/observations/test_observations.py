@@ -68,7 +68,10 @@ def test_streamer_reuses_latest_frame_without_advancing_source(mocker) -> None:
     video_connection = mocker.Mock()
     video_connection.get_latest_frame.return_value = image
     connection = SimpleNamespace(
-        video_connection=video_connection, get_bboxes=lambda: []
+        video_connection=video_connection,
+        get_bboxes=lambda: [],
+        get_observations=lambda: None,
+        focus_track_id=None,
     )
     streamer = Streamer({"camera-a": connection})
 
@@ -86,6 +89,8 @@ def test_streamer_draws_on_copy_without_mutating_shared_packet(mocker) -> None:
     connection = SimpleNamespace(
         video_connection=video_connection,
         get_bboxes=lambda: [(10, 10, 30, 40)],
+        get_observations=lambda: None,
+        focus_track_id=None,
     )
 
     rendered = Streamer({"camera-a": connection}, draw_bboxes=True).get_frame(
