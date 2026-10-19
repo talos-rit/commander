@@ -160,7 +160,8 @@ function HoldButton({
 
 const JOINT_MARKS = {
   shoulder: { "-1": shoulderMinus, "1": shoulderPlus },
-  elbow: { "-1": elbowMinus, "1": elbowPlus },
+  // The elbow drawings run opposite the jog sign.
+  elbow: { "-1": elbowPlus, "1": elbowMinus },
 } as const;
 
 function ArmMark({ axis, direction }: { axis: JointName; direction: -1 | 1 }) {
