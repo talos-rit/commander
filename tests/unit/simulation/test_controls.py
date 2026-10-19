@@ -362,6 +362,8 @@ def test_real_degree_targets_use_fresh_measurement_and_preserve_forearm_independ
     real = RecordingRealPublisher()
     controller.real_publishers["bluey"] = real
     controller.set_selected_backend("real")
+    # The panel polls before a sample can count. Open that epoch first.
+    controller.advance_once()
     real.emit_telemetry((0, 1088, 2113, 1151), (0, 1088, 2113, 1151, 0))
 
     assert controller.move_real_joints_to_angles(-89.0, 0.0, 0.0)
