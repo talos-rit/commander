@@ -169,6 +169,77 @@ def test_stop_move_continuous_and_stop_all(monkeypatch, app_under_test, mocker):
     assert publisher.polar_pan_continuous_stop.call_count >= 1
 
 
+def test_joint_jog_refreshes_until_stopped(app_under_test, mocker):
+    app = app_under_test
+    publisher = mocker.Mock()
+    conn = mocker.Mock(is_manual=True, publisher=publisher, host="h")
+    app.connections["h"] = conn
+    app.connections.set_active("h")
+    task = mocker.Mock()
+    app.scheduler.set_interval.return_value = task
+
+    app.start_joint_jog(2, 1)
+    publisher.erv_joint_jog_start.assert_called_once_with(2, 1)
+    app.scheduler.set_interval.assert_called_once()
+    assert app.scheduler.set_interval.call_args.args[0] == talos_app.JOINT_JOG_REFRESH_MS
+
+    app.start_joint_jog(2, 1)
+    publisher.erv_joint_jog_start.assert_called_once()
+
+    app._refresh_joint_jog()
+    assert publisher.erv_joint_jog_start.call_count == 2
+
+    app.start_joint_jog(3, -1)
+    publisher.erv_joint_jog_stop.assert_called_once()
+    publisher.erv_joint_jog_start.assert_called_with(3, -1)
+
+    app.stop_joint_jog()
+    task.cancel.assert_called()
+    assert publisher.erv_joint_jog_stop.call_count == 2
+    assert app._joint_jog is None
+
+
+def test_cartesian_continuous_replaces_vector_and_stops(app_under_test, mocker):
+    app = app_under_test
+    publisher = mocker.Mock()
+    conn = mocker.Mock(is_manual=True, publisher=publisher, host="h")
+    app.connections["h"] = conn
+    app.connections.set_active("h")
+    app.control_mode = talos_app.ControlMode.CONTINUOUS
+
+    app.start_cartesian(0, -1, 0)
+    publisher.cartesian_move_continuous_start.assert_called_once_with(0, -1, 0)
+    app.start_cartesian(0, -1, 0)
+    publisher.cartesian_move_continuous_start.assert_called_once()
+
+    app.start_cartesian(0, 1, 0)
+    publisher.cartesian_move_continuous_start.assert_called_with(0, 1, 0)
+
+    app.stop_cartesian()
+    publisher.cartesian_move_continuous_stop.assert_called_once()
+    app.stop_all_movement()
+    publisher.polar_pan_continuous_stop.assert_called_once()
+
+
+def test_cartesian_discrete_repeats_a_step(app_under_test, mocker):
+    app = app_under_test
+    publisher = mocker.Mock()
+    conn = mocker.Mock(is_manual=True, publisher=publisher, host="h")
+    app.connections["h"] = conn
+    app.connections.set_active("h")
+    task = mocker.Mock()
+    app.scheduler.set_interval.return_value = task
+    app.control_mode = talos_app.ControlMode.DISCRETE
+
+    app.start_cartesian(0, -1, 0)
+    app._publish_cartesian_discrete()
+    publisher.cartesian_move_discrete.assert_called_once_with(0, -10, 0, 1000, 3000)
+
+    app.stop_cartesian()
+    task.cancel.assert_called_once()
+    publisher.cartesian_move_continuous_stop.assert_not_called()
+
+
 def test_stop_move_discrete_cancels_task(monkeypatch, app_under_test, mocker):
     app = app_under_test
     app.control_mode = talos_app.ControlMode.DISCRETE
@@ -191,6 +262,58 @@ def test_move_home_uses_publisher(monkeypatch, app_under_test, mocker):
 
     app.move_home()
     publisher.home.assert_called_once_with(1000)
+
+
+def test_move_home_targets_named_host_not_active(app_under_test, mocker):
+    app = app_under_test
+    active = mocker.Mock(is_manual=True, publisher=mocker.Mock())
+    other = mocker.Mock(is_manual=True, publisher=mocker.Mock())
+    app.connections["active"] = active
+    app.connections["other"] = other
+    app.connections.set_active("active")
+
+    app.move_home(hostname="other")
+
+    other.publisher.home.assert_called_once_with(1000)
+    active.publisher.home.assert_not_called()
+
+
+def test_move_home_unknown_host_logs_error(monkeypatch, app_under_test, mocker):
+    error = mocker.Mock()
+    monkeypatch.setattr(talos_app.logger, "error", error)
+
+    app_under_test.move_home(hostname="missing")
+
+    error.assert_called_once()
+
+
+def test_manual_control_passes_hostname_to_director(
+    app_under_test, patch_talos_app_dependencies
+):
+    director = patch_talos_app_dependencies["director"]
+
+    app_under_test.set_manual_control(False, hostname="h")
+    app_under_test.get_manual_control(hostname="h")
+    app_under_test.set_manual_control(True)
+
+    director.set_manual_control.assert_any_call(hostname="h", manual=False)
+    director.get_manual_control.assert_called_once_with(hostname="h")
+    director.set_manual_control.assert_called_with(manual=True)
+
+
+def test_change_model_toggles_bbox_overlay(
+    monkeypatch, app_under_test, patch_talos_app_dependencies, mocker
+):
+    app = app_under_test
+    app.connections["h"] = mocker.Mock()
+    monkeypatch.setattr(talos_app, "USABLE_MODELS", {"basic": object})
+    streamer = patch_talos_app_dependencies["streamer"]
+    streamer.draw_bboxes = False
+
+    assert app.change_model("basic") is True
+    assert streamer.draw_bboxes is True
+    assert app.change_model(None) is True
+    assert streamer.draw_bboxes is False
 
 
 def test_active_hostname_and_connection_methods(app_under_test, mocker):

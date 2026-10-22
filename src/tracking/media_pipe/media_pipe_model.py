@@ -3,7 +3,7 @@ from mediapipe.tasks.python import BaseOptions, vision
 
 from src.tracking.detector import ObjectModel
 from src.tracking.media_pipe.model_path import path_efficientdet_lite0
-from src.tracking.types import BBox
+from src.tracking.types import BBox, LocalDetection
 
 
 def detection_result_to_xywh(detection_result) -> BBox:
@@ -32,7 +32,7 @@ class MediaPipeModel(ObjectModel):
         )
         self.object_detector = vision.ObjectDetector.create_from_options(options)
 
-    def detect_person(self, frame) -> list[BBox]:
+    def detect_person(self, frame) -> list[LocalDetection]:
         frameRGB, size = self.resize_frame(frame, self.inHeight, self.inWidth)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frameRGB)
         detection_result = self.object_detector.detect(mp_image)
@@ -40,5 +40,13 @@ class MediaPipeModel(ObjectModel):
         if detection_result:
             for detection in detection_result.detections:
                 xywh = detection_result_to_xywh(detection)
-                bboxes.append(self.fix_bbox_scale(self.xywh_to_xyxy(xywh), size))
+                category = detection.categories[0] if detection.categories else None
+                bboxes.append(
+                    LocalDetection(
+                        bounding_box=self.fix_bbox_scale(
+                            self.xywh_to_xyxy(xywh), size
+                        ),
+                        confidence=category.score if category is not None else None,
+                    )
+                )
         return bboxes
