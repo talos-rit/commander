@@ -5,7 +5,10 @@ from loguru import logger
 import src.config as config
 from src.connection.publisher import Direction, Publisher
 from src.directors.base_director import BaseDirector
+from src.tracking.vertical import named_joint_counts, select_vertical_motion
 from src.utils import calculate_acceptable_box, calculate_center_bbox
+
+_COUNT_FRESH_S = 1.25
 
 
 class ContinuousDirector(BaseDirector):
@@ -89,29 +92,105 @@ class ContinuousDirector(BaseDirector):
                 logger.debug(f"Move camera down: Average:{average} Center:{center}")
                 change_in_y = average - center_bottom
 
-            if change_in_x > 0:
-                publisher.polar_pan_continuous_direction_start(Direction.RIGHT)
+            # One axis at a time. Horizontal pan wins a tie; a larger vertical error waits for it.
+            horizontal = change_in_x != 0 and (change_in_y == 0 or abs(change_in_x) >= abs(change_in_y))
+            if horizontal and change_in_x > 0:
+                self._command(hostname, publisher, ("polar", Direction.RIGHT))
                 logger.debug("start right")
-                self.last_command_stop = False
-            elif change_in_x < 0:
-                publisher.polar_pan_continuous_direction_start(Direction.LEFT)
+            elif horizontal:
+                self._command(hostname, publisher, ("polar", Direction.LEFT))
                 logger.debug("start left")
-                self.last_command_stop = False
-            elif change_in_y < 0:
-                publisher.polar_pan_continuous_direction_start(Direction.UP)
-                logger.debug("start up")
-                self.last_command_stop = False
-            elif change_in_y > 0:
-                publisher.polar_pan_continuous_direction_start(Direction.DOWN)
-                logger.debug("start down")
-                self.last_command_stop = False
-            elif not self.last_command_stop:
+            elif change_in_y != 0:
+                self._command_vertical(hostname, publisher, image_up=change_in_y < 0)
+            else:
+                self._release(hostname, publisher)
+            return
+        self._release(hostname, publisher)
+        self.movement_detection_start_time = None
+
+    def _command_vertical(self, hostname: str, publisher: Publisher, image_up: bool) -> None:
+        robot = config.ROBOT_CONFIGS[hostname]
+        counts, fresh = self._read_counts(publisher)
+        named = named_joint_counts(counts)
+        motion = select_vertical_motion(
+            elbow=bool(getattr(robot, "track_elbow", False)),
+            shoulder=bool(getattr(robot, "track_shoulder", False)),
+            polar_vertical=bool(getattr(robot, "track_polar_vertical", True)),
+            image_up=image_up,
+            elbow_count=named.get("elbow"),
+            shoulder_count=named.get("shoulder"),
+            pitch_count=named.get("pitch"),
+            counts_fresh=fresh,
+            elbow_limits=_limit_pair(robot, "elbow_count_min", "elbow_count_max"),
+            shoulder_limits=_limit_pair(robot, "shoulder_count_min", "shoulder_count_max"),
+            pitch_limits=_limit_pair(robot, "pitch_count_min", "pitch_count_max"),
+        )
+        if motion is None:
+            logger.info("Vertical tracking held; no enabled axis can move.")
+            self._release(hostname, publisher)
+            return
+        if motion[0] == "polar":
+            self._command(hostname, publisher, ("polar", Direction.UP if motion[1] > 0 else Direction.DOWN))
+            return
+        self._command(hostname, publisher, motion)
+
+    def _command(self, hostname: str, publisher: Publisher, motion: tuple) -> None:
+        """Start or refresh one tracking motion. A joint jog and a polar pan are different operations."""
+        current = self._motions().get(hostname)
+        if current is not None and current[0] != motion[0]:
+            self._halt(publisher, current)
+        elif current is not None and current[0] == "joint" and current != motion:
+            publisher.erv_joint_jog_stop()
+        if motion[0] == "joint":
+            publisher.erv_joint_jog_start(motion[1], motion[2])
+        else:
+            publisher.polar_pan_continuous_direction_start(motion[1])
+        self._motions()[hostname] = motion
+        self.last_command_stop = False
+
+    def _release(self, hostname: str, publisher: Publisher) -> None:
+        current = self._motions().pop(hostname, None)
+        if current is None:
+            if not self.last_command_stop:
                 publisher.polar_pan_continuous_stop()
                 self.last_command_stop = True
             return
-        if not self.last_command_stop:
-            publisher.polar_pan_continuous_stop()
-            logger.info("Stop")
-            self.last_command_stop = True
+        self._halt(publisher, current)
+        self.last_command_stop = True
 
-        self.movement_detection_start_time = None
+    def _motions(self) -> dict:
+        motions = getattr(self, "_tracking_motion", None)
+        if motions is None:
+            motions = {}
+            self._tracking_motion = motions
+        return motions
+
+    def _halt(self, publisher: Publisher, motion: tuple) -> None:
+        if motion[0] == "joint":
+            stop = getattr(publisher, "erv_joint_jog_stop", None)
+            if stop is not None:
+                stop()
+            return
+        publisher.polar_pan_continuous_stop()
+
+    def _read_counts(self, publisher: Publisher) -> tuple[tuple | None, bool]:
+        if getattr(publisher, "tracking_joint_counts", None) is not None or hasattr(
+            publisher, "tracking_joint_counts_at"
+        ):
+            counts = getattr(publisher, "tracking_joint_counts", None)
+            received = getattr(publisher, "tracking_joint_counts_at", None)
+        elif hasattr(publisher, "_telemetry_lock"):
+            counts = publisher.get_erv_joint_counts()
+            received = publisher.get_erv_telemetry_received_monotonic()
+        else:
+            return None, False
+        fresh = received is not None and time.monotonic() - received <= _COUNT_FRESH_S
+        return counts, fresh
+
+
+def _limit_pair(robot, low_name: str, high_name: str) -> tuple[int, int] | None:
+    low = getattr(robot, low_name, None)
+    high = getattr(robot, high_name, None)
+    if low is None or high is None:
+        return None
+    return (low, high)

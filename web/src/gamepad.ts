@@ -354,6 +354,7 @@ function pulled(value: number, already: boolean): boolean {
 
 /**
  * Shoulder is the right stick's sideways axis, elbow is up and down.
+ * Stick up commands elbow negative.
  * The hardware jog moves one joint, so a diagonal keeps the joint already
  * held unless the other axis is clearly stronger.
  */
@@ -372,7 +373,7 @@ function jointFromStick(x: number, y: number, held: JointAxis | null): ArmComman
   } else if (shoulderOn) axis = "shoulder";
   else if (elbowOn) axis = "elbow";
   if (axis === "shoulder") return { axis, direction: x < 0 ? -1 : 1 };
-  if (axis === "elbow") return { axis, direction: y < 0 ? 1 : -1 };
+  if (axis === "elbow") return { axis, direction: y < 0 ? -1 : 1 };
   return null;
 }
 

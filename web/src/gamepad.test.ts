@@ -164,12 +164,12 @@ describe("arm axes", () => {
     return { joint: null, retract: false, extend: false, negativeRest: new Set(), centered: new Set() };
   }
 
-  it("maps the right stick to shoulder and elbow, with up as elbow positive", () => {
+  it("maps the right stick to shoulder and elbow, with up as elbow negative", () => {
     const state = hold();
     expect(armFromGamepad(pad({ axes: [0, 0, 1, 0] }), state).joint).toEqual({ axis: "shoulder", direction: 1 });
     expect(armFromGamepad(pad({ axes: [0, 0, -1, 0] }), hold()).joint).toEqual({ axis: "shoulder", direction: -1 });
-    expect(armFromGamepad(pad({ axes: [0, 0, 0, -1] }), hold()).joint).toEqual({ axis: "elbow", direction: 1 });
-    expect(armFromGamepad(pad({ axes: [0, 0, 0, 1] }), hold()).joint).toEqual({ axis: "elbow", direction: -1 });
+    expect(armFromGamepad(pad({ axes: [0, 0, 0, -1] }), hold()).joint).toEqual({ axis: "elbow", direction: -1 });
+    expect(armFromGamepad(pad({ axes: [0, 0, 0, 1] }), hold()).joint).toEqual({ axis: "elbow", direction: 1 });
     expect(state.joint).toBe("shoulder");
   });
 
@@ -177,7 +177,7 @@ describe("arm axes", () => {
     const state = hold();
     armFromGamepad(pad({ axes: [0, 0, 0.8, 0] }), state);
     expect(armFromGamepad(pad({ axes: [0, 0, 0.7, -0.75] }), state).joint?.axis).toBe("shoulder");
-    expect(armFromGamepad(pad({ axes: [0, 0, 0.4, -1] }), state).joint).toEqual({ axis: "elbow", direction: 1 });
+    expect(armFromGamepad(pad({ axes: [0, 0, 0.4, -1] }), state).joint).toEqual({ axis: "elbow", direction: -1 });
   });
 
   it("ignores a resting right stick and an unmapped listing", () => {

@@ -66,6 +66,8 @@ describe("SettingsPanel", () => {
   it("lists robots and the current camera slots", async () => {
     setup();
     expect(await screen.findByText("bluey.local", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText(":61616 · polar")).toBeInTheDocument();
+    expect(screen.queryByText(/rtsp:/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Camera 1 (primary)")).toHaveValue("bluey.local");
     expect(screen.getByLabelText("Camera 2 (optional)")).toHaveValue("");
     expect(screen.queryByRole("form", { name: "Add robot" })).not.toBeInTheDocument();
@@ -88,6 +90,9 @@ describe("SettingsPanel", () => {
       camera_index: 0,
       fps: 30,
       manual_only: true,
+      track_elbow: false,
+      track_shoulder: false,
+      track_polar_vertical: true,
       pi_vision_url: null,
     });
     expect(await screen.findByText("raspberrypi.local", { selector: "strong" })).toBeInTheDocument();
@@ -117,6 +122,29 @@ describe("SettingsPanel", () => {
       camera_index: "rtsp://bluey.local:8554/camera",
       fps: 30,
       manual_only: false,
+      track_elbow: false,
+      track_shoulder: false,
+      track_polar_vertical: true,
+    });
+  });
+
+  it("saves vertical axes independently and can turn vertical tracking off", async () => {
+    const { user, callsTo } = setup();
+    await user.click(await screen.findByRole("button", { name: "Edit bluey.local" }));
+    const form = screen.getByRole("form", { name: "Edit bluey.local" });
+    expect(within(form).getByLabelText("Polar up/down")).toBeChecked();
+    expect(within(form).getByLabelText("Elbow")).not.toBeChecked();
+    await user.click(within(form).getByLabelText("Elbow"));
+    await user.click(within(form).getByLabelText("Polar up/down"));
+    expect(within(form).getByText(/unchecked axis is never commanded/i)).toBeInTheDocument();
+    await user.click(within(form).getByLabelText("Elbow"));
+    expect(within(form).getByText(/vertical tracking off/i)).toBeInTheDocument();
+    await user.click(within(form).getByRole("button", { name: /save robot/i }));
+    await waitFor(() => expect(callsTo("PUT", "/robots/bluey.local")).toHaveLength(1));
+    expect(callsTo("PUT", "/robots/bluey.local")[0].body).toMatchObject({
+      track_elbow: false,
+      track_shoulder: false,
+      track_polar_vertical: false,
     });
   });
 

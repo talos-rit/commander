@@ -20,6 +20,14 @@ def test_connection_config_accepts_valid_defaults():
     assert config.socket_host == "robot.local"
     assert config.socket_port == 5000
     assert config.camera_index == 0
+    assert config.track_polar_vertical is True
+    assert config.track_elbow is False
+    assert config.track_shoulder is False
+
+
+def test_connection_config_rejects_a_one_sided_count_limit():
+    with pytest.raises(ValidationError):
+        ConnectionConfig(**_valid_payload(elbow_count_min=-10))
 
 
 def test_connection_config_strips_socket_host_whitespace():
