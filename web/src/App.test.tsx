@@ -428,7 +428,7 @@ describe("Controller", () => {
     pads[0] = fakePad({ axes: [0, 0, 0, -1] });
     await step();
     await waitFor(() => expect(callsTo("POST", "/control/joint/start")).toHaveLength(2));
-    expect(callsTo("POST", "/control/joint/start")[1].body).toEqual({ axis: "elbow", direction: 1 });
+    expect(callsTo("POST", "/control/joint/start")[1].body).toEqual({ axis: "elbow", direction: -1 });
 
     pads[0] = press(fakePad(), 7);
     await step();
