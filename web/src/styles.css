@@ -1795,6 +1795,38 @@ button:disabled {
   fill: var(--signal);
 }
 
+/* Mini jog pad beside the sticks and D-pad. It mirrors the debug rail's jog buttons. */
+.pm-compass__cell {
+  color: var(--text-dim);
+  transition: color 90ms ease;
+}
+
+.pm-compass__key {
+  fill: var(--surface-2);
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  transition:
+    fill 90ms ease,
+    stroke 90ms ease;
+}
+
+.pm-compass__mark {
+  fill: currentColor;
+}
+
+.pm-compass__hub {
+  fill: var(--line-strong);
+}
+
+.pm-compass__cell.is-held {
+  color: var(--signal-ink);
+}
+
+.pm-compass__cell.is-held .pm-compass__key {
+  fill: var(--signal);
+  stroke: var(--signal);
+}
+
 .pmglyph circle,
 .pmglyph path:not(.pmglyph__line) {
   fill: var(--surface-3);

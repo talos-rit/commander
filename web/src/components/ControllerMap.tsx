@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, type LucideIcon } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
 import {
   armFromGamepads,
@@ -5,6 +6,7 @@ import {
   bumpersPressed,
   buttonPressed,
   connectedGamepads,
+  DIRECTION_ORDER,
   dpadFromGamepad,
   padActionsPressed,
   selectGamepad,
@@ -16,6 +18,7 @@ import {
 } from "../gamepad";
 import { readGamepads } from "../hooks/useGamepad";
 import type { Direction } from "../types";
+import { JOINT_MARKS } from "./DebugRail";
 
 /** Matches the fade-out in styles.css, so the map stays mounted until it has faded. */
 const EXIT_MS = 180;
@@ -26,10 +29,19 @@ type Glyph = "a" | "b" | "x" | "y" | "lb" | "rb" | "lt" | "rt" | "ls" | "rs" | "
 type Control = Glyph | Direction | "guide";
 type Point = readonly [number, number];
 
+type JointName = keyof typeof JOINT_MARKS;
+
+/** Which way each direction of a stick or D-pad moves, drawn with the debug jog pad's icons. */
+interface Compass {
+  kind: "aim" | "joint";
+  source: "ls" | "rs" | "dpad";
+}
+
 interface Callout {
   glyph: Glyph;
   title: string;
-  detail: string;
+  detail?: string;
+  compass?: Compass;
   /** Unset for B, which always works because it is what opens the map. */
   group?: MapGroup;
   align: "start" | "end";
@@ -45,8 +57,8 @@ const RIGHT_X = 804;
 const CALLOUTS: readonly Callout[] = [
   { glyph: "lt", title: "Retract arm", detail: "hold", group: "arm", align: "end", at: [LEFT_X, 96], leader: [[214, 96], [304, 96], [338, 130]] },
   { glyph: "lb", title: "Previous camera", detail: "manual view", group: "cameras", align: "end", at: [LEFT_X, 150], leader: [[214, 150], [262, 150], [292, 172]] },
-  { glyph: "ls", title: "Aim", detail: "pan · tilt", group: "aim", align: "end", at: [LEFT_X, 252], leader: [[214, 252], [334, 252]] },
-  { glyph: "dpad", title: "Aim", detail: "pan · tilt", group: "aim", align: "end", at: [LEFT_X, 330], leader: [[214, 330], [394, 330]] },
+  { glyph: "ls", title: "Aim", compass: { kind: "aim", source: "ls" }, group: "aim", align: "end", at: [LEFT_X, 252], leader: [[214, 252], [334, 252]] },
+  { glyph: "dpad", title: "Aim", compass: { kind: "aim", source: "dpad" }, group: "aim", align: "end", at: [LEFT_X, 330], leader: [[214, 330], [394, 330]] },
   { glyph: "view", title: "Home", detail: "return to rest", group: "home", align: "end", at: [466, 46], leader: [[466, 64], [466, 240]] },
   { glyph: "menu", title: "Debug mode", detail: "toggle", group: "debug", align: "start", at: [534, 46], leader: [[534, 64], [534, 240]] },
   { glyph: "rt", title: "Extend arm", detail: "hold", group: "arm", align: "start", at: [RIGHT_X, 96], leader: [[786, 96], [696, 96], [662, 130]] },
@@ -55,7 +67,7 @@ const CALLOUTS: readonly Callout[] = [
   { glyph: "y", title: "Manual / Dynamic", detail: "camera layout", group: "layout", align: "start", at: [RIGHT_X, 232], leader: [[786, 232], [712, 232], [651, 214]] },
   { glyph: "b", title: "Button map", detail: "hold", align: "start", at: [RIGHT_X, 272], leader: [[786, 272], [712, 272], [691, 256]] },
   { glyph: "a", title: "Auto-Track", detail: "toggle", group: "track", align: "start", at: [RIGHT_X, 312], leader: [[786, 312], [712, 312], [649, 298]] },
-  { glyph: "rs", title: "Shoulder · elbow", detail: "↔ shoulder  ↕ elbow", group: "arm", align: "start", at: [RIGHT_X, 380], leader: [[786, 380], [712, 380], [598, 350]] },
+  { glyph: "rs", title: "Arm joints", compass: { kind: "joint", source: "rs" }, group: "arm", align: "start", at: [RIGHT_X, 380], leader: [[786, 380], [712, 380], [598, 350]] },
 ];
 
 const LS: Point = [372, 252];
@@ -294,22 +306,127 @@ function Controller({ lit, ls, rs }: PadSnapshot) {
   );
 }
 
-function CalloutLabel({ callout, lit, dim, index }: { callout: Callout; lit: boolean; dim: boolean; index: number }) {
-  const { align, at, leader, glyph, title, detail } = callout;
-  const textX = align === "end" ? at[0] - 24 : at[0] + 24;
+const COMPASS_STEP = 20;
+const COMPASS_KEY = 18;
+const COMPASS_ICON = 13;
+const COMPASS_OFFSET: Record<Direction, Point> = {
+  up: [0, -COMPASS_STEP],
+  right: [COMPASS_STEP, 0],
+  down: [0, COMPASS_STEP],
+  left: [-COMPASS_STEP, 0],
+};
+const ARROWS: Record<Direction, LucideIcon> = { up: ArrowUp, right: ArrowRight, down: ArrowDown, left: ArrowLeft };
+/** Right stick: sideways is the shoulder, up and down the elbow. Stick up commands elbow negative. */
+const JOINT_CELLS: Record<Direction, { axis: JointName; direction: -1 | 1 }> = {
+  up: { axis: "elbow", direction: -1 },
+  down: { axis: "elbow", direction: 1 },
+  left: { axis: "shoulder", direction: -1 },
+  right: { axis: "shoulder", direction: 1 },
+};
+
+function markId(axis: JointName, direction: -1 | 1) {
+  return `pm-mark-${axis}-${direction < 0 ? "neg" : "pos"}`;
+}
+
+/** The jog icons are black strokes on transparent, so they become alpha masks over a currentColor fill. */
+function MarkMasks() {
+  return (
+    <defs>
+      {Object.values(JOINT_CELLS).map(({ axis, direction }) => (
+        <mask
+          key={markId(axis, direction)}
+          id={markId(axis, direction)}
+          maskContentUnits="objectBoundingBox"
+          style={{ maskType: "alpha" }}
+        >
+          <image href={JOINT_MARKS[axis][direction]} width={1} height={1} />
+        </mask>
+      ))}
+    </defs>
+  );
+}
+
+function stickDirections([x, y]: Point, oneAxis: boolean): Set<Direction> {
+  const held = new Set<Direction>();
+  const horizontal = Math.abs(x) >= STICK_RELEASE && (!oneAxis || Math.abs(x) >= Math.abs(y));
+  const vertical = Math.abs(y) >= STICK_RELEASE && (!oneAxis || Math.abs(y) > Math.abs(x));
+  if (horizontal) held.add(x < 0 ? "left" : "right");
+  if (vertical) held.add(y < 0 ? "up" : "down");
+  return held;
+}
+
+function compassHeld(source: Compass["source"], snapshot: PadSnapshot): ReadonlySet<Direction> {
+  if (source === "ls") return stickDirections(snapshot.ls, false);
+  // The hardware jogs one joint at a time.
+  if (source === "rs") return stickDirections(snapshot.rs, true);
+  return new Set(DIRECTION_ORDER.filter((direction) => snapshot.lit.has(direction)));
+}
+
+function CompassPad({ at, kind, held }: { at: Point; kind: Compass["kind"]; held: ReadonlySet<Direction> }) {
+  const half = COMPASS_KEY / 2;
+  const icon = COMPASS_ICON / 2;
+  return (
+    <g className="pm-compass">
+      <circle className="pm-compass__hub" cx={at[0]} cy={at[1]} r={2} />
+      {DIRECTION_ORDER.map((direction) => {
+        const x = at[0] + COMPASS_OFFSET[direction][0];
+        const y = at[1] + COMPASS_OFFSET[direction][1];
+        const Arrow = ARROWS[direction];
+        const joint = JOINT_CELLS[direction];
+        return (
+          <g key={direction} className={`pm-compass__cell${held.has(direction) ? " is-held" : ""}`}>
+            <rect className="pm-compass__key" x={x - half} y={y - half} width={COMPASS_KEY} height={COMPASS_KEY} rx={3} />
+            {kind === "aim" ? (
+              <Arrow x={x - icon} y={y - icon} size={COMPASS_ICON} strokeWidth={2.75} />
+            ) : (
+              <rect
+                className="pm-compass__mark"
+                x={x - icon}
+                y={y - icon}
+                width={COMPASS_ICON}
+                height={COMPASS_ICON}
+                mask={`url(#${markId(joint.axis, joint.direction)})`}
+              />
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function CalloutLabel({
+  callout,
+  snapshot,
+  dim,
+  index,
+}: {
+  callout: Callout;
+  snapshot: PadSnapshot;
+  dim: boolean;
+  index: number;
+}) {
+  const { align, at, leader, glyph, title, detail, compass } = callout;
+  const side = align === "end" ? -1 : 1;
+  const compassAt: Point = [at[0] + side * 52, at[1]];
+  const textX = at[0] + side * (compass ? 92 : 24);
   const anchor = leader[leader.length - 1];
+  const lit = snapshot.lit.has(glyph);
   const className = `pm-callout${lit ? " is-lit" : ""}${dim ? " is-dim" : ""}`;
   return (
     <g className={className} style={{ "--i": index } as CSSProperties} data-align={align}>
       <polyline className="pm-leader" points={leader.map((point) => point.join(",")).join(" ")} pathLength={1} />
       <circle className="pm-leader__dot" cx={anchor[0]} cy={anchor[1]} r={3} />
       <GlyphMark kind={glyph} x={at[0]} y={at[1]} />
-      <text className="pm-callout__title" x={textX} y={at[1] - 2} textAnchor={align}>
+      {compass && <CompassPad at={compassAt} kind={compass.kind} held={compassHeld(compass.source, snapshot)} />}
+      <text className="pm-callout__title" x={textX} y={detail ? at[1] - 2 : at[1] + 5} textAnchor={align}>
         {title}
       </text>
-      <text className="pm-callout__detail" x={textX} y={at[1] + 13} textAnchor={align}>
-        {detail}
-      </text>
+      {detail && (
+        <text className="pm-callout__detail" x={textX} y={at[1] + 13} textAnchor={align}>
+          {detail}
+        </text>
+      )}
     </g>
   );
 }
@@ -358,13 +475,14 @@ export function ControllerMap({ open, via, label, note, available }: Props) {
         </header>
 
         <svg className="padmap__art" viewBox="0 30 1000 490" role="img" aria-label="Xbox controller button layout">
+          <MarkMasks />
           <Controller {...snapshot} />
           {CALLOUTS.map((callout, index) => (
             <CalloutLabel
               key={callout.glyph}
               callout={callout}
               index={index}
-              lit={snapshot.lit.has(callout.glyph)}
+              snapshot={snapshot}
               dim={callout.group ? !available[callout.group] : false}
             />
           ))}

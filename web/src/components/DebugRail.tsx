@@ -158,7 +158,7 @@ function HoldButton({
   );
 }
 
-const JOINT_MARKS = {
+export const JOINT_MARKS = {
   shoulder: { "-1": shoulderMinus, "1": shoulderPlus },
   // The elbow drawings run opposite the jog sign.
   elbow: { "-1": elbowPlus, "1": elbowMinus },
