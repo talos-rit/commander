@@ -1,4 +1,5 @@
 import { Hand, Settings, Shuffle, Wrench, X } from "lucide-react";
+import talosLogo from "../assets/talos_logo.svg";
 import type { OneScreenMode, Slot, Status, UIMode } from "../types";
 import { Rocker } from "./Rocker";
 import { Segmented } from "./Segmented";
@@ -19,10 +20,7 @@ export function TopBar({ status, offline, onOneScreenMode, onSelectSlot, onUIMod
   return (
     <header className="topbar">
       <div className="brand">
-        <svg viewBox="0 0 32 32" aria-hidden="true" className="brand__mark">
-          <circle cx="16" cy="16" r="8" />
-          <path d="M16 3v6M16 23v6M3 16h6M23 16h6" />
-        </svg>
+        <img src={talosLogo} alt="" className="brand__mark" />
         <span className="brand__name">Commander</span>
       </div>
 

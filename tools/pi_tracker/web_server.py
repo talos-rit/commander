@@ -21,6 +21,44 @@ except ImportError:
     from operator_client import OperatorClient
 
 
+def _count_limits(value):
+    if value is None:
+        return None
+    if (not isinstance(value, (list, tuple)) or len(value) != 2
+            or any(type(item) is not int for item in value) or value[0] >= value[1]):
+        raise HTTPException(422, "joint limits must be null or [min, max] with min < max")
+    return (int(value[0]), int(value[1]))
+
+
+def apply_vertical_axes(controller, payload):
+    """Copy Commander's per-robot axis switches onto the local tracker."""
+    kwargs = {}
+    if "vertical_axes" in payload:
+        axes = payload["vertical_axes"]
+        if not isinstance(axes, dict):
+            raise HTTPException(422, "vertical_axes must be an object")
+        for name in ("elbow", "shoulder", "polar_vertical"):
+            if name in axes and type(axes[name]) is not bool:
+                raise HTTPException(422, f"vertical_axes.{name} must be a boolean")
+        if "elbow" in axes:
+            kwargs["elbow"] = axes["elbow"]
+        if "shoulder" in axes:
+            kwargs["shoulder"] = axes["shoulder"]
+        if "polar_vertical" in axes:
+            kwargs["polar_vertical"] = axes["polar_vertical"]
+    for key, flag in (
+        ("elbow_limits", "elbow_limits_set"),
+        ("shoulder_limits", "shoulder_limits_set"),
+        ("pitch_limits", "pitch_limits_set"),
+    ):
+        if key not in payload:
+            continue
+        kwargs[key] = _count_limits(payload[key])
+        kwargs[flag] = True
+    if kwargs:
+        controller.set_vertical_axes(**kwargs)
+
+
 def create_app(
     controller: TrackingController,
     detector: PersonDetector,
@@ -216,6 +254,7 @@ def create_app(
     def control_lease_update(payload: dict):
         if control_lease is None:
             raise HTTPException(409, "start PiVision with --edge-control")
+        apply_vertical_axes(controller, payload)
         if payload.get("enabled") is True and payload.get("renew") is not True:
             speed, age = payload.get("speed_percent", 20), payload.get("max_observation_age_s", 0.35)
             if type(speed) is not int or not 1 <= speed <= 100 or type(age) not in (int, float) or not 0.05 <= age <= 1.0:

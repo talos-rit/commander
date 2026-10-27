@@ -5,7 +5,7 @@ Provides type validation, range checking, and default values for all configurati
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ConnectionConfig(BaseModel):
@@ -107,6 +107,44 @@ class ConnectionConfig(BaseModel):
     manual_only: bool = Field(
         default=False, description="If True, only manual control is allowed"
     )
+
+    # Vertical auto-track. Fixed order: elbow, then shoulder, then polar up/down.
+    # Defaults keep existing robots on polar up/down only.
+    track_elbow: bool = Field(
+        default=False,
+        description="Auto-Track may jog the elbow for vertical image error",
+    )
+    track_shoulder: bool = Field(
+        default=False,
+        description="Auto-Track may jog the shoulder after the elbow cannot move further",
+    )
+    track_polar_vertical: bool = Field(
+        default=True,
+        description="Auto-Track may polar-pan up/down after elbow and shoulder",
+    )
+    elbow_count_min: Optional[int] = Field(
+        default=None, description="Fresh elbow count at or below this skips to the next vertical axis"
+    )
+    elbow_count_max: Optional[int] = Field(default=None)
+    shoulder_count_min: Optional[int] = Field(default=None)
+    shoulder_count_max: Optional[int] = Field(default=None)
+    pitch_count_min: Optional[int] = Field(default=None)
+    pitch_count_max: Optional[int] = Field(default=None)
+
+    @model_validator(mode="after")
+    def validate_count_limits(self):
+        pairs = (
+            ("elbow_count_min", "elbow_count_max"),
+            ("shoulder_count_min", "shoulder_count_max"),
+            ("pitch_count_min", "pitch_count_max"),
+        )
+        for low_name, high_name in pairs:
+            low, high = getattr(self, low_name), getattr(self, high_name)
+            if (low is None) != (high is None):
+                raise ValueError(f"{low_name} and {high_name} must be set together")
+            if low is not None and low >= high:
+                raise ValueError(f"{low_name} must be less than {high_name}")
+        return self
 
     @field_validator("camera_index", mode="before")
     @classmethod

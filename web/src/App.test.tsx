@@ -428,7 +428,7 @@ describe("Controller", () => {
     pads[0] = fakePad({ axes: [0, 0, 0, -1] });
     await step();
     await waitFor(() => expect(callsTo("POST", "/control/joint/start")).toHaveLength(2));
-    expect(callsTo("POST", "/control/joint/start")[1].body).toEqual({ axis: "elbow", direction: 1 });
+    expect(callsTo("POST", "/control/joint/start")[1].body).toEqual({ axis: "elbow", direction: -1 });
 
     pads[0] = press(fakePad(), 7);
     await step();
@@ -704,6 +704,26 @@ describe("Controller", () => {
     expect(calls.some((call) => call.path === "/view")).toBe(false);
   });
 
+  it("shows the button map while B is held and pauses commands under it", async () => {
+    const { calls } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = press(fakePad(), 1);
+    await step();
+    const map = await screen.findByLabelText("Controller map");
+    expect(within(map).getByText("Auto-Track")).toBeInTheDocument();
+
+    pads[0] = press(press(fakePad({ axes: [0, -1, 0, 0] }), 1), 0);
+    await step();
+    await step();
+    expect(calls.some((call) => call.path === "/control/auto-track")).toBe(false);
+    expect(calls.some((call) => call.path === "/control/move/start")).toBe(false);
+
+    pads[0] = press(fakePad(), 0);
+    await step();
+    await waitFor(() => expect(screen.queryByLabelText("Controller map")).not.toBeInTheDocument());
+    expect(calls.some((call) => call.path === "/control/auto-track")).toBe(false);
+  });
+
   it("does not start the virtual camera before a frame arrives", async () => {
     const { calls } = setup(makeStatus());
     await screen.findByTestId("pane-bluey.local");
@@ -738,6 +758,16 @@ describe("Keyboard shortcuts", () => {
     fireEvent.keyDown(window, { key: "T" });
     await waitFor(() => expect(callsTo("POST", "/control/auto-track")).toHaveLength(1));
     expect(callsTo("POST", "/control/home")).toHaveLength(1);
+  });
+
+  it("shows the controller map while ⌘⇧/ is held", async () => {
+    setup(makeStatus());
+    await screen.findByTestId("pane-bluey.local");
+    fireEvent.keyDown(window, { key: "?", code: "Slash", metaKey: true, shiftKey: true });
+    const map = await screen.findByLabelText("Controller map");
+    expect(within(map).getByText("Hold B on a controller to open this from the pad.")).toBeInTheDocument();
+    fireEvent.keyUp(window, { key: "Meta", shiftKey: true });
+    await waitFor(() => expect(screen.queryByLabelText("Controller map")).not.toBeInTheDocument());
   });
 
   it("ignores shortcuts while typing or with the settings open", async () => {

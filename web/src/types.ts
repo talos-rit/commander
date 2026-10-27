@@ -104,6 +104,16 @@ export interface RobotConfig {
   frame_height: number | null;
   max_fps: number;
   manual_only: boolean;
+  /** Vertical auto-track, fixed order: elbow, then shoulder, then polar up/down. */
+  track_elbow?: boolean;
+  track_shoulder?: boolean;
+  track_polar_vertical?: boolean;
+  elbow_count_min?: number | null;
+  elbow_count_max?: number | null;
+  shoulder_count_min?: number | null;
+  shoulder_count_max?: number | null;
+  pitch_count_min?: number | null;
+  pitch_count_max?: number | null;
   pi_vision_url?: string | null;
   pi_vision_speed_percent?: number;
   pi_vision_max_age_s?: number;

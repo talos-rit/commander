@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { ActionBar, CommandReceipt } from "./components/ActionBar";
+import { ControllerMap, isMapShortcut, type MapGroup } from "./components/ControllerMap";
 import { DebugRail } from "./components/DebugRail";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TopBar } from "./components/TopBar";
@@ -184,6 +185,40 @@ export default function App() {
             : !robotReady
               ? "offline"
               : "ready";
+  const [keyMap, setKeyMap] = useState(false);
+  const mapVia = useRef<"pad" | "keys">("pad");
+  if (gamepad.mapHeld) mapVia.current = "pad";
+  else if (keyMap) mapVia.current = "keys";
+  // macOS drops the key-up for "/" while ⌘ is down, so letting go of any key in the chord closes the map.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isMapShortcut(event)) return;
+      event.preventDefault();
+      setKeyMap(true);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (["Meta", "Control", "Shift", "/", "?"].includes(event.key) || event.code === "Slash") setKeyMap(false);
+    };
+    const close = () => setKeyMap(false);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", close);
+    };
+  }, []);
+  const mapAvailable: Record<MapGroup, boolean> = {
+    aim: jogEnabled,
+    arm: jogEnabled,
+    cameras: bumpersEnabled,
+    home: Boolean(!settingsOpen && selected?.open),
+    debug: Boolean(status && !settingsOpen),
+    track: Boolean(!settingsOpen && selected?.open && !selected.manual_only),
+    virtual: Boolean(status && !settingsOpen && (status.virtual_camera || (selected?.open && selected.has_video))),
+    layout: Boolean(status && !settingsOpen && status.view.available_slots === 2),
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -303,6 +338,14 @@ export default function App() {
         modelOptions={status?.tracking.model_options ?? []}
         onClose={() => setSettingsOpen(false)}
         onChanged={() => void refresh()}
+      />
+
+      <ControllerMap
+        open={gamepad.mapHeld || keyMap}
+        via={mapVia.current}
+        label={gamepad.pad?.label ?? null}
+        note={controllerGate && controllerGate !== "ready" ? describeController(controllerGate) : null}
+        available={mapAvailable}
       />
 
       <div className="toasts" aria-live="polite">

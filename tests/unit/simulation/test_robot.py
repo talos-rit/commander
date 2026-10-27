@@ -1,3 +1,4 @@
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -220,3 +221,70 @@ def test_continuous_director_can_command_simulated_publisher(monkeypatch) -> Non
     state = publisher.get_state()
     assert state.movement_state == MovementState.MOVING
     assert state.velocity.azimuth > 0
+
+
+class _Calls:
+    def __init__(self, counts=None, fresh=False):
+        self.calls = []
+        self.tracking_joint_counts = counts
+        self.tracking_joint_counts_at = time.monotonic() if fresh else None
+
+    def polar_pan_continuous_direction_start(self, direction):
+        self.calls.append(("polar", int(direction)))
+
+    def polar_pan_continuous_stop(self):
+        self.calls.append(("polar_stop",))
+
+    def erv_joint_jog_start(self, axis, direction):
+        self.calls.append(("joint", axis, direction))
+
+    def erv_joint_jog_stop(self):
+        self.calls.append(("joint_stop",))
+
+
+def _tracking_director():
+    director = ContinuousDirector.__new__(ContinuousDirector)
+    director.last_command_stop = False
+    director.movement_detection_start_time = None
+    director._tracking_motion = {}
+    return director
+
+
+def test_director_jogs_the_elbow_and_does_not_use_polar(monkeypatch):
+    monkeypatch.setitem(
+        config.ROBOT_CONFIGS,
+        "sim",
+        SimpleNamespace(
+            confirmation_delay=0.0,
+            track_elbow=True,
+            track_shoulder=False,
+            track_polar_vertical=False,
+            elbow_count_min=-10,
+            elbow_count_max=10,
+        ),
+    )
+    publisher = _Calls(counts=(0, 0, 0, 0, 0), fresh=True)
+    _tracking_director().process_frame("sim", [(100, 0, 20, 40)], (200, 200, 3), publisher)
+    assert publisher.calls == [("joint", 3, -1)]
+
+
+def test_director_holds_when_vertical_tracking_is_off(monkeypatch):
+    monkeypatch.setitem(
+        config.ROBOT_CONFIGS,
+        "sim",
+        SimpleNamespace(confirmation_delay=0.0, track_elbow=False, track_shoulder=False, track_polar_vertical=False),
+    )
+    publisher = _Calls()
+    _tracking_director().process_frame("sim", [(100, 0, 20, 40)], (200, 200, 3), publisher)
+    assert publisher.calls == [("polar_stop",)]
+
+
+def test_director_pans_when_horizontal_error_is_larger(monkeypatch):
+    monkeypatch.setitem(
+        config.ROBOT_CONFIGS,
+        "sim",
+        SimpleNamespace(confirmation_delay=0.0, track_elbow=True, track_shoulder=False, track_polar_vertical=False),
+    )
+    publisher = _Calls()
+    _tracking_director().process_frame("sim", [(300, 60, 20, 20)], (200, 200, 3), publisher)
+    assert publisher.calls == [("polar", int(Direction.RIGHT))]

@@ -149,7 +149,7 @@ class PiVisionControl:
                 with self._lock:
                     if self._enabled:
                         self._edge = self.request(self._url("/api/v1/control/lease"), "PUT",
-                                                  {"owner": self.owner, "enabled": True, "renew": True})
+                                                  self._lease_body(True, renew=True))
                     else:
                         self._edge = self.request(self._url("/api/v1/control/status"))
                     if self._edge.get("owner") != self.owner or not self._edge.get("enabled"):
@@ -189,7 +189,7 @@ class PiVisionControl:
             if not enabled and not self._armed:
                 return False
             try:
-                payload = {"owner": self.owner, "enabled": enabled}
+                payload = self._lease_body(enabled)
                 if enabled:
                     payload.update(speed_percent=getattr(self.config, "pi_vision_speed_percent", 20),
                                    max_observation_age_s=getattr(self.config, "pi_vision_max_age_s", 0.35),
@@ -209,6 +209,33 @@ class PiVisionControl:
             self._lease_deadline = self.clock() + self._edge.get("lease_remaining_s", 1.5) if self._enabled else 0
             self._stop_reason = None
             return self._enabled
+
+    def _lease_body(self, enabled, renew=False):
+        """Arm, renew, or release. Vertical axes ride along so the Pi decides the jog locally."""
+        payload = {"owner": self.owner, "enabled": enabled}
+        if renew:
+            payload["renew"] = True
+        if not enabled:
+            return payload
+        config = self.config
+
+        def pair(low_name, high_name):
+            low, high = getattr(config, low_name, None), getattr(config, high_name, None)
+            if low is None or high is None:
+                return None
+            return [int(low), int(high)]
+
+        payload["vertical_axes"] = {
+            "elbow": bool(getattr(config, "track_elbow", False)),
+            "shoulder": bool(getattr(config, "track_shoulder", False)),
+            "polar_vertical": bool(getattr(config, "track_polar_vertical", True)),
+        }
+        payload["elbow_limits"] = pair("elbow_count_min", "elbow_count_max")
+        payload["shoulder_limits"] = pair("shoulder_count_min", "shoulder_count_max")
+        pitch = pair("pitch_count_min", "pitch_count_max")
+        if pitch is not None:
+            payload["pitch_limits"] = pitch
+        return payload
 
     def manual_handoff(self):
         pass  # The Pi command gateway performs arbitration next to Operator.

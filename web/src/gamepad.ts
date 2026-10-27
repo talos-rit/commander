@@ -11,10 +11,13 @@ export const TRIGGER_LEFT = 6;
 export const TRIGGER_RIGHT = 7;
 export const BUTTON_BACK = 8;
 export const BUTTON_MENU = 9;
+export const STICK_CLICK_LEFT = 10;
+export const STICK_CLICK_RIGHT = 11;
 export const DPAD_UP = 12;
 export const DPAD_DOWN = 13;
 export const DPAD_LEFT = 14;
 export const DPAD_RIGHT = 15;
+export const BUTTON_GUIDE = 16;
 
 /**
  * Left-stick deflection that starts a jog, and the lower value that keeps it
@@ -50,7 +53,7 @@ export function describeController(gate: ControllerGate): string {
     case "offline":
       return "Controller connected. The selected robot isn't ready to move.";
     case "ready":
-      return "Left stick and D-pad aim. Right stick jogs the shoulder and elbow, one joint at a time. Triggers extend and retract the arm. LB and RB switch cameras in Manual. Menu toggles Debug, Back homes, A toggles Auto-Track, X Virtual Cam, and Y Manual or Dynamic.";
+      return "Left stick and D-pad aim. Right stick jogs the shoulder and elbow, one joint at a time. Triggers extend and retract the arm. LB and RB switch cameras in Manual. Menu toggles Debug, Back homes, A toggles Auto-Track, X Virtual Cam, and Y Manual or Dynamic. Hold B for the button map.";
   }
 }
 
@@ -218,16 +221,8 @@ function axisDirection(
   return value < 0 ? negative : positive;
 }
 
-/**
- * Jog directions for one listing. Button D-pad, hat-switch, and extra digital
- * axes are read on any mapping. The left stick still needs the standard layout.
- * The D-pad wins over the stick on that axis.
- */
-export function directionsFromGamepad(
-  gamepad: Gamepad,
-  held: ReadonlySet<Direction> = new Set(),
-  hatState?: HatState,
-): Direction[] {
+/** D-pad directions for one listing, from buttons, a hat-switch axis, or extra digital axes, on any mapping. */
+export function dpadFromGamepad(gamepad: Gamepad, hatState?: HatState): Set<Direction> {
   const hat = readHat(gamepad.axes, hatState?.axis ?? null);
   if (hatState) hatState.axis = hat.axis;
   const dpad = new Set<Direction>(hat.directions);
@@ -236,6 +231,19 @@ export function directionsFromGamepad(
   if (buttonPressed(gamepad, DPAD_LEFT)) dpad.add("left");
   if (buttonPressed(gamepad, DPAD_RIGHT)) dpad.add("right");
   dpadFromAxisPairs(gamepad.axes, hat.axis, dpad);
+  return dpad;
+}
+
+/**
+ * Jog directions for one listing. The D-pad is read on any mapping; the left
+ * stick still needs the standard layout. The D-pad wins over the stick on that axis.
+ */
+export function directionsFromGamepad(
+  gamepad: Gamepad,
+  held: ReadonlySet<Direction> = new Set(),
+  hatState?: HatState,
+): Direction[] {
+  const dpad = dpadFromGamepad(gamepad, hatState);
 
   const standard = gamepad.mapping === "standard";
   const chosen = new Set<Direction>();
@@ -354,6 +362,7 @@ function pulled(value: number, already: boolean): boolean {
 
 /**
  * Shoulder is the right stick's sideways axis, elbow is up and down.
+ * Stick up commands elbow negative.
  * The hardware jog moves one joint, so a diagonal keeps the joint already
  * held unless the other axis is clearly stronger.
  */
@@ -372,7 +381,7 @@ function jointFromStick(x: number, y: number, held: JointAxis | null): ArmComman
   } else if (shoulderOn) axis = "shoulder";
   else if (elbowOn) axis = "elbow";
   if (axis === "shoulder") return { axis, direction: x < 0 ? -1 : 1 };
-  if (axis === "elbow") return { axis, direction: y < 0 ? 1 : -1 };
+  if (axis === "elbow") return { axis, direction: y < 0 ? -1 : 1 };
   return null;
 }
 

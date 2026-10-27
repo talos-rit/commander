@@ -18,10 +18,22 @@ type RobotDraft = {
   camera_index: string;
   fps: string;
   manual_only: boolean;
+  track_elbow: boolean;
+  track_shoulder: boolean;
+  track_polar_vertical: boolean;
   pi_vision_url?: string;
 };
 
-const EMPTY_DRAFT: RobotDraft = { socket_host: "", socket_port: "61616", camera_index: "", fps: "30", manual_only: false };
+const EMPTY_DRAFT: RobotDraft = {
+  socket_host: "",
+  socket_port: "61616",
+  camera_index: "",
+  fps: "30",
+  manual_only: false,
+  track_elbow: false,
+  track_shoulder: false,
+  track_polar_vertical: true,
+};
 
 /** Usual camera stream for a robot: RTSP on the operator host. */
 function suggestedCameraUrl(host: string): string {
@@ -41,8 +53,20 @@ function toDraft(robot: RobotConfig): RobotDraft {
     camera_index: String(robot.camera_index),
     fps: String(robot.fps),
     manual_only: robot.manual_only,
+    track_elbow: robot.track_elbow ?? false,
+    track_shoulder: robot.track_shoulder ?? false,
+    track_polar_vertical: robot.track_polar_vertical ?? true,
     pi_vision_url: robot.pi_vision_url ?? "",
   };
+}
+
+function verticalSummary(robot: RobotConfig): string {
+  const axes = [
+    robot.track_elbow ? "elbow" : "",
+    robot.track_shoulder ? "shoulder" : "",
+    (robot.track_polar_vertical ?? true) ? "polar" : "",
+  ].filter(Boolean);
+  return axes.length ? axes.join(", ") : "vertical off";
 }
 
 const asInt = (value: string) => (/^\d+$/.test(value.trim()) ? Number(value.trim()) : value.trim());
@@ -54,6 +78,9 @@ function fromDraft(draft: RobotDraft): RobotInput {
     camera_index: asInt(draft.camera_index),
     fps: Number(draft.fps) || 30,
     manual_only: draft.manual_only,
+    track_elbow: draft.track_elbow,
+    track_shoulder: draft.track_shoulder,
+    track_polar_vertical: draft.track_polar_vertical,
     pi_vision_url: draft.pi_vision_url?.trim() || null,
   };
 }
@@ -181,6 +208,38 @@ function RobotForm({
             <span>Manual only (no auto-tracking)</span>
           </label>
         </div>
+        <fieldset className="robotform__axes" disabled={busy}>
+          <legend>Vertical tracking</legend>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.track_elbow}
+              onChange={(e) => set("track_elbow", e.target.checked)}
+            />
+            <span>Elbow</span>
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.track_shoulder}
+              onChange={(e) => set("track_shoulder", e.target.checked)}
+            />
+            <span>Shoulder</span>
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.track_polar_vertical}
+              onChange={(e) => set("track_polar_vertical", e.target.checked)}
+            />
+            <span>Polar up/down</span>
+          </label>
+        </fieldset>
+        <p className="robotform__hint">
+          {draft.track_elbow || draft.track_shoulder || draft.track_polar_vertical
+            ? "Checked axes are commanded in this order: elbow, shoulder, then polar up/down. An unchecked axis is never commanded."
+            : "Vertical tracking off. Auto-Track still pans left and right."}
+        </p>
       </div>
       <div className="robotform__actions">
         {onCancel && (
@@ -352,8 +411,9 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
                     <div>
                       <strong>{host}</strong>
                       <span className="muted">
-                        :{robots[host].socket_port} · {String(robots[host].camera_index)}
+                        :{robots[host].socket_port}
                         {robots[host].manual_only ? " · manual only" : ""}
+                        {` · ${verticalSummary(robots[host])}`}
                       </span>
                     </div>
                     <div className="robots__actions">
