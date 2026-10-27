@@ -9,9 +9,9 @@
   --text: #e6e9ec;
   --text-dim: #9aa3ab;
   --text-faint: #6b747c;
-  --signal: #c8f04a;
-  --signal-ink: #141a05;
-  --signal-glow: rgb(200 240 74 / 0.18);
+  --signal: #ff9400;
+  --signal-ink: #1f1200;
+  --signal-glow: rgb(255 148 0 / 0.18);
   --warn: #f2b84b;
   --danger: #ff6b5e;
   --radius: 6px;
@@ -139,11 +139,9 @@ button:disabled {
 }
 
 .brand__mark {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: var(--signal);
-  stroke-width: 2.4;
+  display: block;
+  width: 28px;
+  height: 28px;
 }
 
 .viewbar {
@@ -526,7 +524,7 @@ button:disabled {
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: #d7f86d;
+  background: #ffab38;
 }
 
 .btn--busy:disabled {
@@ -742,7 +740,7 @@ button:disabled {
 }
 .centering-tolerance > span { display: flex; justify-content: space-between; }
 .centering-tolerance output { font-family: var(--mono); }
-.centering-tolerance input { width: 100%; accent-color: var(--accent); }
+.centering-tolerance input { width: 100%; accent-color: var(--signal); }
 .actionbar {
   display: flex;
   align-items: center;
@@ -847,7 +845,7 @@ button:disabled {
 
 .action--track.is-on:hover:not(:disabled),
 .action--cam.is-on:hover:not(:disabled) {
-  background: #d7f86d;
+  background: #ffab38;
 }
 
 .action--track.is-on .action__icon,
@@ -864,10 +862,10 @@ button:disabled {
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgb(20 26 5 / 0.5);
+    box-shadow: 0 0 0 0 rgb(31 18 0 / 0.5);
   }
   100% {
-    box-shadow: 0 0 0 10px rgb(20 26 5 / 0);
+    box-shadow: 0 0 0 10px rgb(31 18 0 / 0);
   }
 }
 
@@ -1307,7 +1305,7 @@ button:disabled {
 
 .robotform__secondary .field--derived input {
   color: var(--text);
-  border-color: rgb(200 240 74 / 0.28);
+  border-color: rgb(255 148 0 / 0.28);
 }
 
 .robotform__hint {
@@ -1423,7 +1421,7 @@ button:disabled {
 }
 
 .receipt-toast.toast--ok {
-  border-color: rgb(184 232 74 / 0.45);
+  border-color: rgb(255 148 0 / 0.45);
 }
 
 .receipt-toast.toast--warn {
@@ -1578,11 +1576,11 @@ button:disabled {
 .pm-dpad__arm.is-lit {
   fill: var(--signal);
   stroke: var(--signal);
-  filter: drop-shadow(0 0 6px rgb(200 240 74 / 0.45));
+  filter: drop-shadow(0 0 6px rgb(255 148 0 / 0.45));
 }
 
 .pm-trigger.is-lit {
-  fill: rgb(200 240 74 / 0.85);
+  fill: rgb(255 148 0 / 0.85);
 }
 
 .pm-well,
@@ -1615,7 +1613,7 @@ button:disabled {
 
 .pm-stick.is-lit .pm-stick__skirt {
   stroke: var(--signal);
-  filter: drop-shadow(0 0 6px rgb(200 240 74 / 0.45));
+  filter: drop-shadow(0 0 6px rgb(255 148 0 / 0.45));
 }
 
 .pm-stick.is-lit .pm-stick__ring {
@@ -1714,16 +1712,15 @@ button:disabled {
   stroke: var(--signal);
 }
 
-.pm-guide__mark {
-  fill: none;
-  stroke: var(--text-dim);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  transition: stroke 90ms ease;
+.pm-guide > circle {
+  transition:
+    stroke 90ms ease,
+    filter 90ms ease;
 }
 
-.pm-guide.is-lit .pm-guide__mark {
+.pm-guide.is-lit > circle {
   stroke: var(--signal);
+  filter: drop-shadow(0 0 6px rgb(255 148 0 / 0.45));
 }
 
 /* Callouts */

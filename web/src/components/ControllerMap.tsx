@@ -18,6 +18,7 @@ import {
 } from "../gamepad";
 import { readGamepads } from "../hooks/useGamepad";
 import type { Direction } from "../types";
+import talosLogo from "../assets/talos_logo.svg";
 import { JOINT_MARKS } from "./DebugRail";
 
 /** Matches the fade-out in styles.css, so the map stays mounted until it has faded. */
@@ -297,10 +298,7 @@ function Controller({ lit, ls, rs }: PadSnapshot) {
       </g>
       <g className={`pm-guide${on("guide")}`}>
         <circle cx={500} cy={206} r={19} />
-        <g className="pm-guide__mark" transform="translate(500 206) scale(0.72) translate(-16 -16)">
-          <circle cx={16} cy={16} r={8} />
-          <path d="M16 3v6M16 23v6M3 16h6M23 16h6" />
-        </g>
+        <image href={talosLogo} x={500 - 17} y={206 - 17} width={34} height={34} />
       </g>
     </g>
   );
