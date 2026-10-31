@@ -324,8 +324,8 @@ export default function App() {
           {starting ? (
             <div className="loading" role="status">
               <span className="loading__spinner" aria-hidden="true" />
-              <strong>Connecting to cameras…</strong>
-              <span className="muted">Commander is opening the robot and camera connections.</span>
+              <strong>Connecting to robots…</strong>
+              <span className="muted">Commander is opening each robot and its stream.</span>
             </div>
           ) : (
             <p className="muted">{error ?? "Connecting to Commander…"}</p>

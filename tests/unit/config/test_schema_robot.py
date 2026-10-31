@@ -23,6 +23,29 @@ def test_connection_config_accepts_valid_defaults():
     assert config.track_polar_vertical is True
     assert config.track_elbow is False
     assert config.track_shoulder is False
+    assert config.pi_vision_enabled is False
+    assert config.uses_pi_vision is False
+
+
+def test_pi_vision_url_alone_turns_pi_vision_on():
+    config = ConnectionConfig(**_valid_payload(pi_vision_url="http://pi:5050"))
+
+    assert config.pi_vision_enabled is True
+    assert config.uses_pi_vision is True
+
+
+def test_pi_vision_can_be_off_while_keeping_its_url():
+    config = ConnectionConfig(
+        **_valid_payload(pi_vision_enabled=False, pi_vision_url="http://other:9090")
+    )
+
+    assert config.pi_vision_url == "http://other:9090"
+    assert config.uses_pi_vision is False
+
+
+def test_pi_vision_on_requires_a_url():
+    with pytest.raises(ValidationError, match="PiVision URL is required"):
+        ConnectionConfig(**_valid_payload(pi_vision_enabled=True))
 
 
 def test_connection_config_rejects_a_one_sided_count_limit():

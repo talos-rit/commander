@@ -57,15 +57,15 @@ const RIGHT_X = 804;
 
 const CALLOUTS: readonly Callout[] = [
   { glyph: "lt", title: "Retract arm", detail: "hold", group: "arm", align: "end", at: [LEFT_X, 96], leader: [[214, 96], [304, 96], [338, 130]] },
-  { glyph: "lb", title: "Previous camera", detail: "manual view", group: "cameras", align: "end", at: [LEFT_X, 150], leader: [[214, 150], [262, 150], [292, 172]] },
+  { glyph: "lb", title: "Previous feed", detail: "manual view", group: "cameras", align: "end", at: [LEFT_X, 150], leader: [[214, 150], [262, 150], [292, 172]] },
   { glyph: "ls", title: "Aim", compass: { kind: "aim", source: "ls" }, group: "aim", align: "end", at: [LEFT_X, 252], leader: [[214, 252], [334, 252]] },
   { glyph: "dpad", title: "Aim", compass: { kind: "aim", source: "dpad" }, group: "aim", align: "end", at: [LEFT_X, 330], leader: [[214, 330], [394, 330]] },
   { glyph: "view", title: "Home", detail: "return to rest", group: "home", align: "end", at: [466, 46], leader: [[466, 64], [466, 240]] },
   { glyph: "menu", title: "Debug mode", detail: "toggle", group: "debug", align: "start", at: [534, 46], leader: [[534, 64], [534, 240]] },
   { glyph: "rt", title: "Extend arm", detail: "hold", group: "arm", align: "start", at: [RIGHT_X, 96], leader: [[786, 96], [696, 96], [662, 130]] },
-  { glyph: "rb", title: "Next camera", detail: "manual view", group: "cameras", align: "start", at: [RIGHT_X, 150], leader: [[786, 150], [738, 150], [708, 172]] },
+  { glyph: "rb", title: "Next feed", detail: "manual view", group: "cameras", align: "start", at: [RIGHT_X, 150], leader: [[786, 150], [738, 150], [708, 172]] },
   { glyph: "x", title: "Virtual Cam", detail: "toggle", group: "virtual", align: "start", at: [RIGHT_X, 192], leader: [[786, 192], [596, 192], [596, 235]] },
-  { glyph: "y", title: "Manual / Dynamic", detail: "camera layout", group: "layout", align: "start", at: [RIGHT_X, 232], leader: [[786, 232], [712, 232], [651, 214]] },
+  { glyph: "y", title: "Manual / Dynamic", detail: "feed layout", group: "layout", align: "start", at: [RIGHT_X, 232], leader: [[786, 232], [712, 232], [651, 214]] },
   { glyph: "b", title: "Button map", detail: "hold", align: "start", at: [RIGHT_X, 272], leader: [[786, 272], [712, 272], [691, 256]] },
   { glyph: "a", title: "Auto-Track", detail: "toggle", group: "track", align: "start", at: [RIGHT_X, 312], leader: [[786, 312], [712, 312], [649, 298]] },
   { glyph: "rs", title: "Arm joints", compass: { kind: "joint", source: "rs" }, group: "arm", align: "start", at: [RIGHT_X, 380], leader: [[786, 380], [712, 380], [598, 350]] },

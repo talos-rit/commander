@@ -21,8 +21,11 @@ type RobotDraft = {
   track_elbow: boolean;
   track_shoulder: boolean;
   track_polar_vertical: boolean;
-  pi_vision_url?: string;
+  pi_vision_enabled: boolean;
+  pi_vision_url: string;
 };
+
+const PI_VISION_PORT = 5050;
 
 const EMPTY_DRAFT: RobotDraft = {
   socket_host: "",
@@ -33,6 +36,8 @@ const EMPTY_DRAFT: RobotDraft = {
   track_elbow: false,
   track_shoulder: false,
   track_polar_vertical: true,
+  pi_vision_enabled: true,
+  pi_vision_url: "",
 };
 
 /** Usual camera stream for a robot: RTSP on the operator host. */
@@ -41,9 +46,15 @@ function suggestedCameraUrl(host: string): string {
   return trimmed ? `rtsp://${trimmed}:8554/camera` : "";
 }
 
+/** Usual PiVision service: HTTP on the operator host. */
+function suggestedPiVisionUrl(host: string): string {
+  const trimmed = host.trim();
+  return trimmed ? `http://${trimmed}:${PI_VISION_PORT}` : "";
+}
+
 /** Empty, or still the URL derived from this host, so host edits may rewrite it. */
-function cameraFollowsHost(camera: string, host: string): boolean {
-  return camera === "" || camera === suggestedCameraUrl(host);
+function followsHost(value: string, host: string, suggest: (host: string) => string): boolean {
+  return value === "" || value === suggest(host);
 }
 
 function toDraft(robot: RobotConfig): RobotDraft {
@@ -56,6 +67,7 @@ function toDraft(robot: RobotConfig): RobotDraft {
     track_elbow: robot.track_elbow ?? false,
     track_shoulder: robot.track_shoulder ?? false,
     track_polar_vertical: robot.track_polar_vertical ?? true,
+    pi_vision_enabled: robot.pi_vision_enabled ?? Boolean(robot.pi_vision_url),
     pi_vision_url: robot.pi_vision_url ?? "",
   };
 }
@@ -81,7 +93,8 @@ function fromDraft(draft: RobotDraft): RobotInput {
     track_elbow: draft.track_elbow,
     track_shoulder: draft.track_shoulder,
     track_polar_vertical: draft.track_polar_vertical,
-    pi_vision_url: draft.pi_vision_url?.trim() || null,
+    pi_vision_enabled: draft.pi_vision_enabled,
+    pi_vision_url: draft.pi_vision_url.trim() || null,
   };
 }
 
@@ -110,6 +123,7 @@ function RobotForm({
   onCancel?: () => void;
 }) {
   const cameraHintId = useId();
+  const piVisionHintId = useId();
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof RobotDraft>(key: K, value: RobotDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
@@ -119,9 +133,24 @@ function RobotForm({
       ...d,
       socket_host,
       camera_index:
-        !editing && cameraFollowsHost(d.camera_index, d.socket_host)
+        !editing && followsHost(d.camera_index, d.socket_host, suggestedCameraUrl)
           ? suggestedCameraUrl(socket_host)
           : d.camera_index,
+      pi_vision_url:
+        !editing && followsHost(d.pi_vision_url, d.socket_host, suggestedPiVisionUrl)
+          ? suggestedPiVisionUrl(socket_host)
+          : d.pi_vision_url,
+    }));
+  };
+
+  const setPiVisionEnabled = (pi_vision_enabled: boolean) => {
+    setDraft((d) => ({
+      ...d,
+      pi_vision_enabled,
+      pi_vision_url:
+        pi_vision_enabled && followsHost(d.pi_vision_url, d.socket_host, suggestedPiVisionUrl)
+          ? suggestedPiVisionUrl(d.socket_host)
+          : d.pi_vision_url,
     }));
   };
 
@@ -131,6 +160,16 @@ function RobotForm({
     : draft.camera_index
       ? "RTSP or HTTP URL, or a device index."
       : "Fills in from the operator host.";
+  const piDerived = draft.pi_vision_url !== "" && draft.pi_vision_url === suggestedPiVisionUrl(draft.socket_host);
+  const piVisionHint = !draft.pi_vision_enabled
+    ? draft.pi_vision_url
+      ? "PiVision is off. This address stays saved."
+      : "PiVision is off. Commander talks to Operator directly."
+    : piDerived
+      ? "PiVision follows the operator host."
+      : draft.pi_vision_url
+        ? "Custom PiVision address."
+        : "PiVision fills in from the operator host.";
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -165,10 +204,27 @@ function RobotForm({
           onChange={(e) => set("socket_port", e.target.value)}
         />
       </label>
+      <div className="robotform__pivision">
+        <label className="check">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={draft.pi_vision_enabled}
+            aria-describedby={draft.pi_vision_enabled ? undefined : piVisionHintId}
+            onChange={(e) => setPiVisionEnabled(e.target.checked)}
+          />
+          <span>Use PiVision</span>
+        </label>
+        {!draft.pi_vision_enabled && (
+          <p id={piVisionHintId} className="robotform__hint">
+            {piVisionHint}
+          </p>
+        )}
+      </div>
       <div className="robotform__secondary">
         <p className="robotform__kicker">Rarely needs changing</p>
         <label className={`field${derived ? " field--derived" : ""}`}>
-          <span>Camera</span>
+          <span>Stream</span>
           <input
             required
             disabled={busy}
@@ -182,17 +238,25 @@ function RobotForm({
         <p id={cameraHintId} className="robotform__hint">
           {cameraHint}
         </p>
-        <label className="field">
-          <span>PiVision URL (optional)</span>
-          <input
-            placeholder="http://bluey.local:5050"
-            spellCheck={false}
-            disabled={busy}
-            value={draft.pi_vision_url ?? ""}
-            onChange={(e) => set("pi_vision_url", e.target.value)}
-          />
-        </label>
-        <p className="robotform__hint">PiVision tracks locally. Commander supervises Auto-Track and manual control.</p>
+        {draft.pi_vision_enabled && (
+          <>
+            <label className={`field${piDerived ? " field--derived" : ""}`}>
+              <span>PiVision URL</span>
+              <input
+                required
+                disabled={busy}
+                placeholder="http://bluey.local:5050"
+                spellCheck={false}
+                aria-describedby={piVisionHintId}
+                value={draft.pi_vision_url}
+                onChange={(e) => set("pi_vision_url", e.target.value)}
+              />
+            </label>
+            <p id={piVisionHintId} className="robotform__hint">
+              {piVisionHint}
+            </p>
+          </>
+        )}
         <div className="robotform__rare">
           <label className="field">
             <span>FPS</span>
@@ -449,9 +513,9 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
 
           {settings && (
             <form className="drawer__section" onSubmit={saveSettings} aria-label="Defaults">
-              <h3>Cameras</h3>
+              <h3>Feeds</h3>
               <label className="field">
-                <span>Camera 1 (primary)</span>
+                <span>Feed 1</span>
                 <select
                   value={draft.camera_1_host ?? ""}
                   onChange={(e) => set("camera_1_host", e.target.value || null)}
@@ -465,13 +529,13 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
                 </select>
               </label>
               <label className="field">
-                <span>Camera 2 (optional)</span>
+                <span>Feed 2</span>
                 <select
                   value={draft.camera_2_host ?? ""}
                   onChange={(e) => set("camera_2_host", e.target.value || null)}
                   disabled={!draft.camera_1_host}
                 >
-                  <option value="">— none (single camera) —</option>
+                  <option value="">— none —</option>
                   {robotNames
                     .filter((host) => host !== draft.camera_1_host)
                     .map((host) => (

@@ -53,7 +53,7 @@ def run_web(args=None) -> None:
 
 def _on_started(backend: CommanderWebBackend, url: str) -> None:
     if web_dist_available():
-        logger.info(f"Commander web UI running at {url} (connecting to cameras...)")
+        logger.info(f"Commander web UI running at {url} (connecting to robots...)")
     else:
         logger.warning(
             f"Serving API only at {url}/api. From web/, run `bun install` and `bun run build`, "

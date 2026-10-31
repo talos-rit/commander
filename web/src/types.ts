@@ -114,6 +114,8 @@ export interface RobotConfig {
   shoulder_count_max?: number | null;
   pitch_count_min?: number | null;
   pitch_count_max?: number | null;
+  /** When false, pi_vision_url is kept but Commander talks to Operator directly. */
+  pi_vision_enabled?: boolean;
   pi_vision_url?: string | null;
   pi_vision_speed_percent?: number;
   pi_vision_max_age_s?: number;

@@ -80,15 +80,15 @@ class AppSettingsFields(BaseModel):
     )
     one_screen_mode: OneScreenMode = Field(
         default="manual",
-        description="When two cameras are assigned: pick the controlled camera (manual) or let Commander switch (dynamic)",
+        description="When two feeds are assigned: pick the controlled feed (manual) or let Commander switch (dynamic)",
     )
     camera_1_host: str | None = Field(
         default=None,
-        description="Robot config hostname shown as Camera 1 (the primary camera)",
+        description="Robot config hostname shown on Feed 1",
     )
     camera_2_host: str | None = Field(
         default=None,
-        description="Optional robot config hostname shown as Camera 2",
+        description="Optional robot config hostname shown on Feed 2",
     )
     default_model: str | None = Field(
         default=None,

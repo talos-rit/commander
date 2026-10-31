@@ -45,29 +45,29 @@ export function TopBar({ status, offline, onOneScreenMode, onSelectSlot, onUIMod
           <nav className="viewbar" aria-label="View">
             {view.one_screen_mode === "manual" ? (
               <Segmented<Slot>
-                label="Controlled camera"
+                label="Controlled feed"
                 value={view.displayed_slot ?? 1}
                 onChange={onSelectSlot}
                 size="sm"
                 options={[
-                  { value: 1, label: "Cam 1", title: `${view.camera_1} (key 1)` },
-                  { value: 2, label: "Cam 2", title: `${view.camera_2} (key 2)` },
+                  { value: 1, label: "Feed 1", title: `${view.camera_1} (key 1)` },
+                  { value: 2, label: "Feed 2", title: `${view.camera_2} (key 2)` },
                 ]}
               />
             ) : (
-              <span className="viewbar__note">Controlling Cam {view.displayed_slot} · auto-switch coming soon</span>
+              <span className="viewbar__note">Controlling Feed {view.displayed_slot} · auto-switch coming soon</span>
             )}
             <Rocker<OneScreenMode>
-              label="Camera switching"
+              label="Feed switching"
               value={view.one_screen_mode}
               onChange={onOneScreenMode}
               size="sm"
               options={[
-                { value: "manual", label: <><Hand size={14} /> Manual</>, description: "You choose the camera" },
+                { value: "manual", label: <><Hand size={14} /> Manual</>, description: "You choose the feed" },
                 {
                   value: "dynamic",
                   label: <><Shuffle size={14} /> Dynamic</>,
-                  description: "Commander picks the camera (switching logic coming in a later release)",
+                  description: "Commander picks the feed (switching logic coming in a later release)",
                 },
               ]}
             />

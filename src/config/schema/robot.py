@@ -30,10 +30,25 @@ class ConnectionConfig(BaseModel):
         description="Camera device index (0, 1, ...) or URL (RTSP/HTTP stream)",
     )
 
-    # Tracking parameters
+    # Tracking parameters.
+    # pi_vision_enabled is separate from the URL so turning PiVision off keeps a custom address.
+    pi_vision_enabled: bool = Field(
+        default=False,
+        description="When true, Commander routes control through pi_vision_url. The URL is kept when this is false.",
+    )
     pi_vision_url: Optional[str] = Field(default=None, description="PiVision local tracking and manual gateway URL; Commander supervises control")
     pi_vision_max_age_s: float = Field(default=0.35, ge=0.05, le=1.0)
     pi_vision_speed_percent: int = Field(default=20, ge=1, le=100)
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_pi_vision_enabled(cls, data):
+        """Older configs have only a URL. A URL means PiVision is on."""
+        if not isinstance(data, dict) or data.get("pi_vision_enabled") is not None:
+            return data
+        url = data.get("pi_vision_url")
+        enabled = isinstance(url, str) and bool(url.strip())
+        return {**data, "pi_vision_enabled": enabled}
 
     @field_validator("pi_vision_url")
     @classmethod
@@ -44,6 +59,12 @@ class ConnectionConfig(BaseModel):
             if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
                 raise ValueError("PiVision URL must be an HTTP(S) service URL without credentials, query or fragment")
         return value
+
+    @model_validator(mode="after")
+    def pi_vision_url_required_when_enabled(self):
+        if self.pi_vision_enabled and not self.pi_vision_url:
+            raise ValueError("PiVision URL is required when PiVision is on")
+        return self
 
     acceptable_box_percent: float = Field(
         default=0.4,
@@ -159,6 +180,24 @@ class ConnectionConfig(BaseModel):
                 raise ValueError("Camera URL cannot be empty string")
             return v
         raise ValueError(f"Camera index must be int or str, got {type(v)}")
+
+    @property
+    def uses_pi_vision(self) -> bool:
+        return active_pi_vision_url(self) is not None
+
+
+def active_pi_vision_url(conf) -> str | None:
+    """URL Commander should call, or None when PiVision is off or unset.
+
+    A false ``pi_vision_enabled`` keeps a saved URL without using it.
+    Objects that predate the flag still follow the URL alone.
+    """
+    if getattr(conf, "pi_vision_enabled", None) is False:
+        return None
+    url = getattr(conf, "pi_vision_url", None)
+    if isinstance(url, str) and url.strip():
+        return url
+    return None
 
 
 type RobotConfigs = dict[str, ConnectionConfig]

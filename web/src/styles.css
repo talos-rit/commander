@@ -1269,6 +1269,18 @@ button:disabled {
   background: var(--surface-2);
 }
 
+.robotform__pivision {
+  grid-column: 1 / -1;
+}
+
+.robotform__pivision .check {
+  margin-bottom: 8px;
+}
+
+.robotform__pivision .robotform__hint {
+  margin-top: -4px;
+}
+
 .robotform__secondary {
   grid-column: 1 / -1;
   margin-top: 2px;
