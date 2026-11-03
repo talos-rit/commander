@@ -149,3 +149,60 @@ def test_controller_fault_is_reported_separately_from_network_error():
     control._edge = {"state": "DISABLED"}
     control._error = "getaddrinfo failed"
     assert control.status()["robot_fault"] is None
+
+
+def sample_with(boxes, sequence):
+    payload = observation()
+    payload["sample"]["sequence"] = sequence
+    payload["sample"]["detections"] = [
+        {"box": box, "confidence": 0.8, "aim_point": [(box[0] + box[2]) // 2, box[1] + 10]}
+        for box in boxes
+    ]
+    return payload
+
+
+def test_subject_ids_persist_as_people_move_and_swap_order():
+    seen = []
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"), clock=lambda: 10,
+                              on_observations=lambda detections, size: seen.append((detections, size)))
+    control.ingest(sample_with([[100, 50, 200, 400], [400, 50, 500, 400]], 1), 10)
+    # Both move a little, and the Pi now lists them in the other order.
+    control.ingest(sample_with([[420, 50, 520, 400], [110, 50, 210, 400]], 2), 10)
+
+    first, second = (detections for detections, _ in seen)
+    assert [d["id"] for d in first] == [1, 2]
+    assert [d["id"] for d in second] == [2, 1]
+    assert seen[0][1] == (640, 480)
+
+
+def test_repeated_sample_keeps_ids_and_is_not_republished():
+    seen = []
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"),
+                              on_observations=lambda detections, size: seen.append(detections))
+    control.ingest(sample_with([[100, 50, 200, 400]], 1), 10)
+    control.ingest(sample_with([[100, 50, 200, 400]], 1), 10.1)
+
+    assert len(seen) == 1
+
+
+def test_a_far_jump_is_a_new_subject():
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"), clock=lambda: 10)
+    control.ingest(sample_with([[0, 50, 60, 400]], 1), 10)
+    control.ingest(sample_with([[560, 50, 630, 400]], 2), 10)
+
+    assert control._sample["detections"][0]["id"] == 2
+
+
+def test_stale_observations_clear_subjects(monkeypatch):
+    seen = []
+    now = [10.0]
+    def request(url, method="GET", body=None):
+        raise TimeoutError("pi slow")
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"), request=request,
+                              clock=lambda: now[0], on_observations=lambda d, s: seen.append((d, s)))
+    control.ingest(sample_with([[100, 50, 200, 400]], 1), 10)
+    now[0] = 12.0
+    control._quit = OnePoll()
+    control._poll_observations()
+
+    assert seen[-1] == (None, None)

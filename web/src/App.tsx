@@ -93,6 +93,10 @@ export default function App() {
   const onEnableControl = useCallback(() => void run(() => api.enableControl()), [run]);
   const onSpeed = useCallback((percent: number) => void run(() => api.setSpeed(percent)), [run]);
   const onModel = (model: string | null) => void run(() => api.setModel(model));
+  const onZoomTarget = (subjectId: number | null) => void run(() => api.setZoomTarget(subjectId, selectedHost));
+  const onZoomFill = (fill: number) => void run(() => api.setZoomFill(fill, selectedHost));
+  const onRecognitionLeniency = (leniency: number) => void run(() => api.setRecognitionLeniency(leniency));
+  const onForgetSubjects = () => void run(() => api.forgetSubjects());
 
   const debug = status?.view.ui_mode === "debug";
   const robotReady = Boolean(selected?.open);
@@ -293,6 +297,10 @@ export default function App() {
                 onJogMode={onJogMode}
                 onModel={onModel}
                 onHome={() => void onHome()}
+                onZoomTarget={onZoomTarget}
+                onZoomFill={onZoomFill}
+                onRecognitionLeniency={onRecognitionLeniency}
+                onForgetSubjects={onForgetSubjects}
                 heldDirections={gamepad.held}
                 controllerConnected={Boolean(gamepad.pad)}
               />

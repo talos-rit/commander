@@ -68,7 +68,10 @@ def test_streamer_reuses_latest_frame_without_advancing_source(mocker) -> None:
     video_connection = mocker.Mock()
     video_connection.get_latest_frame.return_value = image
     connection = SimpleNamespace(
-        video_connection=video_connection, get_bboxes=lambda: []
+        video_connection=video_connection,
+        get_bboxes=lambda: [],
+        get_observations=lambda: None,
+        focus_subject_id=None,
     )
     streamer = Streamer({"camera-a": connection})
 
@@ -86,6 +89,8 @@ def test_streamer_draws_on_copy_without_mutating_shared_packet(mocker) -> None:
     connection = SimpleNamespace(
         video_connection=video_connection,
         get_bboxes=lambda: [(10, 10, 30, 40)],
+        get_observations=lambda: None,
+        focus_subject_id=None,
     )
 
     rendered = Streamer({"camera-a": connection}, draw_bboxes=True).get_frame(
@@ -311,3 +316,23 @@ def test_tracker_acquires_each_source_once_and_detector_uses_same_batch(mocker) 
         ("camera-b", 4),
     ]
     detector._frame_ready_event.set.assert_called_once_with()
+
+
+def test_recent_packets_can_be_found_by_sequence_until_they_age_out(
+    monkeypatch, mocker
+) -> None:
+    from src.connection.connection import RECENT_PACKETS
+
+    fake_cap = mocker.Mock()
+    fake_cap.read.side_effect = lambda: (True, np.zeros((2, 3, 3), dtype=np.uint8))
+    monkeypatch.setattr("src.connection.connection.cv2.VideoCapture", lambda _: fake_cap)
+    connection = VideoConnection(src=0, camera_id="camera-a", timestamp_provider=lambda: 1.0)
+
+    first = connection.get_latest_packet()
+    assert first is not None
+    assert connection.get_packet(0) is first
+    for _ in range(RECENT_PACKETS):
+        connection.capture_packet()
+
+    assert connection.get_packet(0) is None
+    assert connection.get_packet(RECENT_PACKETS) is connection.get_latest_packet()

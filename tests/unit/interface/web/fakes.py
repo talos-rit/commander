@@ -8,7 +8,9 @@ from src.config.schema.app import AppSettingsFields
 from src.config.schema.robot import ConnectionConfig
 from src.connection.publisher import ERVTelemetrySnapshot
 from src.observations.types import FramePacket
+from src.streaming.zoom import DigitalZoom
 from src.talos_app import ControlMode
+from src.tracking.identity import IdentityResolver
 
 
 class FakePublisher:
@@ -43,15 +45,24 @@ class FakeVideo:
 
 
 class FakeConnection:
-    def __init__(self, host, frame=None):
+    def __init__(self, host, frame=None, identity=None):
         self.host = host
         self.is_manual = True
         self.publisher = FakePublisher()
         self.video_connection = FakeVideo(frame)
         self.bboxes = []
+        self.observations = []
+        self.identity = identity or IdentityResolver()
+        self.focus_subject_id = None
 
     def get_bboxes(self):
         return self.bboxes
+
+    def get_observations(self):
+        return self.observations
+
+    def set_observations(self, observations):
+        self.observations = self.identity.resolve(self.host, observations or [])
 
 
 class FakeApp:
@@ -65,17 +76,23 @@ class FakeApp:
         self.model: str | None = None
         self.change_model_result = True
         self.control_mode = ControlMode.DISCRETE
-        self.streamer = SimpleNamespace(get_frame=self._get_frame)
+        self.zooms: dict[str, DigitalZoom] = {}
+        self.identity = IdentityResolver()
+        self.streamer = SimpleNamespace(
+            get_frame=self._get_frame,
+            zoom=lambda host: self.zooms.setdefault(host, DigitalZoom()),
+        )
         self.streaming = False
         self.stream_error: Exception | None = None
 
-    def _get_frame(self, host):
+    def _get_frame(self, host, annotate=None):
         conn = self.connections.get(host)
-        return conn.video_connection.frame if conn else None
+        frame = conn.video_connection.frame if conn else None
+        return annotate(frame) if annotate is not None and frame is not None else frame
 
     def open_connection(self, host):
         self.calls.append(("open", host))
-        self.connections[host] = FakeConnection(host, self.frame)
+        self.connections[host] = FakeConnection(host, self.frame, self.identity)
         self.active = host
 
     def disconnect_connection(self, host):
