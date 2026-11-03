@@ -35,9 +35,11 @@ export interface GamepadHandlers {
 export interface GamepadState {
   pad: ControllerPresence | null;
   held: readonly Direction[];
+  /** B is held, so the button map is showing. Jog and button commands pause until it is released. */
+  mapHeld: boolean;
 }
 
-function readGamepads(): ArrayLike<Gamepad | null> {
+export function readGamepads(): ArrayLike<Gamepad | null> {
   try {
     return navigator.getGamepads?.() ?? [];
   } catch {
@@ -83,6 +85,14 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
 
   const [pad, setPad] = useState<ControllerPresence | null>(null);
   const [heldList, setHeldList] = useState<readonly Direction[]>([]);
+  const mapRef = useRef(false);
+  const [mapHeld, setMapHeld] = useState(false);
+
+  const publishMap = (next: boolean) => {
+    if (mapRef.current === next) return;
+    mapRef.current = next;
+    setMapHeld(next);
+  };
 
   const publishPad = (next: ControllerPresence | null) => {
     const prev = padRef.current;
@@ -145,7 +155,10 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
       publishPad(presence);
 
       const pageAsleep = blurred.current || document.hidden;
-      if (!connected.length || pageAsleep || !latest.current.jog) {
+      const padActions = padActionsPressed(list);
+      const mapOpen = connected.length > 0 && !pageAsleep && padActions.b;
+      publishMap(mapOpen);
+      if (!connected.length || pageAsleep || mapOpen || !latest.current.jog) {
         reportRef.current([]);
         releaseArm();
       } else {
@@ -154,8 +167,7 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
       }
 
       const physical = bumpersPressed(list);
-      const padActions = padActionsPressed(list);
-      const quiet = !connected.length || pageAsleep || suppressEdges.current;
+      const quiet = !connected.length || pageAsleep || suppressEdges.current || mapOpen;
       if (quiet || !latest.current.bumpers) {
         bumpers.current = physical;
       } else {
@@ -224,5 +236,5 @@ export function useGamepad(handlers: GamepadHandlers): GamepadState {
     };
   }, []);
 
-  return { pad, held: heldList };
+  return { pad, held: heldList, mapHeld };
 }

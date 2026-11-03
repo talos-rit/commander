@@ -136,7 +136,7 @@ def create_web_app(
         if path.startswith("/api/") and path != "/api/health" and not backend.ready:
             return JSONResponse(
                 status_code=503,
-                content={"detail": "Commander is connecting to cameras…", "starting": True},
+                content={"detail": "Commander is connecting to robots…", "starting": True},
             )
         return await call_next(request)
 

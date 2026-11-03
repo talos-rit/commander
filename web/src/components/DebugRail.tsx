@@ -164,7 +164,7 @@ function HoldButton({
   );
 }
 
-const JOINT_MARKS = {
+export const JOINT_MARKS = {
   shoulder: { "-1": shoulderMinus, "1": shoulderPlus },
   // The elbow drawings run opposite the jog sign.
   elbow: { "-1": elbowPlus, "1": elbowMinus },
@@ -394,7 +394,7 @@ export function DebugRail({
 
         <p className="hint">
           {controllerConnected
-            ? "Left stick aims. Right stick moves the shoulder and elbow. Triggers extend and retract. LB and RB switch cameras."
+            ? "Left stick aims. Right stick moves the shoulder and elbow. Triggers extend and retract. LB and RB switch feeds. Hold B for the button map."
             : "Hold a button or an arrow key."}
         </p>
       </section>

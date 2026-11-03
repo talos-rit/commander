@@ -184,6 +184,9 @@ class OperatorConnection:
         self._message_buffer, acks = strip_acks(self._message_buffer)
         if acks:
             self._receipts.note_ack(acks)
+        if self._message_buffer.startswith(b"\x00"):
+            # NUL from ``char resp[] = "ACK\n"`` when it arrived in a later read.
+            self._message_buffer = self._message_buffer[1:]
         while b"\n" in self._message_buffer:
             line, self._message_buffer = self._message_buffer.split(b"\n", 1)
             decoded = line.decode(errors="replace").rstrip("\0")

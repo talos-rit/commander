@@ -18,6 +18,7 @@ except ImportError:
 # Same four-byte token Operator writes when it queues an ICD frame. Kept here
 # so a deployed Pi tracker can see it without Commander's package installed.
 _ACK_TOKEN = b"ACK\x00"
+_ACK_LINE = b"ACK\n"
 _COMMAND_LABELS = {0: "Handshake", 1: "Aim", 2: "Home", 3: "Jog", 4: "Stop", 5: "Move", 6: "Extend", 7: "Stop", 8: "Hardware", 9: "Read speed", 10: "Speed"}
 _HARDWARE_LABELS = {1: "Joint jog", 2: "Stop joint", 3: "Joint move", 4: "Enable control", 5: "Speed", 6: "Tracking jog"}
 
@@ -155,15 +156,25 @@ class OperatorClient:
                     buffer += chunk
                     acks = 0
                     while True:
-                        index = buffer.find(_ACK_TOKEN)
-                        if index == -1:
+                        nul_at = buffer.find(_ACK_TOKEN)
+                        line_at = buffer.find(_ACK_LINE)
+                        if nul_at == -1 and line_at == -1:
                             break
-                        buffer = buffer[:index] + buffer[index + len(_ACK_TOKEN):]
+                        if line_at != -1 and (nul_at == -1 or line_at < nul_at):
+                            end = line_at + len(_ACK_LINE)
+                            if end < len(buffer) and buffer[end:end + 1] == b"\x00":
+                                end += 1
+                            buffer = buffer[:line_at] + buffer[end:]
+                            acks += 1
+                            continue
+                        buffer = buffer[:nul_at] + buffer[nul_at + len(_ACK_TOKEN):]
                         acks += 1
                     if acks:
                         with self._receipt_lock:
                             self._acked += acks
                             self._last_ack = time.monotonic()
+                    if buffer.startswith(b"\x00"):
+                        buffer = buffer[1:]
                     while b"\n" in buffer:
                         line, buffer = buffer.split(b"\n", 1)
                         decoded = line.decode(errors="replace").strip()
@@ -331,6 +342,17 @@ class OperatorClient:
         """
         body = struct.pack(">BI", subcommand, 0) + payload
         return self.send_command(ICDCommand.EXECUTE_HARDWARE_OPERATION, body)
+
+    def joint_jog_start(self, axis: int, direction: int) -> bool:
+        """Hold an ER-V shoulder (axis 2) or elbow (axis 3) jog. One axis at a time."""
+        if axis not in (2, 3) or direction not in (-1, 1):
+            logger.error(f"[OperatorClient] Refusing joint jog axis={axis} direction={direction}")
+            return False
+        return self.execute_hardware_operation(0x01, struct.pack(">Bb", axis, direction))
+
+    def joint_jog_stop(self) -> bool:
+        """Stop the current supervised ER-V joint jog."""
+        return self.execute_hardware_operation(0x02, b"")
 
     def erv_enable_control(self) -> bool:
         """Request ACL 'CON' to clear faults and re-enable ER-V servo control."""

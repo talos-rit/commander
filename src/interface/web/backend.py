@@ -9,7 +9,7 @@ import src.config as config
 from src.config.add import validate_connection_config
 from src.config.save import remove_config, save_app_settings, update_config
 from src.config.schema.app import AppSettingsFields
-from src.config.schema.robot import ConnectionConfig
+from src.config.schema.robot import ConnectionConfig, active_pi_vision_url
 from src.connection.publisher import Direction
 from src.observations.types import PersonObservation
 from src.talos_app import ControlMode
@@ -137,7 +137,7 @@ class CommanderWebBackend:
 
     def _ensure_pi_vision(self, host: str) -> None:
         robot = config.ROBOT_CONFIGS.get(host)
-        if robot and robot.pi_vision_url and host in self.app.connections and host not in self._pi_vision:
+        if robot and active_pi_vision_url(robot) and host in self.app.connections and host not in self._pi_vision:
             self.app.set_manual_control(True, hostname=host)
             control = PiVisionControl(
                 self.app.connections[host].publisher,
@@ -190,7 +190,7 @@ class CommanderWebBackend:
             target = self._target(host)
             control = self._pi_vision.get(target)
             if control is None:
-                raise BackendError("Configure this robot's PiVision URL first", 409)
+                raise BackendError("Turn on PiVision for this robot in Settings", 409)
             try:
                 return control.set_perception(enabled)
             except Exception as exc:
@@ -201,7 +201,7 @@ class CommanderWebBackend:
             target = self._target(host)
             control = self._pi_vision.get(target)
             if control is None:
-                raise BackendError("Configure this robot's PiVision URL first", 409)
+                raise BackendError("Turn on PiVision for this robot in Settings", 409)
             try:
                 return control.set_tolerance(ratio)
             except ValueError as exc:
@@ -391,7 +391,7 @@ class CommanderWebBackend:
     def _target(self, host: str | None) -> str:
         target = host or self.state.selected_host
         if target is None:
-            raise BackendError("No camera is assigned; open Settings to add one", 409)
+            raise BackendError("No feed is assigned; open Settings to add one", 409)
         if target not in self.app.connections:
             raise BackendError(f"{target!r} is not connected", 409)
         return target

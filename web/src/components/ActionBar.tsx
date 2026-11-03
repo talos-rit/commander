@@ -124,10 +124,10 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
   const streaming = status.virtual_camera;
   const cameraDisabled = pendingCamera || (!streaming && (!ready || !host?.has_video));
   const cameraTitle = streaming
-    ? "Stop sending the selected camera to the virtual webcam (V)"
+    ? "Stop sending the selected feed to the virtual webcam (V)"
     : !ready || !host?.has_video
-      ? "Waiting for a camera frame to stream"
-      : "Send the selected camera to a virtual webcam, for OBS or Zoom to record (V)";
+      ? "Waiting for a video frame to stream"
+      : "Send the selected feed to a virtual webcam, for OBS or Zoom to record (V)";
 
   const toggleCamera = async () => {
     setPendingCamera(true);
@@ -146,7 +146,7 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
             <span className="target">
               <span className="target__label">Controlling</span>
               <span className="target__host">
-                {host?.slot ? `CAM ${host.slot} · ` : ""}
+                {host?.slot ? `FEED ${host.slot} · ` : ""}
                 {selected}
               </span>
             </span>
@@ -162,7 +162,7 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
               ok={host?.has_video ?? false}
               on={<><Video size={14} /> Video</>}
               off={<><VideoOff size={14} /> No video</>}
-              label="Camera stream"
+              label="Video stream"
             />
             {status.tracking.model && !host?.pi_vision && (
               <span className="chip" title="Detection model used for tracking">

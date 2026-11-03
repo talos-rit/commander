@@ -117,6 +117,21 @@ def test_publish_records_a_send_and_ack_does_not_corrupt_telemetry(operator_conn
     assert heard == ["TEL 1 2 3 4 5 6 7 8 9 10 11"]
 
 
+def test_current_operator_ack_is_a_receipt_and_its_nul_stays_off_telemetry(operator_connection):
+    """Operator sends span("ACK\\n"), which is ACK, newline, and the C-string NUL."""
+    heard = []
+    operator_connection.add_message_listener(heard.append)
+
+    assert operator_connection.publish(command=2, payload=b"\x00\x00\x00\x00") == 0
+    operator_connection._on_message(b"ACK\n")
+    operator_connection._on_message(b"\x00TELP 1 2 3 4 5\n")
+
+    receipt = operator_connection.command_receipt()
+    assert receipt["sent"] == 1
+    assert receipt["acked"] == 1
+    assert heard == ["TELP 1 2 3 4 5"]
+
+
 def test_publish_records_a_failed_send(operator_connection, monkeypatch):
     class BadSocket(DummySocket):
         def sendall(self, _: bytes):
