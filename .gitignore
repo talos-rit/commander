@@ -179,3 +179,5 @@ web/node_modules/
 web/dist/
 web/coverage/
 web/*.tsbuildinfo
+# Face models, downloaded on first use
+assets/face/

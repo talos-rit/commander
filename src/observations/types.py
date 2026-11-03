@@ -48,6 +48,8 @@ class PersonObservation:
     bounding_box: BBox
     detection_confidence: float | None
     local_track_id: int | None
+    subject_id: int | None = None
+    """Persistent ID across tracker IDs, set by `IdentityResolver`."""
 
     def __post_init__(self) -> None:
         if self.frame_sequence < 0:

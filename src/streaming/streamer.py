@@ -23,7 +23,7 @@ def draw_visuals(bboxes, frame, labels=None, highlight=None):  # -> Any:
     Parameters:
     - bounding_box - bounding boxes from capture frame
     - frame - frame to draw on
-    - labels - optional text per box, such as the subject's tracker ID
+    - labels - optional text per box, such as the subject ID
     - highlight - index of the box to draw in the focus color
     """
     # Draw the acceptable box
@@ -105,12 +105,12 @@ class Streamer:
         if frame is None:
             return None
         observations = conn.get_observations() or []
-        target = conn.focus_track_id
+        target = conn.focus_subject_id
         if self.draw_bboxes and (bboxes := conn.get_bboxes()) is not None:
             labels = None
             highlight = None
             if len(observations) == len(bboxes):
-                ids = [o.local_track_id for o in observations]
+                ids = [o.subject_id for o in observations]
                 labels = [f"#{i}" if i is not None else None for i in ids]
                 if target is not None and target in ids:
                     highlight = ids.index(target)

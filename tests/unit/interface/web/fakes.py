@@ -10,6 +10,7 @@ from src.connection.publisher import ERVTelemetrySnapshot
 from src.observations.types import FramePacket
 from src.streaming.zoom import DigitalZoom
 from src.talos_app import ControlMode
+from src.tracking.identity import IdentityResolver
 
 
 class FakePublisher:
@@ -44,14 +45,15 @@ class FakeVideo:
 
 
 class FakeConnection:
-    def __init__(self, host, frame=None):
+    def __init__(self, host, frame=None, identity=None):
         self.host = host
         self.is_manual = True
         self.publisher = FakePublisher()
         self.video_connection = FakeVideo(frame)
         self.bboxes = []
         self.observations = []
-        self.focus_track_id = None
+        self.identity = identity or IdentityResolver()
+        self.focus_subject_id = None
 
     def get_bboxes(self):
         return self.bboxes
@@ -60,7 +62,7 @@ class FakeConnection:
         return self.observations
 
     def set_observations(self, observations):
-        self.observations = observations or []
+        self.observations = self.identity.resolve(self.host, observations or [])
 
 
 class FakeApp:
@@ -75,6 +77,7 @@ class FakeApp:
         self.change_model_result = True
         self.control_mode = ControlMode.DISCRETE
         self.zooms: dict[str, DigitalZoom] = {}
+        self.identity = IdentityResolver()
         self.streamer = SimpleNamespace(
             get_frame=self._get_frame,
             zoom=lambda host: self.zooms.setdefault(host, DigitalZoom()),
@@ -89,7 +92,7 @@ class FakeApp:
 
     def open_connection(self, host):
         self.calls.append(("open", host))
-        self.connections[host] = FakeConnection(host, self.frame)
+        self.connections[host] = FakeConnection(host, self.frame, self.identity)
         self.active = host
 
     def disconnect_connection(self, host):

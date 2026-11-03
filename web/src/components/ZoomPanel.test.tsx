@@ -56,6 +56,13 @@ it("keeps a lost target visible in the list", () => {
   expect(screen.getByRole("radio", { name: /Subject #9.*out of view/ })).toBeDisabled();
 });
 
+it("waits for a target that has left the frame", () => {
+  const zoom = { target: 9, locked: false, holding: false, level: 1, fill: 0.6 };
+  render(<ZoomPanel host={host({ zoom })} modelLoaded onTarget={vi.fn()} onFill={vi.fn()} />);
+
+  expect(screen.getByText(/#9 out of view · waiting/)).toBeInTheDocument();
+});
+
 it("commits the fill slider on release", () => {
   const onFill = vi.fn();
   render(<ZoomPanel host={host()} modelLoaded onTarget={vi.fn()} onFill={onFill} />);

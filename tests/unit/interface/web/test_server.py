@@ -270,10 +270,22 @@ def test_zoom_endpoints(setup):
     from src.observations.types import PersonObservation
 
     client, app = setup()
-    app.connections["a"].observations = [PersonObservation("a", 0, 0.0, (1, 2, 3, 4), 0.9, 5)]
+    app.connections["a"].set_observations([PersonObservation("a", 0, 0.0, (1, 2, 3, 4), 0.9, 5)])
 
-    assert client.post("/api/control/zoom/target", json={"track_id": 5}).json() == {"track_id": 5}
-    assert client.post("/api/control/zoom/target", json={"track_id": 6}).status_code == 404
-    assert client.post("/api/control/zoom/target", json={}).json() == {"track_id": None}
+    assert client.post("/api/control/zoom/target", json={"subject_id": 1}).json() == {"subject_id": 1}
+    assert client.post("/api/control/zoom/target", json={"subject_id": 6}).status_code == 404
+    assert client.post("/api/control/zoom/target", json={}).json() == {"subject_id": None}
     assert client.post("/api/control/zoom/fill", json={"fill": 0.5}).json() == {"fill": 0.5}
     assert client.post("/api/control/zoom/fill", json={"fill": 0.95}).status_code == 422
+
+
+def test_recognition_endpoints(setup):
+    from src.observations.types import PersonObservation
+
+    client, app = setup()
+    app.connections["a"].set_observations([PersonObservation("a", 0, 0.0, (1, 2, 3, 4), 0.9, 5)])
+
+    assert client.post("/api/control/recognition/leniency", json={"leniency": 0.7}).json() == {"leniency": 0.7}
+    assert client.post("/api/control/recognition/leniency", json={"leniency": 2}).status_code == 422
+    assert client.post("/api/control/recognition/forget").json()["known"] == 0
+    assert client.get("/api/status").json()["recognition"]["leniency"] == 0.7

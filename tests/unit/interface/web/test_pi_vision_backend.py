@@ -181,9 +181,9 @@ def test_pi_subjects_are_scaled_to_the_video_and_can_be_zoomed(web_config):
     backend._on_pi_observations("a", [{"box": [100, 40, 200, 400], "confidence": 0.8, "id": 4}], (640, 480))
 
     host = backend.status()["connections"]["a"]
-    assert host["subject_list"] == [{"id": 4, "confidence": 0.8, "box": [50, 20, 100, 200]}]
-    assert backend.set_zoom_target(4) == 4
-    assert app.connections["a"].focus_track_id == 4
+    assert host["subject_list"] == [{"id": 1, "confidence": 0.8, "box": [50, 20, 100, 200]}]
+    assert backend.set_zoom_target(1) == 1
+    assert app.connections["a"].focus_subject_id == 1
 
     backend._on_pi_observations("a", None, None)
     assert backend.status()["connections"]["a"]["subject_list"] == []

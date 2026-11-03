@@ -7,14 +7,15 @@ from src.streaming.zoom import DigitalZoom, framing_rect
 FRAME = (480, 640, 3)
 
 
-def person(track_id, box):
+def person(subject_id, box):
     return PersonObservation(
         camera_id="cam",
         frame_sequence=0,
         capture_timestamp=0.0,
         bounding_box=box,
         detection_confidence=0.9,
-        local_track_id=track_id,
+        local_track_id=None,
+        subject_id=subject_id,
     )
 
 

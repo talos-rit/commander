@@ -8,7 +8,7 @@ interface Props {
   modelLoaded: boolean;
   /** PiVision steers the arm on the Pi, so it does not follow the zoom subject. */
   piVision?: boolean;
-  onTarget: (trackId: number | null) => void;
+  onTarget: (subjectId: number | null) => void;
   onFill: (fill: number) => void;
 }
 
@@ -19,7 +19,7 @@ function describe(zoom: NonNullable<HostStatus["zoom"]>): string {
   if (zoom.target === null) return "Full frame";
   if (zoom.locked) return `Following #${zoom.target} · ${zoom.level.toFixed(1)}×`;
   if (zoom.holding) return `#${zoom.target} lost · holding`;
-  return `#${zoom.target} out of view · full frame`;
+  return `#${zoom.target} out of view · waiting`;
 }
 
 function SubjectRow({

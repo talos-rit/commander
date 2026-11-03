@@ -81,8 +81,12 @@ class VirtualCameraRequest(BaseModel):
 
 
 class ZoomTargetRequest(BaseModel):
-    track_id: int | None = None
+    subject_id: int | None = None
     host: str | None = None
+
+
+class RecognitionLeniencyRequest(BaseModel):
+    leniency: float = Field(ge=0.0, le=1.0)
 
 
 class ZoomFillRequest(BaseModel):
@@ -239,11 +243,19 @@ def create_web_app(
 
     @api.post("/control/zoom/target")
     def zoom_target(req: ZoomTargetRequest):
-        return {"track_id": backend.set_zoom_target(req.track_id, req.host)}
+        return {"subject_id": backend.set_zoom_target(req.subject_id, req.host)}
 
     @api.post("/control/zoom/fill")
     def zoom_fill(req: ZoomFillRequest):
         return {"fill": backend.set_zoom_fill(req.fill, req.host)}
+
+    @api.post("/control/recognition/leniency")
+    def recognition_leniency(req: RecognitionLeniencyRequest):
+        return {"leniency": backend.set_recognition_leniency(req.leniency)}
+
+    @api.post("/control/recognition/forget")
+    def recognition_forget():
+        return backend.forget_subjects()
 
     @api.get("/cameras/{host}/snapshot")
     def snapshot(host: str, width: int | None = None):

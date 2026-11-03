@@ -98,6 +98,12 @@ class AppSettingsFields(BaseModel):
         default="discrete",
         description="Manual jog style in debug mode",
     )
+    recognition_leniency: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="How readily a returning person is recognized: 0 is strict, 1 is lenient",
+    )
 
 
 class AppSettings(AppSettingsFields, BaseSettings):

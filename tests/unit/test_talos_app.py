@@ -29,6 +29,9 @@ def patch_talos_app_dependencies(monkeypatch, mocker):
 
     monkeypatch.setattr(connection_module, "add_termination_handler", lambda f: 1)
     monkeypatch.setattr(connection_module, "remove_termination_handler", lambda term: None)
+    # Loading the ReID model would pull in torch and download weights.
+    monkeypatch.setattr(talos_app, "default_embedder", lambda: None)
+    monkeypatch.setattr(talos_app, "default_face_embedder", lambda: None)
 
     yield {
         "tracker": mock_tracker,
@@ -91,7 +94,7 @@ def test_open_connection_uses_config_and_creates_connection(monkeypatch, app_und
     monkeypatch.setattr(talos_app, "VideoConnection", lambda src: mock_video)
 
     mock_conn = mocker.Mock()
-    monkeypatch.setattr(talos_app, "Connection", lambda host, port, video_connection: mock_conn)
+    monkeypatch.setattr(talos_app, "Connection", lambda host, port, video_connection, **_: mock_conn)
 
     app.open_connection("host")
 
@@ -108,7 +111,7 @@ def test_open_connection_falls_back_when_video_fails(monkeypatch, app_under_test
     monkeypatch.setattr(talos_app, "VideoConnection", lambda src: (_ for _ in ()).throw(Exception("boom")))
 
     mock_conn = mocker.Mock()
-    monkeypatch.setattr(talos_app, "Connection", lambda host, port, video_connection: mock_conn)
+    monkeypatch.setattr(talos_app, "Connection", lambda host, port, video_connection, **_: mock_conn)
 
     app.open_connection("host")
     assert "host" in app.connections

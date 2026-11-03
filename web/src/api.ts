@@ -4,6 +4,7 @@ import type {
   DisplayMode,
   JogMode,
   OneScreenMode,
+  RecognitionStatus,
   RobotConfig,
   RobotInput,
   Slot,
@@ -84,10 +85,13 @@ export const api = {
   setModel: (model: string | null) => request<{ model: string | null }>("POST", "/control/model", { model }),
   setVirtualCamera: (enabled: boolean) =>
     request<{ enabled: boolean }>("POST", "/control/virtual-camera", { enabled }),
-  setZoomTarget: (track_id: number | null, host?: string) =>
-    request<{ track_id: number | null }>("POST", "/control/zoom/target", { track_id, host }),
+  setZoomTarget: (subject_id: number | null, host?: string) =>
+    request<{ subject_id: number | null }>("POST", "/control/zoom/target", { subject_id, host }),
   setZoomFill: (fill: number, host?: string) =>
     request<{ fill: number }>("POST", "/control/zoom/fill", { fill, host }),
+  setRecognitionLeniency: (leniency: number) =>
+    request<{ leniency: number }>("POST", "/control/recognition/leniency", { leniency }),
+  forgetSubjects: () => request<RecognitionStatus>("POST", "/control/recognition/forget"),
 
   settings: () => request<AppSettings>("GET", "/settings"),
   updateSettings: (updates: Partial<AppSettings>) => request<AppSettings>("PUT", "/settings", updates),

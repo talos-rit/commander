@@ -38,7 +38,8 @@ export interface CommandReceipt {
 
 /** A person the local detector sees, keyed by its tracker ID. */
 export interface Subject {
-  /** Tracker ID. Null when the model does not track, so it cannot be zoomed on. */
+  /** Subject ID, kept when the person leaves and is recognized again. Null when
+   * the model does not track, so it cannot be zoomed on. */
   id: number | null;
   confidence: number | null;
   /** x1, y1, x2, y2 in source-frame pixels. */
@@ -56,6 +57,25 @@ export interface ZoomStatus {
   level: number;
   /** Share of the zoomed frame the subject takes up. */
   fill: number;
+  /** How the target was last recognized after coming back, if they have been. */
+  match?: RecognitionMatch | null;
+}
+
+export interface RecognitionMatch {
+  by: "face" | "body";
+  /** Similarity that matched, 1 being identical. */
+  score: number;
+}
+
+export interface RecognitionStatus {
+  /** People recognized so far this session. */
+  known: number;
+  /** Body matching is running. */
+  appearance: boolean;
+  /** Face matching is running. */
+  faces: boolean;
+  /** 0 is strict, 1 is lenient. */
+  leniency: number;
 }
 
 export interface HostStatus {
@@ -96,6 +116,7 @@ export interface Status {
   speed_percent: number | null;
   /** True while the selected camera is being sent to a virtual webcam. */
   virtual_camera: boolean;
+  recognition?: RecognitionStatus;
   robots: string[];
 }
 
@@ -113,6 +134,7 @@ export interface AppSettings {
   camera_2_host: string | null;
   default_model: string | null;
   jog_mode: JogMode;
+  recognition_leniency: number;
 }
 
 export interface RobotConfig {

@@ -114,6 +114,7 @@ class CommanderWebBackend:
             if self._cancel_startup.is_set():
                 return
             self._apply_jog_mode(config.APP_SETTINGS.jog_mode)
+            self.app.identity.set_leniency(config.APP_SETTINGS.recognition_leniency)
             self._sync_active()
             # Load a saved model now. A saved Haar/MediaPipe name is replaced
             # with YOLO; with nothing saved, Auto-Track loads YOLO on demand.
@@ -160,12 +161,15 @@ class CommanderWebBackend:
             conn.set_observations(None)
             return
         sx, sy = shape[1] / size[0], shape[0] / size[1]
+        # The Pi detects on its own copy of the stream; the newest local frame is
+        # the closest match, for cropping subjects to recognize them.
+        packet = conn.video_connection.get_latest_packet()
         conn.set_observations(
             [
                 PersonObservation(
                     camera_id=host,
-                    frame_sequence=0,
-                    capture_timestamp=0.0,
+                    frame_sequence=packet.frame_sequence if packet is not None else 0,
+                    capture_timestamp=packet.capture_timestamp if packet is not None else 0.0,
                     bounding_box=(d["box"][0] * sx, d["box"][1] * sy, d["box"][2] * sx, d["box"][3] * sy),
                     detection_confidence=float(d["confidence"]),
                     local_track_id=d.get("id"),
@@ -236,6 +240,7 @@ class CommanderWebBackend:
                 "jog_mode": str(self.app.get_control_mode()),
                 "speed_percent": self._speed_percent,
                 "virtual_camera": self.app.is_streaming(),
+                "recognition": self.app.identity.status(),
                 "robots": sorted(config.ROBOT_CONFIGS.keys()),
             }
 
@@ -279,7 +284,7 @@ class CommanderWebBackend:
         observations = conn.get_observations() or []
         subjects = [
             {
-                "id": observation.local_track_id,
+                "id": observation.subject_id,
                 "confidence": round(observation.detection_confidence, 3)
                 if observation.detection_confidence is not None
                 else None,
@@ -292,7 +297,12 @@ class CommanderWebBackend:
     def _zoom_status(self, host: str, conn: Any) -> dict[str, Any]:
         # The zoom only learns a new target when it renders a frame, so report
         # the connection's focus directly.
-        return {**self.app.streamer.zoom(host).status(), "target": conn.focus_track_id}
+        target = conn.focus_subject_id
+        return {
+            **self.app.streamer.zoom(host).status(),
+            "target": target,
+            "match": conn.identity.last_match(target) if target is not None else None,
+        }
 
     @staticmethod
     def _command_receipt(publisher: Any) -> dict[str, Any] | None:
@@ -461,17 +471,19 @@ class CommanderWebBackend:
                 raise BackendError("Could not start the virtual camera", 500)
             return True
 
-    def set_zoom_target(self, track_id: int | None, host: str | None = None) -> int | None:
-        """Zoom on, and follow, the subject with this tracker ID. None shows the full frame."""
+    def set_zoom_target(self, subject_id: int | None, host: str | None = None) -> int | None:
+        """Zoom on, and follow, this subject. None shows the full frame.
+
+        The subject may be out of view; zoom and Auto-Track pick them up when
+        they come back.
+        """
         with self._lock:
             target = self._target(host)
             conn = self.app.connections[target]
-            if track_id is not None:
-                visible = {o.local_track_id for o in conn.get_observations() or []}
-                if track_id not in visible:
-                    raise BackendError(f"Subject #{track_id} is no longer in view", 404)
-            conn.focus_track_id = track_id
-            return track_id
+            if subject_id is not None and not conn.identity.is_known(subject_id):
+                raise BackendError(f"Subject #{subject_id} is unknown", 404)
+            conn.focus_subject_id = subject_id
+            return subject_id
 
     def set_zoom_fill(self, fill: float, host: str | None = None) -> float:
         """How much of the zoomed frame the subject should take up, from 0.2 to 0.9."""
@@ -481,6 +493,29 @@ class CommanderWebBackend:
                 return self.app.streamer.zoom(target).set_fill(fill)
             except ValueError as exc:
                 raise BackendError(str(exc), 422) from exc
+
+    def set_recognition_leniency(self, leniency: float) -> float:
+        """How readily returning people are recognized, from 0 (strict) to 1 (lenient). Saved."""
+        with self._lock:
+            self._require_debug()
+            try:
+                leniency = self.app.identity.set_leniency(leniency)
+            except ValueError as exc:
+                raise BackendError(str(exc), 422) from exc
+            try:
+                self._persist_settings({"recognition_leniency": leniency})
+            except Exception as exc:
+                logger.warning(f"Could not persist recognition leniency: {exc}")
+            return leniency
+
+    def forget_subjects(self) -> dict[str, Any]:
+        """Forget everyone recognized so far, and zoom every camera back out."""
+        with self._lock:
+            self._require_debug()
+            self.app.identity.forget_all()
+            for conn in self.app.connections.values():
+                conn.focus_subject_id = None
+            return self.app.identity.status()
 
     def _require_debug(self) -> None:
         if self.state.ui_mode != "debug":
@@ -661,6 +696,8 @@ class CommanderWebBackend:
                 self.set_view(**view_updates)
             if "jog_mode" in updates:
                 self.set_jog_mode(updates["jog_mode"])
+            if "recognition_leniency" in updates:
+                self.app.identity.set_leniency(updates["recognition_leniency"])
             rest = {
                 k: v
                 for k, v in updates.items()

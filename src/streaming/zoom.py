@@ -54,7 +54,7 @@ def _lerp(a: Rect, b: Rect, t: float) -> Rect:
 
 
 class DigitalZoom:
-    """Smoothed crop that follows one subject, chosen by its tracker ID.
+    """Smoothed crop that follows one subject, chosen by its subject ID.
 
     With no target, or once the target has been missing longer than
     `lost_hold_s`, the crop eases back out to the full frame. Safe to call from
@@ -113,7 +113,7 @@ class DigitalZoom:
                 self._held = None
                 self._last_seen = None
             subject = (
-                next((o for o in observations if o.local_track_id == target_id), None)
+                next((o for o in observations if o.subject_id == target_id), None)
                 if target_id is not None
                 else None
             )

@@ -7,6 +7,7 @@ import shoulderPlus from "../assets/shoulder_+.svg";
 import type { Direction, JogMode, Status, Telemetry } from "../types";
 import { CommandReceipt } from "./ActionBar";
 import { ModelSlider } from "./ModelSlider";
+import { RecognitionPanel } from "./RecognitionPanel";
 import { Rocker, type RockerOption } from "./Rocker";
 import { ZoomPanel } from "./ZoomPanel";
 
@@ -32,8 +33,10 @@ interface Props {
   onJogMode: (mode: JogMode) => void;
   onModel: (model: string | null) => void;
   onHome: () => void;
-  onZoomTarget: (trackId: number | null) => void;
+  onZoomTarget: (subjectId: number | null) => void;
   onZoomFill: (fill: number) => void;
+  onRecognitionLeniency: (leniency: number) => void;
+  onForgetSubjects: () => void;
   /** Directions currently held by a controller. */
   heldDirections?: readonly Direction[];
   /** A pad is connected; the extra hint can mention it. */
@@ -230,6 +233,8 @@ export function DebugRail({
   onHome,
   onZoomTarget,
   onZoomFill,
+  onRecognitionLeniency,
+  onForgetSubjects,
   heldDirections = [],
   controllerConnected = false,
 }: Props) {
@@ -445,6 +450,13 @@ export function DebugRail({
         piVision={Boolean(host?.pi_vision)}
         onTarget={onZoomTarget}
         onFill={onZoomFill}
+      />
+
+      <RecognitionPanel
+        recognition={status.recognition}
+        zoom={host?.zoom}
+        onLeniency={onRecognitionLeniency}
+        onForget={onForgetSubjects}
       />
 
       <section className="rail__section rail__section--placeholder">
