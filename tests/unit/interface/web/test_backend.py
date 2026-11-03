@@ -562,7 +562,7 @@ def test_update_settings_rejects_invalid_values_without_side_effects(web_config)
 
 def test_add_robot_persists_and_fills_empty_camera_1(web_config):
     web_config.robots.clear()
-    backend, app, _ = make_backend()
+    backend, app, persisted = make_backend()
 
     created = backend.add_robot(
         {"socket_host": "bluey", "socket_port": "61616", "camera_index": "rtsp://x"}
@@ -571,9 +571,32 @@ def test_add_robot_persists_and_fills_empty_camera_1(web_config):
     assert created["socket_port"] == 61616
     assert "bluey" in config_module.ROBOT_CONFIGS
     assert backend.state.camera_1 == "bluey"
+    assert backend.state.camera_2 is None
+    assert any(item.get("camera_1_host") == "bluey" for item in persisted)
     assert "bluey" in app.connections
     saved = yaml.safe_load(web_config.robot_configs_path.read_text())
     assert saved["bluey"]["camera_index"] == "rtsp://x"
+
+
+def test_add_robot_leaves_feed_2_empty(web_config):
+    backend, _, _ = make_backend(camera_1="a")
+
+    backend.add_robot({"socket_host": "c", "socket_port": "61616", "camera_index": "0"})
+
+    assert backend.state.camera_1 == "a"
+    assert backend.state.camera_2 is None
+
+
+def test_disabled_pi_vision_keeps_the_url_without_starting_it(web_config):
+    web_config.robots["a"] = robot(
+        "a", pi_vision_enabled=False, pi_vision_url="http://pi:5050"
+    )
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+
+    assert "a" in app.connections
+    assert "a" not in backend._pi_vision
+    assert config_module.ROBOT_CONFIGS["a"].pi_vision_url == "http://pi:5050"
 
 
 def test_add_robot_validation_errors(web_config):
@@ -628,3 +651,74 @@ def test_delete_unknown_robot(web_config):
 def test_list_robots(web_config):
     backend, _, _ = make_backend()
     assert list(backend.list_robots()) == ["a", "b"]
+
+
+def test_web_twin_reuses_measured_calibration(web_config):
+    from src.simulation.erv_calibration import BASE_CALIBRATION, map_arm_controller_coordinates
+    import time
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    publisher = app.connections["a"].publisher
+    publisher.telemetry = ERVTelemetrySnapshot(None, None, (100, 1500, 2200, 1200, 99), time.monotonic())
+    pose = backend.status()["connections"]["a"]["telemetry"]["joint_positions"]
+    assert pose == {**map_arm_controller_coordinates(1500, 2200, 1200), "base_joint": BASE_CALIBRATION.to_urdf(100)}
+    assert "roll_joint" not in pose
+    publisher.telemetry = ERVTelemetrySnapshot(None, None, (1500, 2200, 1200, 99), time.monotonic())
+    pose = backend.status()["connections"]["a"]["telemetry"]["joint_positions"]
+    assert "base_joint" not in pose
+    publisher.telemetry = ERVTelemetrySnapshot(tuple(range(11)), time.monotonic(), None, None)
+    assert backend.status()["connections"]["a"]["telemetry"]["joint_positions"] is None
+
+
+def test_controller_profile_mismatch_blocks_motion_but_allows_stop(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    backend.set_view(ui_mode="debug")
+    app.connections["a"].publisher.get_controller_profile = lambda: "esp-one-axis"
+    assert backend.status()["connections"]["a"]["controller"]["state"] == "mismatch"
+    for action in (lambda: backend.home(), lambda: backend.move("right", True), lambda: backend.set_auto_track(True)):
+        with pytest.raises(BackendError) as error:
+            action()
+        assert error.value.status == 409
+    backend.stop_motion()
+
+
+def test_esp_profile_restricts_controls_and_native_can_be_restored(web_config):
+    import src.config as config
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    backend.set_view(ui_mode="debug")
+    config.ROBOT_CONFIGS["a"].controller_profile = "esp-one-axis"
+    app.connections["a"].publisher.get_controller_profile = lambda: "esp-one-axis"
+    backend.move("right", True)
+    backend.move("right", False)
+    for action in (lambda: backend.move("up", True), lambda: backend.joint_jog("elbow", 1, True), lambda: backend.cartesian(0, 1, 0, True), lambda: backend.enable_control(), lambda: backend.set_speed_percent(20), lambda: backend.clear_robot_error()):
+        with pytest.raises(BackendError) as error:
+            action()
+        assert error.value.status == 409
+    config.ROBOT_CONFIGS["a"].controller_profile = "native"
+    assert backend.status()["connections"]["a"]["controller"]["state"] == "mismatch"
+    app.connections["a"].publisher.get_controller_profile = lambda: "native"
+    backend.move("up", True)
+    backend.enable_control()
+
+
+def test_unknown_controller_profile_blocks_home(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].publisher.get_controller_profile = lambda: None
+    with pytest.raises(BackendError):
+        backend.home()
+
+
+def test_two_named_robots_can_share_a_pi_with_separate_ports(web_config):
+    import src.config as config
+    backend, app, _ = make_backend()
+    backend.add_robot({"robot_id": "bluey", "socket_host": "shared.local", "socket_port": 61616, "camera_index": "rtsp://shared.local:8554/camera", "controller_profile": "esp-one-axis"})
+    backend.add_robot({"robot_id": "bingo", "socket_host": "shared.local", "socket_port": 61617, "camera_index": "rtsp://shared.local:8554/bingo", "controller_profile": "native"})
+    assert config.ROBOT_CONFIGS["bluey"].socket_host == config.ROBOT_CONFIGS["bingo"].socket_host == "shared.local"
+    assert config.ROBOT_CONFIGS["bluey"].socket_port == 61616
+    assert config.ROBOT_CONFIGS["bingo"].socket_port == 61617
+    backend.update_robot("bluey", {"socket_host": "replacement.local"})
+    assert config.ROBOT_CONFIGS["bluey"].socket_host == "replacement.local"
+    assert config.ROBOT_CONFIGS["bingo"].socket_host == "shared.local"

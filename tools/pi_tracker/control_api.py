@@ -67,6 +67,7 @@ class ControlLease:
                     "last_thought": self.controller.last_thought,
                     "acceptable_ratio": getattr(self.controller, "acceptable_ratio", .25),
                     "lease_remaining_s": max(0, self.deadline - self.clock()),
+                    "controller_profile": getattr(self.operator, "get_controller_profile", lambda: None)(),
                     "operator_connected": self.operator.is_connected,
                     "fault": self.operator.get_fault(),
                     "joint_counts": [telemetry.base, telemetry.shoulder, telemetry.elbow,

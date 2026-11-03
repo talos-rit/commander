@@ -94,7 +94,7 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
   const [pendingCamera, setPendingCamera] = useState(false);
   const [clearingError, setClearingError] = useState(false);
 
-  const ready = Boolean(host?.open);
+  const ready = Boolean(host?.open) && (!host?.controller || host.controller.state === "verified");
   const tracking = host?.auto_tracking ?? false;
   const trackDisabled = !ready || host?.manual_only || pendingTrack;
   const trackTitle = host?.manual_only
@@ -124,10 +124,10 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
   const streaming = status.virtual_camera;
   const cameraDisabled = pendingCamera || (!streaming && (!ready || !host?.has_video));
   const cameraTitle = streaming
-    ? "Stop sending the selected camera to the virtual webcam (V)"
+    ? "Stop sending the selected feed to the virtual webcam (V)"
     : !ready || !host?.has_video
-      ? "Waiting for a camera frame to stream"
-      : "Send the selected camera to a virtual webcam, for OBS or Zoom to record (V)";
+      ? "Waiting for a video frame to stream"
+      : "Send the selected feed to a virtual webcam, for OBS or Zoom to record (V)";
 
   const toggleCamera = async () => {
     setPendingCamera(true);
@@ -146,7 +146,7 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
             <span className="target">
               <span className="target__label">Controlling</span>
               <span className="target__host">
-                {host?.slot ? `CAM ${host.slot} · ` : ""}
+                {host?.slot ? `FEED ${host.slot} · ` : ""}
                 {selected}
               </span>
             </span>
@@ -158,11 +158,14 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
               off={<><Link2Off size={14} /> Robot offline</>}
               label="Connection to the robot's Operator"
             />}
+            {host?.controller && <span role="status" className={`chip ${host.controller.state === "verified" ? "chip--ok" : "chip--warn"}`}>
+              {host.controller.configured === "native" ? "Bingo native" : "Bluey ESP"} ? {host.controller.state === "verified" ? "verified" : host.controller.state === "mismatch" ? `mismatch: Operator is ${host.controller.reported}` : "waiting for Operator profile"}
+            </span>}
             <StatusChip
               ok={host?.has_video ?? false}
               on={<><Video size={14} /> Video</>}
               off={<><VideoOff size={14} /> No video</>}
-              label="Camera stream"
+              label="Video stream"
             />
             {status.tracking.model && !host?.pi_vision && (
               <span className="chip" title="Detection model used for tracking">
@@ -194,7 +197,7 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
         <CenteringTolerance key={selected} ratio={host.pi_vision.acceptable_ratio ?? .25} onChange={onPiTolerance} />
       )}
       <div className="actionbar__actions">
-        {host?.pi_vision && onClearError && (
+        {host?.pi_vision && onClearError && host.controller?.configured !== "esp-one-axis" && (
           <button type="button" className="btn" disabled={!ready || clearingError}
             onClick={async () => {
               setClearingError(true);

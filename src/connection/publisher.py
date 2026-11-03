@@ -77,6 +77,8 @@ class Publisher:
         self._erv_joint_counts: tuple[int, ...] | None = None
         self._erv_encoder_received_monotonic: float | None = None
         self._erv_joint_received_monotonic: float | None = None
+        self._controller_profile = None
+        self._controller_profile_received = 0.0
         self._telemetry_lock = threading.Lock()
         self.operator_connection.add_message_listener(self._on_operator_message)
 
@@ -89,6 +91,12 @@ class Publisher:
 
     def is_connected(self) -> bool:
         return self.operator_connection.is_connected()
+
+    def get_controller_profile(self):
+        with self._telemetry_lock:
+            if not self.is_connected() or time.monotonic() - self._controller_profile_received > 3:
+                return None
+            return self._controller_profile
 
     def get_erv_encoder_counts(self) -> tuple[int, ...] | None:
         with self._telemetry_lock:
@@ -115,6 +123,11 @@ class Publisher:
     def _on_operator_message(self, message: str) -> None:
         fields = message.split()
         if not fields:
+            return
+        if len(fields) == 2 and fields[0] == "PROFILE" and fields[1] in ("native", "esp-one-axis"):
+            with self._telemetry_lock:
+                self._controller_profile = fields[1]
+                self._controller_profile_received = time.monotonic()
             return
         if fields[0] == "TELP":
             if len(fields) not in (5, 6):

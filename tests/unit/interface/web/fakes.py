@@ -20,6 +20,9 @@ class FakePublisher:
     def is_connected(self):
         return self.connected
 
+    def get_controller_profile(self):
+        return "native" if self.connected else None
+
     def get_erv_telemetry_snapshot(self):
         return self.telemetry
 

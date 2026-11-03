@@ -1,5 +1,26 @@
 # TALOS Pi Edge Tracker
 
+## Inference rate
+
+`--inference-fps 2` (or `INFERENCE_FPS=2`) caps detection starts at two per second.
+The default is `0`, meaning unlimited and preserving existing behavior. The cap
+does not reduce the camera/video feed rate or slow the separate controller service
+and watchdog. Waiting occurs before fetching the newest frame, with no backlog or
+catch-up burst. Invalid/negative/non-finite rates fail before hardware startup.
+
+For the observed roughly 4 FPS Pi workload, 2 FPS is a useful half-rate trial.
+It is not a promise to halve total CPU: capture, encoding, control, and UI continue
+running. Current observation/target freshness deadlines remain unchanged; at low
+FPS the arm may stop between observations. Measure tracking smoothness and stop
+latency rather than increasing those deadlines to hide the gaps.
+
+This option is staged locally; the active demo Pi service has not been changed.
+A future shared model worker can alternate the newest frame from each camera,
+but must preserve independent camera IDs/timestamps, targets, control leases,
+and Operators. It shares model memory and scheduling, not the cost of evaluating
+two frames. At 4 total model evaluations/sec, fair scheduling yields about 2 FPS
+per camera, not 4 FPS per camera.
+
 Experimental visual tracking service for Bingo. It runs person detection on Bluey,
 uses the existing Operator ICD connection at `127.0.0.1:61616`, and exposes a local
 diagnostic dashboard on port 5050.

@@ -18,9 +18,11 @@ from loguru import logger
 try:
     from .detector import Detection
     from .operator_client import OperatorClient
+    from .vertical_axes import select_vertical_motion
 except ImportError:
     from detector import Detection
     from operator_client import OperatorClient
+    from vertical_axes import select_vertical_motion
 
 
 class TrackingState(str, Enum):
@@ -98,6 +100,14 @@ class TrackingController:
         self.max_pitch_pulse = max_pitch_pulse
         self.speed_percent = max(1, min(100, speed_percent))
         self.continuous_tracking = continuous_tracking
+        self.track_elbow = False
+        self.track_shoulder = False
+        self.track_polar_vertical = True
+        self.elbow_limits = None
+        self.shoulder_limits = None
+        self._motion_kind = None
+        self.current_joint_axis = 0
+        self.current_joint_direction = 0
         self.last_motion_refresh = 0.0
         self.current_jog_interval_ms = 10
         self._target_sample = None
@@ -183,8 +193,14 @@ class TrackingController:
         if not self.is_currently_moving:
             return
         stopped_at = time.monotonic() if now is None else now
-        self.operator.polar_pan_continuous_stop()
+        if self._motion_kind == "joint":
+            self.operator.joint_jog_stop()
+        else:
+            self.operator.polar_pan_continuous_stop()
         self.is_currently_moving = False
+        self._motion_kind = None
+        self.current_joint_axis = 0
+        self.current_joint_direction = 0
         self.current_azimuth = 0
         self.current_altitude = 0
         self.pulse_deadline = 0.0
@@ -207,7 +223,11 @@ class TrackingController:
                 elif current - self.last_observation_time > self.max_observation_age + 0.3:
                     self._stop_movement_locked("camera updates stopped", current)
                 elif current - self.last_motion_refresh >= 0.15:
-                    if self._send_tracking_direction(self.current_azimuth, self.current_altitude):
+                    if self._motion_kind == "joint":
+                        refreshed = self.operator.joint_jog_start(self.current_joint_axis, self.current_joint_direction)
+                    else:
+                        refreshed = self._send_tracking_direction(self.current_azimuth, self.current_altitude)
+                    if refreshed:
                         self.last_motion_refresh = current
                     else:
                         self._stop_movement_locked("Operator rejected motion refresh", current)
@@ -226,6 +246,33 @@ class TrackingController:
             raise ValueError("centering tolerance must be 0.05..0.8")
         with self._lock:
             self.acceptable_ratio = float(ratio)
+
+    def set_vertical_axes(
+        self,
+        elbow=None,
+        shoulder=None,
+        polar_vertical=None,
+        elbow_limits=None,
+        shoulder_limits=None,
+        pitch_limits=None,
+        elbow_limits_set=False,
+        shoulder_limits_set=False,
+        pitch_limits_set=False,
+    ) -> None:
+        """Axes Commander allows this Pi to command. The decision stays on the Pi."""
+        with self._lock:
+            if elbow is not None:
+                self.track_elbow = bool(elbow)
+            if shoulder is not None:
+                self.track_shoulder = bool(shoulder)
+            if polar_vertical is not None:
+                self.track_polar_vertical = bool(polar_vertical)
+            if elbow_limits_set:
+                self.elbow_limits = elbow_limits
+            if shoulder_limits_set:
+                self.shoulder_limits = shoulder_limits
+            if pitch_limits_set:
+                self.pitch_limits = pitch_limits
 
     def _status(self, box: Tuple[int, int, int, int], now: float, observation_time: float) -> ControllerStatus:
         telemetry = self.operator.get_telemetry()
@@ -426,8 +473,10 @@ class TrackingController:
             norm_x = excess_x / max(1, frame_cx - half_deadband_x)
             norm_y = excess_y / max(1, frame_cy - half_deadband_y)
 
+            vertical_enabled = self.track_elbow or self.track_shoulder or self.track_polar_vertical
+            vertical_needed = desired_altitude != 0 and vertical_enabled
             use_base = desired_azimuth != 0 and (
-                desired_altitude == 0 or norm_x >= norm_y
+                not vertical_needed or norm_x >= norm_y
             )
             if use_base:
                 if self.enable_joint_limits and measured_limits_available and (
@@ -439,18 +488,39 @@ class TrackingController:
                 self.current_jog_interval_ms = self.jog_interval("base", norm_x)
                 if not self._start_pulse(desired_azimuth, 0, pulse, now):
                     return self._fault_status(status, "Operator rejected tracking motion command")
-            else:
-                # Optional additional count limits do not disable the existing
-                # Operator wrist-pitch path when no custom limits were supplied.
-                if self.enable_joint_limits and measured_limits_available and self.pitch_limits is not None:
-                    pitch_min, pitch_max = self.pitch_limits
-                    if ((desired_altitude > 0 and telemetry.wrist_pitch >= pitch_max)
-                            or (desired_altitude < 0 and telemetry.wrist_pitch <= pitch_min)):
-                        return self._limit_status(status, f"pitch count {telemetry.wrist_pitch}")
+            elif vertical_needed:
+                motion = select_vertical_motion(
+                    elbow=self.track_elbow,
+                    shoulder=self.track_shoulder,
+                    polar_vertical=self.track_polar_vertical,
+                    image_up=desired_altitude > 0,
+                    elbow_count=telemetry.elbow,
+                    shoulder_count=telemetry.shoulder,
+                    pitch_count=telemetry.wrist_pitch,
+                    counts_fresh=measured_limits_available,
+                    elbow_limits=self.elbow_limits,
+                    shoulder_limits=self.shoulder_limits,
+                    pitch_limits=self.pitch_limits if self.enable_joint_limits else None,
+                )
+                if motion is None:
+                    self._stop_movement_locked("vertical axes are at a stop", now)
+                    return self._limit_status(status, "no enabled vertical axis can move")
                 pulse = self.min_pitch_pulse + (self.max_pitch_pulse - self.min_pitch_pulse) * min(1.0, norm_y)
-                self.current_jog_interval_ms = self.jog_interval("pitch", norm_y)
-                if not self._start_pulse(0, desired_altitude, pulse, now):
-                    return self._fault_status(status, "Operator rejected tracking motion command")
+                if motion[0] == "polar":
+                    self.current_jog_interval_ms = self.jog_interval("pitch", norm_y)
+                    if not self._start_pulse(0, motion[1], pulse, now):
+                        return self._fault_status(status, "Operator rejected tracking motion command")
+                elif not self._start_joint(motion[1], motion[2], pulse, now):
+                    return self._fault_status(status, "Operator rejected joint jog")
+            else:
+                self._stop_movement_locked("vertical tracking off", now)
+                self.state = TrackingState.TRACKING
+                self.last_thought = "Vertical tracking is off. Holding."
+                status.state = self.state
+                status.last_thought = self.last_thought
+                status.current_command = "HOLDING (VERTICAL OFF)"
+                self._mark_status_stopped(status)
+                return status
 
             self.state = TrackingState.TRACKING
             self.last_thought = (f"Following target (dX={err_x}, dY={err_y})." if self.continuous_tracking
@@ -486,10 +556,42 @@ class TrackingController:
             return self.operator.tracking_jog_start(azimuth, altitude, self.current_jog_interval_ms)
         return self.operator.polar_pan_continuous_start(azimuth, altitude)
 
+    def _start_joint(self, axis: int, direction: int, duration: float, now: float) -> bool:
+        if self.is_currently_moving and self._motion_kind != "joint":
+            self.operator.polar_pan_continuous_stop()
+            self.is_currently_moving = False
+            self._motion_kind = None
+        elif self._motion_kind == "joint" and (self.current_joint_axis, self.current_joint_direction) != (axis, direction):
+            self.operator.joint_jog_stop()
+            self.is_currently_moving = False
+        if not self.operator.joint_jog_start(axis, direction):
+            return False
+        self.is_currently_moving = True
+        self._motion_kind = "joint"
+        self.current_joint_axis = axis
+        self.current_joint_direction = direction
+        self.current_azimuth = 0
+        self.current_altitude = 0
+        self.pulse_deadline = 0.0 if self.continuous_tracking else now + duration
+        self.last_motion_refresh = now
+        name = "elbow" if axis == 3 else "shoulder"
+        self._log(
+            f"Following {name}, direction={direction}." if self.continuous_tracking
+            else f"Started {duration * 1000:.0f}ms {name} jog, direction={direction}."
+        )
+        return True
+
     def _start_pulse(self, azimuth: int, altitude: int, duration: float, now: float) -> bool:
+        if self._motion_kind == "joint":
+            self.operator.joint_jog_stop()
+            self.is_currently_moving = False
+            self._motion_kind = None
+            self.current_joint_axis = 0
+            self.current_joint_direction = 0
         if not self._send_tracking_direction(azimuth, altitude):
             return False
         self.is_currently_moving = True
+        self._motion_kind = "polar"
         self.current_azimuth = azimuth
         self.current_altitude = altitude
         self.pulse_deadline = 0.0 if self.continuous_tracking else now + duration

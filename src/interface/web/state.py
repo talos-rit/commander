@@ -11,7 +11,7 @@ UI_MODES: tuple[str, ...] = get_args(UIMode.__value__)
 
 
 class ViewStateError(ValueError):
-    """A requested view change is not possible with the current camera slots."""
+    """A requested view change is not possible with the current feeds."""
 
 
 @dataclass
@@ -19,10 +19,9 @@ class WebOperatorState:
     """
     What the operator is looking at and which robot their commands target.
 
-    Every assigned camera is on screen. Camera 1 is the primary camera; Camera
-    2 is optional. With one camera every command targets Camera 1. With two,
-    Manual lets the operator pick the controlled camera and Dynamic leaves that
-    choice to Commander.
+    Every assigned feed is on screen. Feed 1 is primary; Feed 2 is optional.
+    With one feed every command targets Feed 1. With two, Manual lets the
+    operator pick the controlled feed and Dynamic leaves that choice to Commander.
     """
 
     camera_1: str | None = None
@@ -110,7 +109,7 @@ class WebOperatorState:
 
     def set_dynamic_slot(self, slot: Slot) -> None:
         if slot not in self.slots:
-            raise ViewStateError(f"Camera {slot} is not assigned")
+            raise ViewStateError(f"Feed {slot} is not assigned")
         self.dynamic_slot = slot
 
     @property
@@ -141,7 +140,7 @@ class WebOperatorState:
     def select_host(self, host: str) -> None:
         slot = self.slot_of(host)
         if slot is None:
-            raise ViewStateError(f"{host!r} is not assigned to a camera slot")
+            raise ViewStateError(f"{host!r} is not assigned to a feed")
         self.select_slot(slot)
 
     def select_slot(self, slot: int) -> None:
@@ -151,7 +150,7 @@ class WebOperatorState:
         stored so it applies again when they switch back to Manual.
         """
         if slot not in self.slots:
-            raise ViewStateError(f"Camera {slot} is not assigned")
+            raise ViewStateError(f"Feed {slot} is not assigned")
         self.manual_slot = slot  # type: ignore[assignment]
 
     # --- helpers ---------------------------------------------------------

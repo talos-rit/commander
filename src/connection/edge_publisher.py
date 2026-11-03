@@ -49,6 +49,7 @@ class EdgePublisher(Publisher):
         self._erv_encoder_received_monotonic = self._erv_joint_received_monotonic = None
         self._telemetry_lock = threading.Lock()
         self._quit = threading.Event()
+        self._controller_profile = None
         self._connected = False
         self._last_status = 0.0
         self._remote_receipts = False
@@ -72,6 +73,7 @@ class EdgePublisher(Publisher):
                         self._remote_receipts = True
                         self._remote_receipt = state.get("commands")
                         self._remote_at = now
+                    self._controller_profile = state.get("controller_profile")
                     self._connected = bool(state.get("operator_connected"))
                     self._last_status = now
                     counts, age = state.get("joint_counts"), state.get("telemetry_age_s")
@@ -104,6 +106,12 @@ class EdgePublisher(Publisher):
             if receipt.get(key) is not None:
                 receipt[key] = round(receipt[key] + lag, 3)
         return receipt
+
+    def get_controller_profile(self):
+        with self._telemetry_lock:
+            if not self._connected or time.monotonic() - self._last_status >= 1:
+                return None
+            return self._controller_profile if self._controller_profile in ("native", "esp-one-axis") else None
 
     def is_connected(self):
         with self._telemetry_lock:

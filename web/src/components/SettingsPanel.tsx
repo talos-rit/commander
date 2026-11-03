@@ -13,15 +13,36 @@ interface Props {
 }
 
 type RobotDraft = {
+  robot_id: string;
+  controller_profile: "native" | "esp-one-axis";
   socket_host: string;
   socket_port: string;
   camera_index: string;
   fps: string;
   manual_only: boolean;
-  pi_vision_url?: string;
+  track_elbow: boolean;
+  track_shoulder: boolean;
+  track_polar_vertical: boolean;
+  pi_vision_enabled: boolean;
+  pi_vision_url: string;
 };
 
-const EMPTY_DRAFT: RobotDraft = { socket_host: "", socket_port: "61616", camera_index: "", fps: "30", manual_only: false };
+const PI_VISION_PORT = 5050;
+
+const EMPTY_DRAFT: RobotDraft = {
+  robot_id: "",
+  controller_profile: "native",
+  socket_host: "",
+  socket_port: "61616",
+  camera_index: "",
+  fps: "30",
+  manual_only: false,
+  track_elbow: false,
+  track_shoulder: false,
+  track_polar_vertical: true,
+  pi_vision_enabled: true,
+  pi_vision_url: "",
+};
 
 /** Usual camera stream for a robot: RTSP on the operator host. */
 function suggestedCameraUrl(host: string): string {
@@ -29,32 +50,59 @@ function suggestedCameraUrl(host: string): string {
   return trimmed ? `rtsp://${trimmed}:8554/camera` : "";
 }
 
+/** Usual PiVision service: HTTP on the operator host. */
+function suggestedPiVisionUrl(host: string): string {
+  const trimmed = host.trim();
+  return trimmed ? `http://${trimmed}:${PI_VISION_PORT}` : "";
+}
+
 /** Empty, or still the URL derived from this host, so host edits may rewrite it. */
-function cameraFollowsHost(camera: string, host: string): boolean {
-  return camera === "" || camera === suggestedCameraUrl(host);
+function followsHost(value: string, host: string, suggest: (host: string) => string): boolean {
+  return value === "" || value === suggest(host);
 }
 
 function toDraft(robot: RobotConfig): RobotDraft {
   return {
+    robot_id: robot.robot_id ?? "",
+    controller_profile: robot.controller_profile ?? "native",
     socket_host: robot.socket_host,
     socket_port: String(robot.socket_port),
     camera_index: String(robot.camera_index),
     fps: String(robot.fps),
     manual_only: robot.manual_only,
+    track_elbow: robot.track_elbow ?? false,
+    track_shoulder: robot.track_shoulder ?? false,
+    track_polar_vertical: robot.track_polar_vertical ?? true,
+    pi_vision_enabled: robot.pi_vision_enabled ?? Boolean(robot.pi_vision_url),
     pi_vision_url: robot.pi_vision_url ?? "",
   };
+}
+
+function verticalSummary(robot: RobotConfig): string {
+  const axes = [
+    robot.track_elbow ? "elbow" : "",
+    robot.track_shoulder ? "shoulder" : "",
+    (robot.track_polar_vertical ?? true) ? "polar" : "",
+  ].filter(Boolean);
+  return axes.length ? axes.join(", ") : "vertical off";
 }
 
 const asInt = (value: string) => (/^\d+$/.test(value.trim()) ? Number(value.trim()) : value.trim());
 
 function fromDraft(draft: RobotDraft): RobotInput {
   return {
+    ...(draft.robot_id.trim() ? { robot_id: draft.robot_id.trim() } : {}),
+    controller_profile: draft.controller_profile,
     socket_host: draft.socket_host.trim(),
     socket_port: asInt(draft.socket_port),
     camera_index: asInt(draft.camera_index),
     fps: Number(draft.fps) || 30,
     manual_only: draft.manual_only,
-    pi_vision_url: draft.pi_vision_url?.trim() || null,
+    track_elbow: draft.track_elbow,
+    track_shoulder: draft.track_shoulder,
+    track_polar_vertical: draft.track_polar_vertical,
+    pi_vision_enabled: draft.pi_vision_enabled,
+    pi_vision_url: draft.pi_vision_url.trim() || null,
   };
 }
 
@@ -83,6 +131,7 @@ function RobotForm({
   onCancel?: () => void;
 }) {
   const cameraHintId = useId();
+  const piVisionHintId = useId();
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof RobotDraft>(key: K, value: RobotDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
@@ -92,9 +141,24 @@ function RobotForm({
       ...d,
       socket_host,
       camera_index:
-        !editing && cameraFollowsHost(d.camera_index, d.socket_host)
+        !editing && followsHost(d.camera_index, d.socket_host, suggestedCameraUrl)
           ? suggestedCameraUrl(socket_host)
           : d.camera_index,
+      pi_vision_url:
+        !editing && followsHost(d.pi_vision_url, d.socket_host, suggestedPiVisionUrl)
+          ? suggestedPiVisionUrl(socket_host)
+          : d.pi_vision_url,
+    }));
+  };
+
+  const setPiVisionEnabled = (pi_vision_enabled: boolean) => {
+    setDraft((d) => ({
+      ...d,
+      pi_vision_enabled,
+      pi_vision_url:
+        pi_vision_enabled && followsHost(d.pi_vision_url, d.socket_host, suggestedPiVisionUrl)
+          ? suggestedPiVisionUrl(d.socket_host)
+          : d.pi_vision_url,
     }));
   };
 
@@ -104,6 +168,16 @@ function RobotForm({
     : draft.camera_index
       ? "RTSP or HTTP URL, or a device index."
       : "Fills in from the operator host.";
+  const piDerived = draft.pi_vision_url !== "" && draft.pi_vision_url === suggestedPiVisionUrl(draft.socket_host);
+  const piVisionHint = !draft.pi_vision_enabled
+    ? draft.pi_vision_url
+      ? "PiVision is off. This address stays saved."
+      : "PiVision is off. Commander talks to Operator directly."
+    : piDerived
+      ? "PiVision follows the operator host."
+      : draft.pi_vision_url
+        ? "Custom PiVision address."
+        : "PiVision fills in from the operator host.";
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -118,15 +192,31 @@ function RobotForm({
   return (
     <form className="robotform" onSubmit={submit} aria-label={editing ? `Edit ${initial.socket_host}` : "Add robot"}>
       <label className="field">
+        <span>Robot name</span>
+        <input aria-label="Robot name" placeholder="bluey or bingo" value={draft.robot_id} disabled={editing || busy}
+          onChange={(e) => set("robot_id", e.target.value)} />
+        <span className="hint">Optional stable name. Use different names when both robots share a Pi.</span>
+      </label>
+      <label className="field">
         <span>Operator host</span>
         <input
           required
-          disabled={editing || busy}
+          disabled={(editing && !draft.robot_id) || busy}
           placeholder="bluey.local"
           spellCheck={false}
           value={draft.socket_host}
           onChange={(e) => setHost(e.target.value)}
         />
+      </label>
+      <label className="field">
+        <span>Robot controller</span>
+        <select aria-label="Robot controller" disabled={busy} value={draft.controller_profile}
+          onChange={(e) => set("controller_profile", e.target.value as RobotDraft["controller_profile"])}>
+          <option value="native">Bingo ? native controller</option>
+          <option value="esp-one-axis">Bluey ? ESP one-axis demo</option>
+        </select>
+        <span className="hint">The robot is independent of the Pi hostname. Save sets the expected profile; it does not restart Operator.</span>
+        <span className="hint">On the Pi, use {draft.controller_profile === "native" ? "tools/start-native.sh --confirm-home (moves the arm through HOME)" : "tools/start-esp-one-axis.sh"}. Controls unlock when Operator reports the matching profile.</span>
       </label>
       <label className="field field--narrow">
         <span>Port</span>
@@ -138,10 +228,27 @@ function RobotForm({
           onChange={(e) => set("socket_port", e.target.value)}
         />
       </label>
+      <div className="robotform__pivision">
+        <label className="check">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={draft.pi_vision_enabled}
+            aria-describedby={draft.pi_vision_enabled ? undefined : piVisionHintId}
+            onChange={(e) => setPiVisionEnabled(e.target.checked)}
+          />
+          <span>Use PiVision</span>
+        </label>
+        {!draft.pi_vision_enabled && (
+          <p id={piVisionHintId} className="robotform__hint">
+            {piVisionHint}
+          </p>
+        )}
+      </div>
       <div className="robotform__secondary">
         <p className="robotform__kicker">Rarely needs changing</p>
         <label className={`field${derived ? " field--derived" : ""}`}>
-          <span>Camera</span>
+          <span>Stream</span>
           <input
             required
             disabled={busy}
@@ -155,17 +262,25 @@ function RobotForm({
         <p id={cameraHintId} className="robotform__hint">
           {cameraHint}
         </p>
-        <label className="field">
-          <span>PiVision URL (optional)</span>
-          <input
-            placeholder="http://bluey.local:5050"
-            spellCheck={false}
-            disabled={busy}
-            value={draft.pi_vision_url ?? ""}
-            onChange={(e) => set("pi_vision_url", e.target.value)}
-          />
-        </label>
-        <p className="robotform__hint">PiVision tracks locally. Commander supervises Auto-Track and manual control.</p>
+        {draft.pi_vision_enabled && (
+          <>
+            <label className={`field${piDerived ? " field--derived" : ""}`}>
+              <span>PiVision URL</span>
+              <input
+                required
+                disabled={busy}
+                placeholder="http://bluey.local:5050"
+                spellCheck={false}
+                aria-describedby={piVisionHintId}
+                value={draft.pi_vision_url}
+                onChange={(e) => set("pi_vision_url", e.target.value)}
+              />
+            </label>
+            <p id={piVisionHintId} className="robotform__hint">
+              {piVisionHint}
+            </p>
+          </>
+        )}
         <div className="robotform__rare">
           <label className="field">
             <span>FPS</span>
@@ -181,6 +296,38 @@ function RobotForm({
             <span>Manual only (no auto-tracking)</span>
           </label>
         </div>
+        <fieldset className="robotform__axes" disabled={busy || draft.controller_profile === "esp-one-axis"}>
+          <legend>Vertical tracking</legend>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.track_elbow}
+              onChange={(e) => set("track_elbow", e.target.checked)}
+            />
+            <span>Elbow</span>
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.track_shoulder}
+              onChange={(e) => set("track_shoulder", e.target.checked)}
+            />
+            <span>Shoulder</span>
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.track_polar_vertical}
+              onChange={(e) => set("track_polar_vertical", e.target.checked)}
+            />
+            <span>Polar up/down</span>
+          </label>
+        </fieldset>
+        <p className="robotform__hint">
+          {draft.track_elbow || draft.track_shoulder || draft.track_polar_vertical
+            ? "Checked axes are commanded in this order: elbow, shoulder, then polar up/down. An unchecked axis is never commanded."
+            : "Vertical tracking off. Auto-Track still pans left and right."}
+        </p>
       </div>
       <div className="robotform__actions">
         {onCancel && (
@@ -285,7 +432,7 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
   const updateRobot = async (host: string, robotDraft: RobotDraft) => {
     try {
       const { socket_host: _ignored, ...rest } = fromDraft(robotDraft);
-      await api.updateRobot(host, rest);
+      await api.updateRobot(host, robotDraft.robot_id ? { ...rest, socket_host: fromDraft(robotDraft).socket_host } : rest);
       setEditing(null);
       await load();
       onChanged();
@@ -352,8 +499,9 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
                     <div>
                       <strong>{host}</strong>
                       <span className="muted">
-                        :{robots[host].socket_port} · {String(robots[host].camera_index)}
+                        :{robots[host].socket_port}
                         {robots[host].manual_only ? " · manual only" : ""}
+                        {` · ${verticalSummary(robots[host])}`}
                       </span>
                     </div>
                     <div className="robots__actions">
@@ -389,9 +537,9 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
 
           {settings && (
             <form className="drawer__section" onSubmit={saveSettings} aria-label="Defaults">
-              <h3>Cameras</h3>
+              <h3>Feeds</h3>
               <label className="field">
-                <span>Camera 1 (primary)</span>
+                <span>Feed 1</span>
                 <select
                   value={draft.camera_1_host ?? ""}
                   onChange={(e) => set("camera_1_host", e.target.value || null)}
@@ -405,13 +553,13 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
                 </select>
               </label>
               <label className="field">
-                <span>Camera 2 (optional)</span>
+                <span>Feed 2</span>
                 <select
                   value={draft.camera_2_host ?? ""}
                   onChange={(e) => set("camera_2_host", e.target.value || null)}
                   disabled={!draft.camera_1_host}
                 >
-                  <option value="">— none (single camera) —</option>
+                  <option value="">— none —</option>
                   {robotNames
                     .filter((host) => host !== draft.camera_1_host)
                     .map((host) => (

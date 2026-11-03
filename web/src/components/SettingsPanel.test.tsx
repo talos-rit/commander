@@ -19,6 +19,9 @@ function setup({
     "POST /robots": ({ body }: { body: unknown }) => {
       const robot = makeRobot((body as RobotConfig).socket_host, body as RobotConfig);
       currentRobots = { ...currentRobots, [robot.socket_host]: robot };
+      if (!currentSettings.camera_1_host) {
+        currentSettings = { ...currentSettings, camera_1_host: robot.socket_host };
+      }
       return robot;
     },
     ...Object.fromEntries(
@@ -66,9 +69,22 @@ describe("SettingsPanel", () => {
   it("lists robots and the current camera slots", async () => {
     setup();
     expect(await screen.findByText("bluey.local", { selector: "strong" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Camera 1 (primary)")).toHaveValue("bluey.local");
-    expect(screen.getByLabelText("Camera 2 (optional)")).toHaveValue("");
+    expect(screen.getByText(":61616 · polar")).toBeInTheDocument();
+    expect(screen.queryByText(/rtsp:/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Feed 1")).toHaveValue("bluey.local");
+    expect(screen.getByLabelText("Feed 2")).toHaveValue("");
     expect(screen.queryByRole("form", { name: "Add robot" })).not.toBeInTheDocument();
+  });
+
+  it("saves the robot controller independently of the Pi hostname", async () => {
+    const { user, callsTo } = setup();
+    await user.click(await screen.findByRole("button", { name: /edit bluey.local/i }));
+    const form = screen.getByRole("form", { name: "Edit bluey.local" });
+    await user.selectOptions(within(form).getByRole("combobox", { name: "Robot controller" }), "esp-one-axis");
+    expect(within(form).getByRole("checkbox", { name: "Polar up/down" })).toBeDisabled();
+    await user.click(within(form).getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(callsTo("PUT", "/robots/bluey.local")).toHaveLength(1));
+    expect(callsTo("PUT", "/robots/bluey.local")[0].body).toMatchObject({ controller_profile: "esp-one-axis" });
   });
 
   it("adds a robot with a numeric device index", async () => {
@@ -76,19 +92,24 @@ describe("SettingsPanel", () => {
     await user.click(await screen.findByRole("button", { name: /add robot/i }));
     const form = screen.getByRole("form", { name: "Add robot" });
     await user.type(within(form).getByLabelText("Operator host"), "raspberrypi.local");
-    const camera = within(form).getByLabelText(/^camera$/i);
+    const camera = within(form).getByLabelText(/^stream$/i);
     await user.clear(camera);
     await user.type(camera, "0");
     await user.click(within(form).getByLabelText(/manual only/i));
     await user.click(within(form).getByRole("button", { name: /add robot/i }));
     await waitFor(() => expect(callsTo("POST", "/robots")).toHaveLength(1));
     expect(callsTo("POST", "/robots")[0].body).toEqual({
+      controller_profile: "native",
       socket_host: "raspberrypi.local",
       socket_port: 61616,
       camera_index: 0,
       fps: 30,
       manual_only: true,
-      pi_vision_url: null,
+      track_elbow: false,
+      track_shoulder: false,
+      track_polar_vertical: true,
+      pi_vision_enabled: true,
+      pi_vision_url: "http://raspberrypi.local:5050",
     });
     expect(await screen.findByText("raspberrypi.local", { selector: "strong" })).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalled();
@@ -98,16 +119,22 @@ describe("SettingsPanel", () => {
     const { user, callsTo } = setup({ robots: {}, settings: makeSettings() });
     const form = await screen.findByRole("form", { name: "Add robot" });
     const host = within(form).getByLabelText("Operator host");
-    const camera = within(form).getByLabelText(/^camera$/i);
+    const camera = within(form).getByLabelText(/^stream$/i);
 
     expect(camera).toHaveValue("");
     expect(within(form).getByText("Fills in from the operator host.")).toBeInTheDocument();
 
     await user.type(host, "blu");
     expect(camera).toHaveValue("rtsp://blu:8554/camera");
+    expect(within(form).getByLabelText("PiVision URL")).toHaveValue("http://blu:5050");
     await user.type(host, "ey.local");
     expect(camera).toHaveValue("rtsp://bluey.local:8554/camera");
+    expect(within(form).getByLabelText("PiVision URL")).toHaveValue("http://bluey.local:5050");
     expect(within(form).getByText("Follows the operator host.")).toBeInTheDocument();
+    expect(within(form).getByText("PiVision follows the operator host.")).toBeInTheDocument();
+    const rare = within(form).getByText("Rarely needs changing").parentElement!;
+    expect(within(rare).getByLabelText("PiVision URL")).toHaveValue("http://bluey.local:5050");
+    expect(within(rare).getByLabelText(/^stream$/i)).toBeInTheDocument();
 
     await user.click(within(form).getByRole("button", { name: /add robot/i }));
     await waitFor(() => expect(callsTo("POST", "/robots")).toHaveLength(1));
@@ -117,6 +144,31 @@ describe("SettingsPanel", () => {
       camera_index: "rtsp://bluey.local:8554/camera",
       fps: 30,
       manual_only: false,
+      track_elbow: false,
+      track_shoulder: false,
+      track_polar_vertical: true,
+      pi_vision_enabled: true,
+      pi_vision_url: "http://bluey.local:5050",
+    });
+  });
+
+  it("saves vertical axes independently and can turn vertical tracking off", async () => {
+    const { user, callsTo } = setup();
+    await user.click(await screen.findByRole("button", { name: "Edit bluey.local" }));
+    const form = screen.getByRole("form", { name: "Edit bluey.local" });
+    expect(within(form).getByLabelText("Polar up/down")).toBeChecked();
+    expect(within(form).getByLabelText("Elbow")).not.toBeChecked();
+    await user.click(within(form).getByLabelText("Elbow"));
+    await user.click(within(form).getByLabelText("Polar up/down"));
+    expect(within(form).getByText(/unchecked axis is never commanded/i)).toBeInTheDocument();
+    await user.click(within(form).getByLabelText("Elbow"));
+    expect(within(form).getByText(/vertical tracking off/i)).toBeInTheDocument();
+    await user.click(within(form).getByRole("button", { name: /save robot/i }));
+    await waitFor(() => expect(callsTo("PUT", "/robots/bluey.local")).toHaveLength(1));
+    expect(callsTo("PUT", "/robots/bluey.local")[0].body).toMatchObject({
+      track_elbow: false,
+      track_shoulder: false,
+      track_polar_vertical: false,
     });
   });
 
@@ -124,7 +176,7 @@ describe("SettingsPanel", () => {
     const { user } = setup({ robots: {}, settings: makeSettings() });
     const form = await screen.findByRole("form", { name: "Add robot" });
     const host = within(form).getByLabelText("Operator host");
-    const camera = within(form).getByLabelText(/^camera$/i);
+    const camera = within(form).getByLabelText(/^stream$/i);
 
     await user.type(host, "bluey.local");
     await user.clear(camera);
@@ -136,6 +188,100 @@ describe("SettingsPanel", () => {
     await user.clear(camera);
     await user.type(host, "y");
     expect(camera).toHaveValue("rtsp://bluey.localxy:8554/camera");
+  });
+
+  it("keeps a custom PiVision URL when the switch is turned off", async () => {
+    const { user, callsTo } = setup({ robots: {}, settings: makeSettings() });
+    const form = await screen.findByRole("form", { name: "Add robot" });
+    const host = within(form).getByLabelText("Operator host");
+    await user.type(host, "bluey.local");
+    const pi = within(form).getByLabelText("PiVision URL");
+    expect(pi).toHaveValue("http://bluey.local:5050");
+
+    await user.clear(pi);
+    await user.type(pi, "http://other.local:9090");
+    await user.type(host, "x");
+    expect(pi).toHaveValue("http://other.local:9090");
+    expect(within(form).getByText("Custom PiVision address.")).toBeInTheDocument();
+
+    await user.click(within(form).getByLabelText("Use PiVision"));
+    expect(within(form).queryByLabelText("PiVision URL")).not.toBeInTheDocument();
+    expect(within(form).getByText("PiVision is off. This address stays saved.")).toBeInTheDocument();
+
+    await user.click(within(form).getByLabelText("Use PiVision"));
+    expect(within(form).getByLabelText("PiVision URL")).toHaveValue("http://other.local:9090");
+
+    await user.click(within(form).getByLabelText("Use PiVision"));
+    await user.click(within(form).getByRole("button", { name: /add robot/i }));
+    await waitFor(() => expect(callsTo("POST", "/robots")).toHaveLength(1));
+    expect(callsTo("POST", "/robots")[0].body).toMatchObject({
+      socket_host: "bluey.localx",
+      pi_vision_enabled: false,
+      pi_vision_url: "http://other.local:9090",
+    });
+  });
+
+  it("keeps a following PiVision URL in sync while the switch is off", async () => {
+    const { user } = setup({ robots: {}, settings: makeSettings() });
+    const form = await screen.findByRole("form", { name: "Add robot" });
+    await user.type(within(form).getByLabelText("Operator host"), "blu");
+    await user.click(within(form).getByLabelText("Use PiVision"));
+    await user.type(within(form).getByLabelText("Operator host"), "ey.local");
+    await user.click(within(form).getByLabelText("Use PiVision"));
+    expect(within(form).getByLabelText("PiVision URL")).toHaveValue("http://bluey.local:5050");
+  });
+
+  it("restores a saved PiVision URL when editing", async () => {
+    const { user, callsTo } = setup({
+      robots: {
+        "bluey.local": makeRobot("bluey.local", {
+          pi_vision_enabled: false,
+          pi_vision_url: "http://bluey.local:5051",
+        }),
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Edit bluey.local" }));
+    const form = screen.getByRole("form", { name: "Edit bluey.local" });
+    expect(within(form).getByLabelText("Use PiVision")).not.toBeChecked();
+    expect(within(form).queryByLabelText("PiVision URL")).not.toBeInTheDocument();
+    await user.click(within(form).getByLabelText("Use PiVision"));
+    expect(within(form).getByLabelText("PiVision URL")).toHaveValue("http://bluey.local:5051");
+    await user.click(within(form).getByRole("button", { name: /save robot/i }));
+    await waitFor(() => expect(callsTo("PUT", "/robots/bluey.local")).toHaveLength(1));
+    expect(callsTo("PUT", "/robots/bluey.local")[0].body).toMatchObject({
+      pi_vision_enabled: true,
+      pi_vision_url: "http://bluey.local:5051",
+    });
+  });
+
+  it("suggests port 5050 when PiVision is turned on for a robot that had none", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: "Edit bluey.local" }));
+    const form = screen.getByRole("form", { name: "Edit bluey.local" });
+    expect(within(form).getByLabelText("Use PiVision")).not.toBeChecked();
+    expect(within(form).getByText("PiVision is off. Commander talks to Operator directly.")).toBeInTheDocument();
+    await user.click(within(form).getByLabelText("Use PiVision"));
+    expect(within(form).getByLabelText("PiVision URL")).toHaveValue("http://bluey.local:5050");
+  });
+
+  it("shows a new robot on Feed 1 when that feed was empty", async () => {
+    const { user } = setup({ robots: {}, settings: makeSettings() });
+    const form = await screen.findByRole("form", { name: "Add robot" });
+    await user.type(within(form).getByLabelText("Operator host"), "bluey.local");
+    await user.click(within(form).getByRole("button", { name: /add robot/i }));
+    await waitFor(() => expect(screen.getByLabelText("Feed 1")).toHaveValue("bluey.local"));
+    expect(screen.getByLabelText("Feed 2")).toHaveValue("");
+  });
+
+  it("leaves Feed 2 empty when another robot is added", async () => {
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: /add robot/i }));
+    const form = screen.getByRole("form", { name: "Add robot" });
+    await user.type(within(form).getByLabelText("Operator host"), "pi.local");
+    await user.click(within(form).getByRole("button", { name: /add robot/i }));
+    expect(await screen.findByText("pi.local", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Feed 1")).toHaveValue("bluey.local");
+    expect(screen.getByLabelText("Feed 2")).toHaveValue("");
   });
 
   it("shows Connecting… while a new robot connection is opening", async () => {
@@ -165,7 +311,7 @@ describe("SettingsPanel", () => {
     setup({ robots: {}, settings: makeSettings() });
     expect(await screen.findByRole("form", { name: "Add robot" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Camera 2 (optional)")).toBeDisabled();
+    expect(screen.getByLabelText("Feed 2")).toBeDisabled();
   });
 
   it("shows validation errors from the backend", async () => {
@@ -177,7 +323,7 @@ describe("SettingsPanel", () => {
     await user.type(within(form).getByLabelText("Operator host"), "x");
     await user.clear(within(form).getByLabelText("Port"));
     await user.type(within(form).getByLabelText("Port"), "abc");
-    const camera = within(form).getByLabelText(/^camera$/i);
+    const camera = within(form).getByLabelText(/^stream$/i);
     await user.clear(camera);
     await user.type(camera, "rtsp://x");
     await user.click(within(form).getByRole("button", { name: /add robot/i }));
@@ -191,7 +337,7 @@ describe("SettingsPanel", () => {
     await user.click(await screen.findByRole("button", { name: "Edit bluey.local" }));
     const form = screen.getByRole("form", { name: "Edit bluey.local" });
     expect(within(form).getByLabelText("Operator host")).toBeDisabled();
-    expect(within(form).getByLabelText(/^camera$/i)).toHaveValue("rtsp://bluey.local:8554/camera");
+    expect(within(form).getByLabelText(/^stream$/i)).toHaveValue("rtsp://bluey.local:8554/camera");
     const port = within(form).getByLabelText("Port");
     await user.clear(port);
     await user.type(port, "5000");
@@ -227,7 +373,7 @@ describe("SettingsPanel", () => {
     });
     const save = await screen.findByRole("button", { name: /^save$/i });
     expect(save).toBeDisabled();
-    await user.selectOptions(screen.getByLabelText("Camera 2 (optional)"), "pi.local");
+    await user.selectOptions(screen.getByLabelText("Feed 2"), "pi.local");
     await user.click(screen.getByRole("radio", { name: "Debug" }));
     expect(screen.getByText(/Adds manual jog/)).toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: "Two screen" })).not.toBeInTheDocument();
@@ -248,9 +394,9 @@ describe("SettingsPanel", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it("does not offer Camera 1 as Camera 2", async () => {
+  it("does not offer Feed 1 as Feed 2", async () => {
     setup();
-    const cam2 = await screen.findByLabelText("Camera 2 (optional)");
+    const cam2 = await screen.findByLabelText("Feed 2");
     expect(within(cam2).queryByRole("option", { name: "bluey.local" })).not.toBeInTheDocument();
   });
 

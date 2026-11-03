@@ -19,6 +19,8 @@ export interface ViewState {
 }
 
 export interface Telemetry {
+  /** URDF radians from the same calibration as the desktop twin. */
+  joint_positions?: Record<string, number> | null;
   encoder_counts: number[] | null;
   encoder_age_s: number | null;
   joint_counts: number[] | null;
@@ -36,7 +38,14 @@ export interface CommandReceipt {
   last_failed: boolean;
 }
 
+export type ControllerProfile = "native" | "esp-one-axis";
+export interface ControllerStatus {
+  configured: ControllerProfile;
+  reported: ControllerProfile | null;
+  state: "verified" | "unverified" | "mismatch";
+}
 export interface HostStatus {
+  controller?: ControllerStatus;
   host: string;
   slot: Slot | null;
   configured: boolean;
@@ -91,6 +100,8 @@ export interface AppSettings {
 }
 
 export interface RobotConfig {
+  robot_id?: string | null;
+  controller_profile?: ControllerProfile;
   socket_host: string;
   socket_port: number;
   camera_index: number | string;
@@ -104,6 +115,18 @@ export interface RobotConfig {
   frame_height: number | null;
   max_fps: number;
   manual_only: boolean;
+  /** Vertical auto-track, fixed order: elbow, then shoulder, then polar up/down. */
+  track_elbow?: boolean;
+  track_shoulder?: boolean;
+  track_polar_vertical?: boolean;
+  elbow_count_min?: number | null;
+  elbow_count_max?: number | null;
+  shoulder_count_min?: number | null;
+  shoulder_count_max?: number | null;
+  pitch_count_min?: number | null;
+  pitch_count_max?: number | null;
+  /** When false, pi_vision_url is kept but Commander talks to Operator directly. */
+  pi_vision_enabled?: boolean;
   pi_vision_url?: string | null;
   pi_vision_speed_percent?: number;
   pi_vision_max_age_s?: number;

@@ -70,8 +70,8 @@ describe("App with one camera", () => {
     expect(screen.getByRole("button", { name: /home/i })).toBeEnabled();
     expect(screen.getByRole("button", { name: /auto-track/i })).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByRole("radiogroup", { name: "Screen layout" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup", { name: "Controlled camera" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup", { name: "Camera switching" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Controlled feed" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Feed switching" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Debug controls")).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Interface mode" })).not.toBeInTheDocument();
   });
@@ -143,7 +143,7 @@ describe("App with no cameras", () => {
       "GET /robots": {},
       "GET /settings": makeSettings(),
     });
-    expect(await screen.findByText("No camera assigned")).toBeInTheDocument();
+    expect(await screen.findByText("No feed assigned")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /auto-track/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Open settings" }));
     expect(await screen.findByRole("dialog", { name: "Settings" })).toBeInTheDocument();
@@ -159,15 +159,15 @@ describe("App with two cameras", () => {
     expect(await screen.findByTestId("pane-bluey.local")).toBeInTheDocument();
     expect(screen.getByTestId("pane-raspberrypi.local")).toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Screen layout" })).not.toBeInTheDocument();
-    expect(screen.getByRole("radiogroup", { name: "Camera switching" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Feed switching" })).toBeInTheDocument();
     expect(screen.getByTestId("pane-bluey.local")).toHaveClass("pane--selected");
 
-    await user.click(screen.getByRole("radio", { name: "Cam 2" }));
+    await user.click(screen.getByRole("radio", { name: "Feed 2" }));
     expect(callsTo("POST", "/cameras/select")[0].body).toEqual({ slot: 2 });
     expect(screen.getByTestId("pane-bluey.local")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("pane-raspberrypi.local")).toHaveClass("pane--selected"));
 
-    await user.click(screen.getByRole("button", { name: /control camera 1/i }));
+    await user.click(screen.getByRole("button", { name: /control feed 1/i }));
     expect(callsTo("POST", "/cameras/select")[1].body).toEqual({ host: "bluey.local" });
     await waitFor(() => expect(screen.getByTestId("pane-bluey.local")).toHaveClass("pane--selected"));
   });
@@ -177,15 +177,15 @@ describe("App with two cameras", () => {
     await user.click(await screen.findByRole("radio", { name: /dynamic/i }));
     expect(callsTo("POST", "/view")[0].body).toEqual({ one_screen_mode: "dynamic" });
     expect(await screen.findByText(/auto-switch coming soon/)).toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup", { name: "Controlled camera" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Controlled feed" })).not.toBeInTheDocument();
     expect(screen.getByTestId("pane-bluey.local")).toBeInTheDocument();
     expect(screen.getByTestId("pane-raspberrypi.local")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /control camera/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /control feed/i })).not.toBeInTheDocument();
   });
 
   it("flips manual and dynamic by clicking the switch track", async () => {
     const { user, callsTo } = setup(makeStatus({ hosts }));
-    const switching = await screen.findByRole("radiogroup", { name: "Camera switching" });
+    const switching = await screen.findByRole("radiogroup", { name: "Feed switching" });
     await user.click(switching.querySelector(".rocker__track")!);
     expect(callsTo("POST", "/view")[0].body).toEqual({ one_screen_mode: "dynamic" });
     await waitFor(() => expect(switching).toHaveAttribute("data-side", "right"));
@@ -428,7 +428,7 @@ describe("Controller", () => {
     pads[0] = fakePad({ axes: [0, 0, 0, -1] });
     await step();
     await waitFor(() => expect(callsTo("POST", "/control/joint/start")).toHaveLength(2));
-    expect(callsTo("POST", "/control/joint/start")[1].body).toEqual({ axis: "elbow", direction: 1 });
+    expect(callsTo("POST", "/control/joint/start")[1].body).toEqual({ axis: "elbow", direction: -1 });
 
     pads[0] = press(fakePad(), 7);
     await step();
@@ -704,6 +704,26 @@ describe("Controller", () => {
     expect(calls.some((call) => call.path === "/view")).toBe(false);
   });
 
+  it("shows the button map while B is held and pauses commands under it", async () => {
+    const { calls } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    await screen.findByLabelText("Debug controls");
+    pads[0] = press(fakePad(), 1);
+    await step();
+    const map = await screen.findByLabelText("Controller map");
+    expect(within(map).getByText("Auto-Track")).toBeInTheDocument();
+
+    pads[0] = press(press(fakePad({ axes: [0, -1, 0, 0] }), 1), 0);
+    await step();
+    await step();
+    expect(calls.some((call) => call.path === "/control/auto-track")).toBe(false);
+    expect(calls.some((call) => call.path === "/control/move/start")).toBe(false);
+
+    pads[0] = press(fakePad(), 0);
+    await step();
+    await waitFor(() => expect(screen.queryByLabelText("Controller map")).not.toBeInTheDocument());
+    expect(calls.some((call) => call.path === "/control/auto-track")).toBe(false);
+  });
+
   it("does not start the virtual camera before a frame arrives", async () => {
     const { calls } = setup(makeStatus());
     await screen.findByTestId("pane-bluey.local");
@@ -740,6 +760,16 @@ describe("Keyboard shortcuts", () => {
     expect(callsTo("POST", "/control/home")).toHaveLength(1);
   });
 
+  it("shows the controller map while ⌘⇧/ is held", async () => {
+    setup(makeStatus());
+    await screen.findByTestId("pane-bluey.local");
+    fireEvent.keyDown(window, { key: "?", code: "Slash", metaKey: true, shiftKey: true });
+    const map = await screen.findByLabelText("Controller map");
+    expect(within(map).getByText("Hold B on a controller to open this from the pad.")).toBeInTheDocument();
+    fireEvent.keyUp(window, { key: "Meta", shiftKey: true });
+    await waitFor(() => expect(screen.queryByLabelText("Controller map")).not.toBeInTheDocument());
+  });
+
   it("ignores shortcuts while typing or with the settings open", async () => {
     const { user, calls } = setup(makeStatus());
     await user.click(await screen.findByRole("button", { name: "Settings" }));
@@ -762,13 +792,13 @@ describe("Backend connection", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let starting = true;
     const starting503 = () =>
-      new Response(JSON.stringify({ detail: "Commander is connecting to cameras…", starting: true }), {
+      new Response(JSON.stringify({ detail: "Commander is connecting to robots…", starting: true }), {
         status: 503,
         headers: { "Content-Type": "application/json" },
       });
     setup(makeStatus(), { "GET /status": () => (starting ? starting503() : makeStatus()) });
 
-    expect(await screen.findByText("Connecting to cameras…")).toBeInTheDocument();
+    expect(await screen.findByText("Connecting to robots…")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
 

@@ -34,7 +34,7 @@ export function CameraPane({ host, slot, status, selected, selectable, onSelect 
     .join(" ");
 
   return (
-    <figure className={className} data-testid={`pane-${host}`} aria-label={`Camera ${slot ?? ""} ${host}`}>
+    <figure className={className} data-testid={`pane-${host}`} aria-label={`Feed ${slot ?? ""} ${host}`}>
       {hasVideo ? (
         <img
           key={attempt}
@@ -47,7 +47,7 @@ export function CameraPane({ host, slot, status, selected, selectable, onSelect 
         <div className="pane__nosignal" role="status">
           {status?.open ? <VideoOff size={40} strokeWidth={1.5} /> : <WifiOff size={40} strokeWidth={1.5} />}
           <strong>{status?.open ? "No signal" : "Not connected"}</strong>
-          <span>{status?.open ? "Waiting for the camera stream…" : "Check the camera URL in Settings."}</span>
+          <span>{status?.open ? "Waiting for the stream…" : "Check the stream URL in Settings."}</span>
         </div>
       )}
       {selectable && (
@@ -56,17 +56,17 @@ export function CameraPane({ host, slot, status, selected, selectable, onSelect 
           className="pane__hit"
           onClick={onSelect}
           aria-pressed={selected}
-          aria-label={`Control camera ${slot ?? ""} (${host})`}
+          aria-label={`Control feed ${slot ?? ""} (${host})`}
         />
       )}
       <figcaption className="pane__caption">
         <span className="pane__label">
-          <span className="pane__slot">{slot ? `CAM ${slot}` : "CAM"}</span>
+          <span className="pane__slot">{slot ? `FEED ${slot}` : "FEED"}</span>
           <span className="pane__host">{host}</span>
           {selected && <span className="pane__controlling">Controlling</span>}
         </span>
         {tracking && (
-          <span className="pane__badge" title="Auto-tracking is steering this camera">
+          <span className="pane__badge" title="Auto-tracking is steering this feed">
             <Crosshair size={14} /> Tracking
             {status?.subjects ? ` · ${status.subjects}` : ""}
           </span>

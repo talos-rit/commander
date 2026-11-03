@@ -1,0 +1,156 @@
+[
+  {
+    "name": "base_joint",
+    "parent": "base_Link",
+    "child": "shoulder_Link",
+    "xyz": [
+      0.13222,
+      -0.16175,
+      0.21721
+    ],
+    "rpy": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "axis": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "lower": -2.7054,
+    "upper": 2.7054
+  },
+  {
+    "name": "shoulder_joint",
+    "parent": "shoulder_Link",
+    "child": "elbow_Link",
+    "xyz": [
+      0.0,
+      -0.029,
+      0.19766
+    ],
+    "rpy": [
+      0.0,
+      -8.6736e-19,
+      -1.3878e-17
+    ],
+    "axis": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "lower": -2.269,
+    "upper": 0.5236
+  },
+  {
+    "name": "elbow_joint",
+    "parent": "elbow_Link",
+    "child": "pitch_Link",
+    "xyz": [
+      0.0,
+      -0.22,
+      0.0
+    ],
+    "rpy": [
+      1.3878e-17,
+      1.6914e-16,
+      1.3461e-15
+    ],
+    "axis": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "lower": -1.8327,
+    "upper": 2.269
+  },
+  {
+    "name": "pitch_joint",
+    "parent": "pitch_Link",
+    "child": "roll_Link",
+    "xyz": [
+      0.0,
+      -0.22,
+      0.0
+    ],
+    "rpy": [
+      -1.5708,
+      -1.5708,
+      0.0
+    ],
+    "axis": [
+      0.0,
+      1.0,
+      0.0
+    ],
+    "lower": -2.269,
+    "upper": 2.269
+  },
+  {
+    "name": "roll_joint",
+    "parent": "roll_Link",
+    "child": "gripper_Link",
+    "xyz": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "rpy": [
+      0.0,
+      1.3878e-17,
+      0.0
+    ],
+    "axis": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "lower": -9.949,
+    "upper": 9.949
+  },
+  {
+    "name": "pad1_joint",
+    "parent": "gripper_Link",
+    "child": "pad1_Link",
+    "xyz": [
+      0.0,
+      -0.0545,
+      -0.0905
+    ],
+    "rpy": [
+      1.5708,
+      -0.74758,
+      -1.5708
+    ],
+    "axis": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "lower": 0.0,
+    "upper": 1.5709
+  },
+  {
+    "name": "pad2_joint",
+    "parent": "gripper_Link",
+    "child": "pad2_Link",
+    "xyz": [
+      0.0,
+      0.0545,
+      -0.0905
+    ],
+    "rpy": [
+      -1.5708,
+      -0.74758,
+      1.5708
+    ],
+    "axis": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "lower": 0.0,
+    "upper": 1.5709
+  }
+]

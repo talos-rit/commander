@@ -6,14 +6,14 @@ from loguru import logger
 from src.streaming import StreamController, StreamControllerFactory
 
 from . import config
-from .config.schema.robot import ConnectionConfig
+from .config.schema.robot import ConnectionConfig, active_pi_vision_url
 from .connection.connection import (
     Connection,
     ConnectionCollection,
     VideoConnection,
     is_live_source,
 )
-from .connection.publisher import Direction
+from .connection.publisher import Direction, Publisher
 from .directors import BaseDirector, ContinuousDirector
 from .observations.replay import ObservationRecorder
 from .scheduler import IterativeTask, Scheduler
@@ -116,10 +116,14 @@ class App:
         except Exception as exc:
             logger.warning(f"Failed to open video connection for {hostname}: {exc}")
             video_connection = None
-        if isinstance(conf.pi_vision_url, str) and conf.pi_vision_url:
+        pi_url = active_pi_vision_url(conf)
+        if pi_url:
             from .connection.edge_publisher import EdgePublisher
             conn = Connection(hostname, conf.socket_port, video_connection,
-                              publisher_factory=lambda _host, _port: EdgePublisher(conf.pi_vision_url))
+                              publisher_factory=lambda _host, _port: EdgePublisher(pi_url))
+        elif conf.socket_host != hostname:
+            conn = Connection(hostname, conf.socket_port, video_connection,
+                              publisher_factory=lambda _host, port: Publisher(conf.socket_host, port))
         else:
             conn = Connection(hostname, conf.socket_port, video_connection)
         self.connections[hostname] = conn

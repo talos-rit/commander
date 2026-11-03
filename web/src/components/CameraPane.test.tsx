@@ -10,7 +10,7 @@ describe("CameraPane", () => {
     render(<CameraPane host="bluey.local" slot={1} status={hostStatus("bluey.local", { has_video: true })} selected selectable={false} />);
     const img = screen.getByRole("img", { name: "Live feed from bluey.local" });
     expect(img.getAttribute("src")).toMatch(/^\/api\/cameras\/bluey.local\/mjpeg\?r=\d+$/);
-    expect(screen.getByText("CAM 1")).toBeInTheDocument();
+    expect(screen.getByText("FEED 1")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
@@ -33,7 +33,7 @@ describe("CameraPane", () => {
     rerender(<CameraPane host="h" slot={2} status={hostStatus("h", { open: false })} selected={false} selectable={false} />);
     expect(screen.getByText("Not connected")).toBeInTheDocument();
     rerender(<CameraPane host="h" slot={null} status={undefined} selected={false} selectable={false} />);
-    expect(screen.getByText("CAM")).toBeInTheDocument();
+    expect(screen.getByText("FEED")).toBeInTheDocument();
   });
 
   it("marks the selected pane and tracking state in two-screen", () => {
@@ -52,7 +52,7 @@ describe("CameraPane", () => {
     expect(pane).toHaveClass("pane--selected", "pane--tracking", "pane--selectable");
     expect(screen.getByText("Controlling")).toBeInTheDocument();
     expect(screen.getByText(/Tracking · 3/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /control camera 2/i }));
+    fireEvent.click(screen.getByRole("button", { name: /control feed 2/i }));
     expect(onSelect).toHaveBeenCalled();
   });
 });
