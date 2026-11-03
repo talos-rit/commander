@@ -4,6 +4,7 @@ import threading
 
 from loguru import logger
 
+from src.connection.command_receipt import CommandReceiptLog, command_label, strip_acks
 from src.icd_config import CTypesInt, toBytes
 
 
@@ -23,6 +24,7 @@ class OperatorConnection:
         self.socket.setblocking(False)  # Set socket to non-blocking mode
         self._message_buffer = b""
         self._message_listeners = []
+        self._receipts = CommandReceiptLog()
         if connect_on_init:
             # Start connection on a separate thread so it doesn't block
             self.connect_on_thread()
@@ -115,10 +117,8 @@ class OperatorConnection:
         Payload	        UINT8[]	Command Info
         CRC	            UINT8	Checksum
         """
-        # Get a unique, incrementing command id. Increment by 2, so that the response
-        # from the operator always returns odd command ids and the publisher always sends
-        # even command ids. Commands can be associated with each other by checking if they
-        # have the same modulus of 2.
+        # Message ids step by 2. The ICD also declares 0x8000 return commands, but
+        # Operator does not send those. It writes a bare ACK once the frame is queued.
         command_id = self.command_count
         self.command_count += 2
         payload_length = 0 if payload is None else len(payload)
@@ -142,15 +142,19 @@ class OperatorConnection:
 
         message += crc
 
+        label = command_label(command, payload)
         try:
             self.socket.sendall(message)  # safer than send()
         except OSError as e:
             logger.error(f"Socket send to {self.host} failed: {e}")
+            self._receipts.note_sent(label, ok=False)
             return -1
 
-        # TODO: Implement response handling if needed
-        # response = self.socket.recv(2048)
+        self._receipts.note_sent(label, ok=True)
         return 0
+
+    def command_receipt(self) -> dict | None:
+        return self._receipts.to_dict()
 
     def listen(self):
         while self.is_running:
@@ -177,6 +181,9 @@ class OperatorConnection:
 
     def _on_message(self, message: bytes):
         self._message_buffer += message
+        self._message_buffer, acks = strip_acks(self._message_buffer)
+        if acks:
+            self._receipts.note_ack(acks)
         while b"\n" in self._message_buffer:
             line, self._message_buffer = self._message_buffer.split(b"\n", 1)
             decoded = line.decode(errors="replace").rstrip("\0")

@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import { ActionBar } from "./components/ActionBar";
+import { ActionBar, CommandReceipt } from "./components/ActionBar";
 import { DebugRail } from "./components/DebugRail";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TopBar } from "./components/TopBar";
@@ -10,7 +10,7 @@ import { describeController, DIRECTION_ORDER, type ArmCommand, type ControllerGa
 import { useCommand, useToasts } from "./hooks/useCommand";
 import { useGamepad } from "./hooks/useGamepad";
 import { useStatus } from "./hooks/useStatus";
-import type { Direction, DisplayMode, JogMode, OneScreenMode, Slot, Status, UIMode } from "./types";
+import type { Direction, JogMode, OneScreenMode, Slot, Status, UIMode } from "./types";
 
 const ARROWS: Record<string, Direction> = {
   ArrowUp: "up",
@@ -54,7 +54,6 @@ export default function App() {
   const selectedHost = status?.view.selected_host ?? undefined;
   const selected = selectedHost ? status?.connections[selectedHost] : undefined;
 
-  const onDisplayMode = (display_mode: DisplayMode) => applyStatus(() => api.setView({ display_mode }));
   const onOneScreenMode = (one_screen_mode: OneScreenMode) => applyStatus(() => api.setView({ one_screen_mode }));
   const onUIMode = (ui_mode: UIMode) => applyStatus(() => api.setView({ ui_mode }));
   const onSelectSlot = useCallback((slot: Slot) => applyStatus(() => api.select({ slot })), [applyStatus]);
@@ -83,18 +82,22 @@ export default function App() {
     [run],
   );
   const onJointStop = useCallback(() => void run(() => api.jointStop()), [run]);
+  const onCartesianStart = useCallback(
+    (x: -1 | 0 | 1, y: -1 | 0 | 1, z: -1 | 0 | 1) => void run(() => api.cartesianStart(x, y, z)),
+    [run],
+  );
+  const onCartesianStop = useCallback(() => void run(() => api.cartesianStop()), [run]);
   const onJogMode = (mode: JogMode) => void run(() => api.setJogMode(mode));
+  const onStopMotion = useCallback(() => void run(() => api.stopMotion()), [run]);
+  const onEnableControl = useCallback(() => void run(() => api.enableControl()), [run]);
+  const onSpeed = useCallback((percent: number) => void run(() => api.setSpeed(percent)), [run]);
   const onModel = (model: string | null) => void run(() => api.setModel(model));
 
   const debug = status?.view.ui_mode === "debug";
   const robotReady = Boolean(selected?.open);
   const jogEnabled = Boolean(debug && robotReady && !selected?.auto_tracking && !settingsOpen);
   const bumpersEnabled = Boolean(
-    status &&
-      !settingsOpen &&
-      status.view.available_slots === 2 &&
-      (status.view.display_mode === "two_screen" ||
-        (status.view.display_mode === "one_screen" && status.view.one_screen_mode === "manual")),
+    status && !settingsOpen && status.view.available_slots === 2 && status.view.one_screen_mode === "manual",
   );
   const keyHeld = useRef(new Set<Direction>());
   const padHeld = useRef(new Set<Direction>());
@@ -144,11 +147,10 @@ export default function App() {
     if (!viewStatus || blocked) return;
     if (action === "menu") void onUIMode(viewStatus.view.ui_mode === "debug" ? "simple" : "debug");
     else if (action === "back" && host?.open) void onHome();
-    else if (action === "y") void onOneScreenMode(viewStatus.view.one_screen_mode === "manual" ? "dynamic" : "manual");
-    else if (action === "x" && (viewStatus.virtual_camera || (host?.open && host.has_video))) {
+    else if (action === "y" && viewStatus.view.available_slots === 2) {
+      void onOneScreenMode(viewStatus.view.one_screen_mode === "manual" ? "dynamic" : "manual");
+    } else if (action === "x" && (viewStatus.virtual_camera || (host?.open && host.has_video))) {
       void onVirtualCamera(!viewStatus.virtual_camera);
-    } else if (action === "b" && viewStatus.view.available_slots === 2) {
-      void onDisplayMode(viewStatus.view.display_mode === "two_screen" ? "one_screen" : "two_screen");
     } else if (action === "a" && host?.open && !host.manual_only) void onAutoTrack(!host.auto_tracking);
   };
   useEffect(() => {
@@ -207,10 +209,8 @@ export default function App() {
       if (key === "h" && host?.open) void onHome();
       else if (key === "t" && host?.open && !host.manual_only) void onAutoTrack(!host.auto_tracking);
       else if (key === "v" && (host?.has_video || s.virtual_camera)) void onVirtualCamera(!s.virtual_camera);
-      else if ((key === "1" || key === "2") && s.view.available_slots === 2) {
-        const slot = Number(key) as Slot;
-        const manualOneScreen = s.view.display_mode === "one_screen" && s.view.one_screen_mode === "manual";
-        if (manualOneScreen || s.view.display_mode === "two_screen") void onSelectSlot(slot);
+      else if ((key === "1" || key === "2") && s.view.available_slots === 2 && s.view.one_screen_mode === "manual") {
+        void onSelectSlot(Number(key) as Slot);
       }
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -237,7 +237,6 @@ export default function App() {
       <TopBar
         status={status}
         offline={error}
-        onDisplayMode={onDisplayMode}
         onOneScreenMode={onOneScreenMode}
         onSelectSlot={onSelectSlot}
         onUIMode={onUIMode}
@@ -248,11 +247,19 @@ export default function App() {
         <>
           <main className="main">
             <VideoStage status={status} onSelectHost={onSelectHost} onOpenSettings={() => setSettingsOpen(true)} />
+            {!debug && <CommandReceipt status={status} />}
             {debug && (
               <DebugRail
                 status={status}
                 onMoveStart={onMoveStart}
                 onMoveStop={onMoveStop}
+                onCartesianStart={onCartesianStart}
+                onCartesianStop={onCartesianStop}
+                onJointStart={onJointStart}
+                onJointStop={onJointStop}
+                onStop={onStopMotion}
+                onEnableControl={onEnableControl}
+                onSpeed={onSpeed}
                 onJogMode={onJogMode}
                 onModel={onModel}
                 onHome={() => void onHome()}

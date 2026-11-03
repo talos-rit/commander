@@ -144,14 +144,14 @@ def test_explicit_host_overrides_selection(web_config):
     assert ("home", "b") in app.calls
 
 
-def test_select_slot_in_manual_one_screen_switches_feed_and_active(web_config):
+def test_select_slot_keeps_both_feeds_and_switches_the_active_camera(web_config):
     backend, app, _ = make_backend(camera_1="a", camera_2="b")
     backend.startup()
 
     backend.select(slot=2)
 
     view = backend.status()["view"]
-    assert view["displayed_hosts"] == ["b"]
+    assert view["displayed_hosts"] == ["a", "b"]
     assert view["selected_host"] == "b"
     assert app.active == "b"
 
@@ -327,6 +327,23 @@ def test_jog_in_debug_mode_targets_selected_robot(web_config):
     assert ("stop_continuous_move", "LEFT", "b") in app.calls
 
 
+def test_left_and_right_pan_follow_the_button(web_config):
+    backend, app, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+
+    backend.move("left", active=True)
+    backend.move("right", active=True)
+    backend.move("up", active=True)
+    backend.move("down", active=True)
+
+    assert [call[1] for call in app.calls if call[0] == "continuous_move"] == [
+        "LEFT",
+        "RIGHT",
+        "UP",
+        "DOWN",
+    ]
+
+
 def test_joint_and_cartesian_jog_target_the_selected_robot(web_config):
     backend, app, _ = make_backend(camera_1="a", camera_2="b", ui_mode="debug")
     backend.startup()
@@ -341,6 +358,39 @@ def test_joint_and_cartesian_jog_target_the_selected_robot(web_config):
     assert ("stop_joint", "b") in app.calls
     assert ("start_cartesian", (0, -1, 0), "b") in app.calls
     assert ("stop_cartesian", "b") in app.calls
+
+
+def test_speed_enable_and_stop_match_the_operator_panel(web_config):
+    backend, app, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+
+    assert backend.status()["speed_percent"] is None
+    assert backend.set_speed_percent(40) == 40
+    assert app.connections["a"].publisher.calls == [("speed", 40)]
+    assert backend.status()["speed_percent"] == 40
+
+    backend.enable_control()
+    assert ("enable",) in app.connections["a"].publisher.calls
+
+    backend.move("up", active=True)
+    backend.stop_motion()
+    assert ("stop_all", "a") in app.calls
+
+    with pytest.raises(BackendError) as err:
+        backend.set_speed_percent(0)
+    assert err.value.status == 422
+    assert backend.status()["speed_percent"] == 40
+
+
+def test_speed_and_enable_require_debug_mode(web_config):
+    backend, _, _ = make_backend(camera_1="a", ui_mode="simple")
+    backend.startup()
+    with pytest.raises(BackendError) as err:
+        backend.set_speed_percent(20)
+    assert err.value.status == 403
+    with pytest.raises(BackendError) as blocked:
+        backend.enable_control()
+    assert blocked.value.status == 403
 
 
 def test_joint_jog_rejects_unknown_axis(web_config):
@@ -430,6 +480,10 @@ def test_status_reports_twin_telemetry(web_config):
     assert status["tracking"]["model_options"] == ["yolo_nano"]
     assert status["tracking"]["default_model"] == "yolo_nano"
     assert status["robots"] == ["a", "b"]
+    app.connections["a"].publisher.get_command_receipt = lambda: {
+        "sent": 1, "acked": 1, "last_command": "Home", "last_sent_age_s": 0.1, "last_ack_age_s": 0.05, "last_failed": False,
+    }
+    assert backend.status()["connections"]["a"]["command"]["last_command"] == "Home"
 
 
 def test_status_for_unopened_slot(web_config):

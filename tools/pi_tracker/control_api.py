@@ -61,6 +61,7 @@ class ControlLease:
     def status(self):
         with self._lock:
             telemetry = self.operator.get_telemetry()
+            receipt = getattr(self.operator, "command_receipt", lambda: None)()
             return {"enabled": self.controller.enabled, "owner": self.owner,
                     "state": getattr(getattr(self.controller, "state", None), "value", None),
                     "last_thought": self.controller.last_thought,
@@ -70,7 +71,8 @@ class ControlLease:
                     "fault": self.operator.get_fault(),
                     "joint_counts": [telemetry.base, telemetry.shoulder, telemetry.elbow,
                                      telemetry.wrist_pitch, telemetry.wrist_roll] if telemetry.has_received else None,
-                    "telemetry_age_s": self.clock() - telemetry.last_updated_monotonic if telemetry.has_received else None}
+                    "telemetry_age_s": self.clock() - telemetry.last_updated_monotonic if telemetry.has_received else None,
+                    "commands": receipt}
 
     def manual_command(self, command, payload):
         # The allowlist mirrors the implemented ER-V protocol. No opaque ACL strings.

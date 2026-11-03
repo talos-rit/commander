@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 from src.config.schema.app import DisplayMode, OneScreenMode, UIMode
@@ -19,21 +19,23 @@ class WebOperatorState:
     """
     What the operator is looking at and which robot their commands target.
 
-    Camera 1 is the primary camera; Camera 2 is optional. With a single camera
-    the view is always one-screen and every command targets Camera 1.
+    Every assigned camera is on screen. Camera 1 is the primary camera; Camera
+    2 is optional. With one camera every command targets Camera 1. With two,
+    Manual lets the operator pick the controlled camera and Dynamic leaves that
+    choice to Commander.
     """
 
     camera_1: str | None = None
     camera_2: str | None = None
+    # Saved so older configs still load. The live view ignores it.
     display_mode: DisplayMode = "one_screen"
     one_screen_mode: OneScreenMode = "manual"
     # Debug while the web UI is still in development. See AppSettings.ui_mode.
     ui_mode: UIMode = "debug"
     manual_slot: Slot = 1
     dynamic_slot: Slot = 1
-    """Slot shown in dynamic mode. Nothing moves it yet; subject-aware
+    """Slot controlled in dynamic mode. Nothing moves it yet; subject-aware
     switching will call set_dynamic_slot()."""
-    _two_screen_selected: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         self._reconcile()
@@ -85,9 +87,11 @@ class WebOperatorState:
 
     @property
     def effective_display_mode(self) -> DisplayMode:
-        return self.display_mode if self.has_two_cameras else "one_screen"
+        """Feeds on screen follow how many cameras are assigned, not a layout setting."""
+        return "two_screen" if self.has_two_cameras else "one_screen"
 
     def set_display_mode(self, mode: str) -> None:
+        """Store a legacy layout value. It does not change which feeds are shown."""
         if mode not in DISPLAY_MODES:
             raise ViewStateError(f"Unknown display mode {mode!r}")
         if mode == "two_screen" and not self.has_two_cameras:
@@ -111,6 +115,7 @@ class WebOperatorState:
 
     @property
     def displayed_slot(self) -> Slot | None:
+        """Camera that receives commands. Both feeds stay on screen either way."""
         if not self.slots:
             return None
         if not self.has_two_cameras:
@@ -119,10 +124,7 @@ class WebOperatorState:
 
     @property
     def displayed_hosts(self) -> list[str]:
-        if self.effective_display_mode == "two_screen":
-            return [self.slots[1], self.slots[2]]
-        slot = self.displayed_slot
-        return [self.slots[slot]] if slot is not None else []
+        return [self.slots[slot] for slot in sorted(self.slots)]
 
     # --- command target --------------------------------------------------
 
@@ -130,11 +132,9 @@ class WebOperatorState:
     def selected_host(self) -> str | None:
         """Robot that receives Home, Auto-Track and jog commands.
 
-        In one-screen mode this is always the camera on screen, so the operator
-        controls what they see. In two-screen mode it is the pane they clicked.
+        With one camera this is Camera 1. With two, Manual follows the
+        operator and Dynamic follows dynamic_slot.
         """
-        if self.effective_display_mode == "two_screen":
-            return self._two_screen_selected or self.camera_1
         slot = self.displayed_slot
         return self.slots.get(slot) if slot is not None else None
 
@@ -142,18 +142,17 @@ class WebOperatorState:
         slot = self.slot_of(host)
         if slot is None:
             raise ViewStateError(f"{host!r} is not assigned to a camera slot")
-        if self.effective_display_mode == "two_screen":
-            self._two_screen_selected = host
-        else:
-            self.select_slot(slot)
+        self.select_slot(slot)
 
     def select_slot(self, slot: int) -> None:
-        """Pick which camera to show (and control) in one-screen manual mode."""
+        """Remember which camera the operator wants to control.
+
+        Dynamic mode keeps controlling dynamic_slot. The manual choice is
+        stored so it applies again when they switch back to Manual.
+        """
         if slot not in self.slots:
             raise ViewStateError(f"Camera {slot} is not assigned")
         self.manual_slot = slot  # type: ignore[assignment]
-        if self.effective_display_mode == "two_screen":
-            self._two_screen_selected = self.slots[slot]  # type: ignore[index]
 
     # --- helpers ---------------------------------------------------------
 
@@ -162,8 +161,6 @@ class WebOperatorState:
             self.manual_slot = 1
         if self.dynamic_slot not in self.slots:
             self.dynamic_slot = 1
-        if self._two_screen_selected not in self.slots.values():
-            self._two_screen_selected = None
 
     def persisted_settings(self) -> dict[str, Any]:
         return {

@@ -76,11 +76,11 @@ class AppSettingsFields(BaseModel):
     )
     display_mode: DisplayMode = Field(
         default="one_screen",
-        description="Show one feed at a time or both camera feeds side by side",
+        description="Legacy layout value. The console shows every assigned camera and ignores this.",
     )
     one_screen_mode: OneScreenMode = Field(
         default="manual",
-        description="In one-screen mode: pick the feed yourself (manual) or let Commander switch (dynamic)",
+        description="When two cameras are assigned: pick the controlled camera (manual) or let Commander switch (dynamic)",
     )
     camera_1_host: str | None = Field(
         default=None,

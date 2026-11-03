@@ -25,6 +25,17 @@ export interface Telemetry {
   joint_age_s: number | null;
 }
 
+/** Operator queued a frame. This is not confirmation that the arm finished moving. */
+export interface CommandReceipt {
+  sent: number;
+  /** Null when this link cannot see Operator's ACK, such as an older Pi build. */
+  acked: number | null;
+  last_command: string | null;
+  last_sent_age_s: number | null;
+  last_ack_age_s: number | null;
+  last_failed: boolean;
+}
+
 export interface HostStatus {
   host: string;
   slot: Slot | null;
@@ -36,6 +47,8 @@ export interface HostStatus {
   auto_tracking: boolean;
   subjects?: number;
   telemetry: Telemetry | null;
+  /** Latest command handed toward Operator, when one has been attempted. */
+  command?: CommandReceipt | null;
   pi_vision?: { enabled: boolean; perception_enabled: boolean | null; error: string | null; robot_fault?: string | null; inference_s: number | null; observation_age_s: number | null; state?: string | null; last_thought?: string | null; acceptable_ratio?: number } | null;
 }
 
@@ -54,6 +67,8 @@ export interface Status {
   connections: Record<string, HostStatus>;
   tracking: TrackingStatus;
   jog_mode: JogMode;
+  /** Last Operator speed sent from this UI, from 1 to 100. Null until set. Home ignores it. */
+  speed_percent: number | null;
   /** True while the selected camera is being sent to a virtual webcam. */
   virtual_camera: boolean;
   robots: string[];

@@ -76,6 +76,7 @@ button:disabled {
 }
 
 .main {
+  position: relative;
   display: flex;
   min-height: 0;
   gap: 12px;
@@ -880,10 +881,19 @@ button:disabled {
   }
 }
 
-/* Debug rail */
-.rail {
+/* Debug rail. The dock stays put; only the rail inside it scrolls. */
+.rail-dock {
+  position: relative;
   width: 300px;
   flex-shrink: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rail {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -923,9 +933,9 @@ button:disabled {
 .jogpad {
   display: grid;
   grid-template-areas:
-    ". up ."
+    "sh-neg up sh-pos"
     "left home right"
-    ". down .";
+    "el-neg down el-pos";
   grid-template-columns: repeat(3, 56px);
   grid-template-rows: repeat(3, 56px);
   gap: 6px;
@@ -933,6 +943,19 @@ button:disabled {
   margin-bottom: 12px;
   touch-action: none;
   user-select: none;
+}
+
+.armmark {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
 }
 
 .jogpad__btn {
@@ -953,6 +976,59 @@ button:disabled {
 .jogpad__home {
   border-radius: 50%;
   color: var(--text-dim);
+}
+
+.axisblock {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.axisblock h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.axisgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.axisbtn {
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  touch-action: none;
+  user-select: none;
+}
+
+.axisbtn:active:not(:disabled),
+.axisbtn.is-held:not(:disabled) {
+  background: var(--signal);
+  color: var(--signal-ink);
+  border-color: var(--signal);
+}
+
+.axisbtn--line {
+  width: 100%;
+}
+
+.rail__ops {
+  margin-top: 14px;
+}
+
+.rail__speed {
+  margin-top: 14px;
 }
 
 .stats {
@@ -1267,7 +1343,8 @@ button:disabled {
 /* Toasts */
 .toasts {
   position: fixed;
-  bottom: 96px;
+  /* Clear the action bar, which grows when PiVision controls are shown. */
+  bottom: 196px;
   left: 50%;
   transform: translateX(-50%);
   display: grid;
@@ -1294,6 +1371,42 @@ button:disabled {
   color: #ffc2bc;
 }
 
+/* Command receipt stays at the bottom of the visible debug rail while that rail scrolls. */
+.receipt-toast {
+  z-index: 6;
+  justify-content: center;
+  margin: 0;
+  pointer-events: none;
+}
+
+.rail-dock .receipt-toast {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  width: auto;
+}
+
+.main > .receipt-toast {
+  position: absolute;
+  right: 24px;
+  bottom: 20px;
+  width: 276px;
+  max-width: calc(100% - 36px);
+}
+
+.receipt-toast.toast--ok {
+  border-color: rgb(184 232 74 / 0.45);
+}
+
+.receipt-toast.toast--warn {
+  border-color: rgb(242 184 75 / 0.55);
+}
+
+.receipt-toast.toast--warn span {
+  color: var(--warn);
+}
+
 /* Narrow screens */
 @media (max-width: 900px) {
   .main {
@@ -1309,6 +1422,7 @@ button:disabled {
     min-height: 50vh;
   }
 
+  .rail-dock,
   .rail {
     width: 100%;
     overflow: visible;

@@ -230,9 +230,10 @@ describe("SettingsPanel", () => {
     await user.selectOptions(screen.getByLabelText("Camera 2 (optional)"), "pi.local");
     await user.click(screen.getByRole("radio", { name: "Debug" }));
     expect(screen.getByText(/Adds manual jog/)).toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: "Two screen" }));
-    await user.click(screen.getByRole("radio", { name: "Continuous" }));
-    const slider = screen.getByRole("slider", { name: "Tracking model" });
+    expect(screen.queryByRole("radio", { name: "Two screen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "One-screen switching" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Jog style" })).not.toBeInTheDocument();
+    const slider = screen.getByRole("slider", { name: "Tracking model (local)" });
     expect(slider).toHaveAttribute("aria-valuetext", "Nano (yolo_nano)");
     fireEvent.change(slider, { target: { value: "1" } });
     fireEvent.keyUp(slider);
@@ -241,8 +242,6 @@ describe("SettingsPanel", () => {
     expect(callsTo("PUT", "/settings")[0].body).toEqual({
       camera_2_host: "pi.local",
       ui_mode: "debug",
-      display_mode: "two_screen",
-      jog_mode: "continuous",
       default_model: "yolo_small",
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();

@@ -59,6 +59,9 @@ class CommanderWebBackend:
         self._cancel_startup = threading.Event()
         self._startup_thread: threading.Thread | None = None
         self._pi_vision: dict[str, PiVisionControl] = {}
+        # Last Operator speed this UI sent. None until the operator sets it.
+        # Home does not use this value.
+        self._speed_percent: int | None = None
 
     # --- lifecycle -------------------------------------------------------
 
@@ -198,6 +201,7 @@ class CommanderWebBackend:
                     "output_fps": round(edge_status.get("fps", 0), 1) if edge else round(self.app.get_tracker_output_fps(), 1),
                 },
                 "jog_mode": str(self.app.get_control_mode()),
+                "speed_percent": self._speed_percent,
                 "virtual_camera": self.app.is_streaming(),
                 "robots": sorted(config.ROBOT_CONFIGS.keys()),
             }
@@ -219,6 +223,7 @@ class CommanderWebBackend:
                 "has_video": False,
                 "auto_tracking": False,
                 "telemetry": None,
+                "command": None,
             }
         video = conn.video_connection
         publisher = conn.publisher
@@ -231,7 +236,16 @@ class CommanderWebBackend:
             "subjects": self._pi_vision[host].status()["subjects"] if host in self._pi_vision else len(conn.get_bboxes() or []),
             "pi_vision": self._pi_vision[host].status() if host in self._pi_vision else None,
             "telemetry": self._telemetry(publisher),
+            "command": self._command_receipt(publisher),
         }
+
+    @staticmethod
+    def _command_receipt(publisher: Any) -> dict[str, Any] | None:
+        getter = getattr(publisher, "get_command_receipt", None)
+        if not callable(getter):
+            return None
+        receipt = getter()
+        return receipt if isinstance(receipt, dict) else None
 
     @staticmethod
     def _telemetry(publisher: Any) -> dict[str, Any] | None:
@@ -366,8 +380,8 @@ class CommanderWebBackend:
     def set_virtual_camera(self, enabled: bool) -> bool:
         """Stream the selected camera out as a virtual webcam, or stop doing so.
 
-        The stream follows whichever robot is selected, so switching cameras in
-        one-screen mode switches the virtual camera too. Both cameras are
+        The stream follows whichever robot is selected, so changing the
+        controlled camera switches the virtual camera too. Both cameras are
         assumed to share a resolution; the device is sized from the first frame.
         """
         with self._lock:
@@ -446,6 +460,43 @@ class CommanderWebBackend:
                 self.app.start_cartesian(*vector)
             else:
                 self.app.stop_cartesian()
+
+    def stop_motion(self) -> None:
+        """Stop polar, Cartesian, and joint jogs. Home is left alone."""
+        with self._lock:
+            self._require_debug()
+            self._target(None)
+            self._sync_active()
+            self.app.stop_all_movement()
+
+    def enable_control(self) -> None:
+        """Ask the Operator to re-enable ER-V servo control (ACL CON)."""
+        with self._lock:
+            self._require_debug()
+            publisher = self._operator_publisher()
+            publisher.erv_enable_control()
+
+    def set_speed_percent(self, percent: int) -> int:
+        """Set the Operator speed used by manual moves. Home is unaffected."""
+        if not isinstance(percent, int) or not 1 <= percent <= 100:
+            raise BackendError("Speed must be from 1 to 100", 422)
+        with self._lock:
+            self._require_debug()
+            publisher = self._operator_publisher()
+            try:
+                publisher.erv_set_speed_percent(percent)
+            except ValueError as exc:
+                raise BackendError(str(exc), 422) from exc
+            self._speed_percent = percent
+            return percent
+
+    def _operator_publisher(self):
+        self._target(None)
+        self._sync_active()
+        connection = self.app.get_active_connection()
+        if connection is None or getattr(connection, "publisher", None) is None:
+            raise BackendError("The selected robot is not connected", 409)
+        return connection.publisher
 
     def _apply_jog_mode(self, mode: str) -> None:
         if self.app.get_active_connection() is not None:
