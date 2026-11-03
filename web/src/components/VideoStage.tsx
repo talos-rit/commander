@@ -16,10 +16,10 @@ export function VideoStage({ status, onSelectHost, onOpenSettings }: Props) {
       <section className="stage stage--empty">
         <div className="empty">
           <Camera size={48} strokeWidth={1.25} />
-          <h2>No camera assigned</h2>
+          <h2>No feed assigned</h2>
           <p>
             {status.robots.length > 0
-              ? "Pick a robot to use as Camera 1."
+              ? "Pick a robot for Feed 1."
               : "Add a robot with its operator address to get started."}
           </p>
           <button type="button" className="btn btn--primary" onClick={onOpenSettings}>
@@ -33,7 +33,7 @@ export function VideoStage({ status, onSelectHost, onOpenSettings }: Props) {
   const multi = view.displayed_hosts.length > 1;
   const manual = view.one_screen_mode === "manual";
   return (
-    <section className={`stage ${multi ? "stage--two" : "stage--one"}`} aria-label="Camera feeds">
+    <section className={`stage ${multi ? "stage--two" : "stage--one"}`} aria-label="Feeds">
       {view.displayed_hosts.map((host) => (
         <CameraPane
           key={host}

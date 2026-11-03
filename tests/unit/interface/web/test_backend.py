@@ -562,7 +562,7 @@ def test_update_settings_rejects_invalid_values_without_side_effects(web_config)
 
 def test_add_robot_persists_and_fills_empty_camera_1(web_config):
     web_config.robots.clear()
-    backend, app, _ = make_backend()
+    backend, app, persisted = make_backend()
 
     created = backend.add_robot(
         {"socket_host": "bluey", "socket_port": "61616", "camera_index": "rtsp://x"}
@@ -571,9 +571,32 @@ def test_add_robot_persists_and_fills_empty_camera_1(web_config):
     assert created["socket_port"] == 61616
     assert "bluey" in config_module.ROBOT_CONFIGS
     assert backend.state.camera_1 == "bluey"
+    assert backend.state.camera_2 is None
+    assert any(item.get("camera_1_host") == "bluey" for item in persisted)
     assert "bluey" in app.connections
     saved = yaml.safe_load(web_config.robot_configs_path.read_text())
     assert saved["bluey"]["camera_index"] == "rtsp://x"
+
+
+def test_add_robot_leaves_feed_2_empty(web_config):
+    backend, _, _ = make_backend(camera_1="a")
+
+    backend.add_robot({"socket_host": "c", "socket_port": "61616", "camera_index": "0"})
+
+    assert backend.state.camera_1 == "a"
+    assert backend.state.camera_2 is None
+
+
+def test_disabled_pi_vision_keeps_the_url_without_starting_it(web_config):
+    web_config.robots["a"] = robot(
+        "a", pi_vision_enabled=False, pi_vision_url="http://pi:5050"
+    )
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+
+    assert "a" in app.connections
+    assert "a" not in backend._pi_vision
+    assert config_module.ROBOT_CONFIGS["a"].pi_vision_url == "http://pi:5050"
 
 
 def test_add_robot_validation_errors(web_config):

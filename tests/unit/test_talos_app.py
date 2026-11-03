@@ -99,6 +99,52 @@ def test_open_connection_uses_config_and_creates_connection(monkeypatch, app_und
     assert app.connections["host"] is mock_conn
 
 
+def test_open_connection_routes_through_pi_vision_when_enabled(monkeypatch, app_under_test, mocker):
+    from src.config.schema.robot import ConnectionConfig
+
+    app = app_under_test
+    robot = ConnectionConfig(
+        socket_host="host",
+        socket_port=123,
+        camera_index=0,
+        pi_vision_url="http://pi:5050",
+    )
+    monkeypatch.setitem(talos_app.config.ROBOT_CONFIGS, "host", robot)
+    monkeypatch.setattr(talos_app, "VideoConnection", lambda *args, **kwargs: mocker.Mock())
+    connection = mocker.Mock()
+    monkeypatch.setattr(talos_app, "Connection", connection)
+    edge = mocker.patch("src.connection.edge_publisher.EdgePublisher")
+
+    app.open_connection("host")
+
+    factory = connection.call_args.kwargs["publisher_factory"]
+    factory("host", 123)
+    edge.assert_called_once_with("http://pi:5050")
+
+
+def test_open_connection_keeps_operator_when_pi_vision_is_off(monkeypatch, app_under_test, mocker):
+    from src.config.schema.robot import ConnectionConfig
+
+    app = app_under_test
+    robot = ConnectionConfig(
+        socket_host="host",
+        socket_port=123,
+        camera_index=0,
+        pi_vision_enabled=False,
+        pi_vision_url="http://pi:5050",
+    )
+    monkeypatch.setitem(talos_app.config.ROBOT_CONFIGS, "host", robot)
+    monkeypatch.setattr(talos_app, "VideoConnection", lambda *args, **kwargs: mocker.Mock())
+    connection = mocker.Mock()
+    monkeypatch.setattr(talos_app, "Connection", connection)
+    edge = mocker.patch("src.connection.edge_publisher.EdgePublisher")
+
+    app.open_connection("host")
+
+    edge.assert_not_called()
+    assert "publisher_factory" not in connection.call_args.kwargs
+
+
 def test_open_connection_falls_back_when_video_fails(monkeypatch, app_under_test, mocker):
     app = app_under_test
     config = mocker.Mock(socket_port=123, camera_index=0)

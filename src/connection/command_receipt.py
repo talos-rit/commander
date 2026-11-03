@@ -1,20 +1,24 @@
 """What Commander can know after it asks Operator to move.
 
-Operator's socket replies with the four bytes ``ACK\\0`` as soon as a complete
-ICD frame has been copied into its command queue (see ``Socket::poll`` in the
-Operator repo). That is a receive receipt. It is not tied to the command id,
-it is not the ``0x8000`` return messages declared in the ICD, and it is sent
-before the arm is asked to move. Nothing in this link reports that a motion
-finished.
+Operator replies as soon as a complete ICD frame has been copied into its
+command queue (see ``Socket::poll`` in the Operator repo). That is a receive
+receipt. It is not tied to the command id, it is not the ``0x8000`` return
+messages declared in the ICD, and it is sent before the arm is asked to move.
+Nothing in this link reports that a motion finished.
+
+The current Operator build sends ``static const char resp[] = "ACK\\n"``.
+``std::span`` over that array includes the terminating NUL, so the bytes are
+``ACK\\n\\0``. An older build sent ``ACK\\0`` with no newline.
 """
 
 import threading
 import time
 from dataclasses import dataclass
 
-# ``static const char resp[] = "ACK"`` includes the terminating NUL, and
-# ``std::span`` over that array sends all four bytes.
+# Older Operator: ``char resp[] = "ACK"`` and span sends the trailing NUL.
 ACK_TOKEN = b"ACK\x00"
+# Current Operator: ``char resp[] = "ACK\n"``. Span sends the newline and the NUL.
+ACK_LINE = b"ACK\n"
 
 COMMAND_LABELS = {
     0: "Handshake",
@@ -51,14 +55,25 @@ def strip_acks(buffer: bytes) -> tuple[bytes, int]:
     """Pull Operator receive-receipts out of a mixed telemetry stream.
 
     A receipt can arrive between newline-terminated ``TEL`` / ``TELP`` lines,
-    or split across reads. A trailing partial token is left in place.
+    or split across reads. A trailing partial token is left in place. A
+    newline receipt is taken as soon as the newline arrives; a NUL that follows
+    it in the same buffer is consumed too. A NUL that arrives in the next read
+    is left at the front of the buffer for the caller to drop.
     """
     count = 0
     while True:
-        index = buffer.find(ACK_TOKEN)
-        if index == -1:
+        nul_at = buffer.find(ACK_TOKEN)
+        line_at = buffer.find(ACK_LINE)
+        if nul_at == -1 and line_at == -1:
             return buffer, count
-        buffer = buffer[:index] + buffer[index + len(ACK_TOKEN) :]
+        if line_at != -1 and (nul_at == -1 or line_at < nul_at):
+            end = line_at + len(ACK_LINE)
+            if end < len(buffer) and buffer[end : end + 1] == b"\x00":
+                end += 1
+            buffer = buffer[:line_at] + buffer[end:]
+            count += 1
+            continue
+        buffer = buffer[:nul_at] + buffer[nul_at + len(ACK_TOKEN) :]
         count += 1
 
 
