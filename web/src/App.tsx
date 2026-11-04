@@ -54,6 +54,7 @@ export default function App() {
 
   const selectedHost = status?.view.selected_host ?? undefined;
   const selected = selectedHost ? status?.connections[selectedHost] : undefined;
+  const controllerFault = selected?.pi_vision?.robot_fault ?? null;
 
   const onOneScreenMode = (one_screen_mode: OneScreenMode) => applyStatus(() => api.setView({ one_screen_mode }));
   const onUIMode = (ui_mode: UIMode) => applyStatus(() => api.setView({ ui_mode }));
@@ -112,6 +113,10 @@ export default function App() {
   const jogged = useRef(new Set<Direction>());
   // Keys and the controller share one jog. Releasing one does not stop a direction the other still holds.
   const syncJog = useCallback(() => {
+    if (controllerFault) {
+      jogged.current.clear();
+      return;
+    }
     const next = new Set<Direction>([...keyHeld.current, ...padHeld.current, ...armHeld.current]);
     for (const direction of DIRECTION_ORDER) {
       if (jogged.current.has(direction) && !next.has(direction)) onMoveStop(direction);
@@ -120,7 +125,27 @@ export default function App() {
       if (!jogged.current.has(direction) && next.has(direction)) onMoveStart(direction);
     }
     jogged.current = next;
-  }, [onMoveStart, onMoveStop]);
+  }, [onMoveStart, onMoveStop, controllerFault]);
+  // Refresh only while the browser still owns a held input. If it closes or
+  // freezes, repeats cease and Operator's unchanged 500 ms watchdog stops it.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (jogEnabled && !controllerFault && !document.hidden) jogged.current.forEach(onMoveStart);
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [jogEnabled, onMoveStart, controllerFault]);
+  useEffect(() => {
+    if (controllerFault) {
+      keyHeld.current.clear();
+      jogged.current.clear();
+    }
+  }, [controllerFault]);
+  useEffect(() => {
+    keyHeld.current.clear();
+    padHeld.current.clear();
+    armHeld.current.clear();
+    jogged.current.clear();
+  }, [selectedHost]);
   const jointSent = useRef<ArmCommand["joint"]>(null);
   const syncArm = useCallback(
     (arm: ArmCommand) => {
@@ -237,7 +262,7 @@ export default function App() {
       if (!s || blocked || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
       const direction = ARROWS[event.key];
       if (direction) {
-        if (s.view.ui_mode !== "debug" || !host?.open || host.auto_tracking) return;
+        if (s.view.ui_mode !== "debug" || !host?.open || host.auto_tracking || host.pi_vision?.robot_fault) return;
         event.preventDefault();
         if (!event.repeat && !keyHeld.current.has(direction)) {
           keyHeld.current.add(direction);
@@ -266,10 +291,13 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", releaseAll);
+    const onVisibility = () => { if (document.hidden) releaseAll(); };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", releaseAll);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [onHome, onAutoTrack, onVirtualCamera, onSelectSlot, syncJog]);
 

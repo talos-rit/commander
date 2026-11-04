@@ -257,6 +257,21 @@ def test_continuous_direction_release_updates_the_remaining_vector(
     publisher.polar_pan_continuous_stop.assert_called_once()
 
 
+def test_browser_polar_repeats_renew_without_a_backend_timer(app_under_test, mocker):
+    app = app_under_test
+    app.current_continuous_directions = set()
+    publisher = mocker.Mock()
+    app.connections["h"] = mocker.Mock(is_manual=True, publisher=publisher, host="h")
+    app.connections.set_active("h")
+    app.continuous_move(talos_app.Direction.LEFT)
+    app.continuous_move(talos_app.Direction.LEFT)
+    assert publisher.polar_pan_continuous_direction_start.call_count == 2
+    app.scheduler.set_interval.assert_not_called()
+    app.stop_continuous_move(talos_app.Direction.LEFT)
+    publisher.polar_pan_continuous_stop.assert_called_once()
+    assert not app.current_continuous_directions
+
+
 def test_joint_jog_refreshes_until_stopped(app_under_test, mocker):
     app = app_under_test
     publisher = mocker.Mock()

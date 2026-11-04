@@ -244,6 +244,26 @@ export function DebugRail({
   const verified = !host?.controller || host.controller.state === "verified";
   const fault = host?.pi_vision?.robot_fault;
   const jogDisabled = !connected || !verified || Boolean(host?.auto_tracking) || Boolean(fault);
+  const startRef = useRef(onMoveStart);
+  startRef.current = onMoveStart;
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!jogDisabled) held.current.forEach(direction => startRef.current(direction));
+    }, 150);
+    const releaseAll = () => {
+      held.current.forEach(onMoveStop);
+      held.current.clear();
+    };
+    window.addEventListener("blur", releaseAll);
+    const onVisibility = () => { if (document.hidden) releaseAll(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("blur", releaseAll);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [jogDisabled, onMoveStop]);
+  useEffect(() => { held.current.clear(); }, [selected, jogDisabled]);
   const reportedSpeed = status.speed_percent;
   const [speed, setSpeed] = useState(reportedSpeed ?? 20);
   const speedRef = useRef(speed);

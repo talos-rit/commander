@@ -64,6 +64,24 @@ afterEach(() => {
 });
 
 describe("App with one camera", () => {
+  it.each(["pointer", "keyboard"])("refreshes a held polar jog from the %s and stops refreshing on release", async (input) => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
+    const rail = await screen.findByLabelText("Debug controls");
+    const left = within(rail).getByRole("button", { name: "Jog left" });
+    if (input === "pointer") fireEvent.pointerDown(left);
+    else fireEvent.keyDown(window, { key: "ArrowLeft" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(350); });
+    expect(callsTo("POST", "/control/move/start").length).toBeGreaterThanOrEqual(3);
+    if (input === "pointer") fireEvent.pointerUp(left);
+    else fireEvent.keyUp(window, { key: "ArrowLeft" });
+    await act(async () => { await Promise.resolve(); });
+    const starts = callsTo("POST", "/control/move/start").length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(350); });
+    expect(callsTo("POST", "/control/move/start")).toHaveLength(starts);
+    expect(callsTo("POST", "/control/move/stop")).toHaveLength(1);
+  });
+
   it("shows the single feed with Home and Auto-Track and no camera switch", async () => {
     setup(makeStatus());
     expect(await screen.findByTestId("pane-bluey.local")).toBeInTheDocument();

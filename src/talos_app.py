@@ -161,9 +161,14 @@ class App:
         This will merge with any existing continuous movements.
         """
         if direction in self.current_continuous_directions:
+            # Browser-held repeats renew Operator's deadman timer. Do not
+            # generate these in the backend: closing the browser must stop them.
+            if (publisher := self._manual_publisher()) is not None:
+                publisher.polar_pan_continuous_direction_start(sum(self.current_continuous_directions))
             return
         if (connection := self.get_active_connection()) is None:
             return logger.error("No connection found")
+        self.stop_joint_jog()
         self.current_continuous_directions.add(direction)
         publisher = connection.publisher
         publisher.polar_pan_continuous_direction_start(
@@ -197,6 +202,9 @@ class App:
             return
         if self._joint_jog == (axis, direction):
             return
+        if self.current_continuous_directions:
+            self.current_continuous_directions.clear()
+            publisher.polar_pan_continuous_stop()
         self._cancel_joint_jog_task()
         if self._joint_jog is not None:
             publisher.erv_joint_jog_stop()
