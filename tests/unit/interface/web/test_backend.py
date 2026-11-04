@@ -174,6 +174,9 @@ def test_independent_tracking_survives_selection_and_manual_handoff(web_config):
         def manual_handoff(self):
             pass
 
+        def status(self):
+            return {"robot_fault": None}
+
     backend, _, _ = make_backend(camera_1="a", camera_2="b", ui_mode="debug")
     backend.startup()
     controls = {host: Control() for host in ("a", "b")}
@@ -368,6 +371,31 @@ def test_left_and_right_pan_follow_the_button(web_config):
         "UP",
         "DOWN",
     ]
+
+
+def test_fault_blocks_new_jogs_but_allows_stop_and_explicit_clear(web_config):
+    from types import SimpleNamespace
+    backend, app, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+    control = SimpleNamespace(
+        status=lambda: {"robot_fault": "IMPACT PROTECTION AXIS 2"},
+        set_enabled=lambda enabled: False,
+    )
+    backend._pi_vision["a"] = control
+    for action in (
+        lambda: backend.move("left", True),
+        lambda: backend.joint_jog("shoulder", 1, True),
+        lambda: backend.cartesian(1, 0, 0, True),
+    ):
+        with pytest.raises(BackendError, match="IMPACT") as error:
+            action()
+        assert error.value.status == 409
+    backend.joint_jog("shoulder", 1, False)
+    app.calls.clear()
+    backend.clear_robot_error()
+    assert ("stop_all", "a") in app.calls
+    assert app.connections["a"].publisher.calls == [("enable",)]
+    assert not any(call[0] == "start_joint" for call in app.calls)
 
 
 def test_joint_and_cartesian_jog_target_the_selected_robot(web_config):

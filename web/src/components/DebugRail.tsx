@@ -112,6 +112,12 @@ function HoldButton({
   const down = useRef(false);
   const stopRef = useRef(onStop);
   stopRef.current = onStop;
+  useEffect(() => {
+    if (disabled && down.current) {
+      down.current = false;
+      stopRef.current();
+    }
+  }, [disabled]);
   useEffect(
     () => () => {
       if (!down.current) return;
@@ -236,7 +242,8 @@ export function DebugRail({
   const connected = Boolean(host?.open);
   const esp = host?.controller?.configured === "esp-one-axis";
   const verified = !host?.controller || host.controller.state === "verified";
-  const jogDisabled = !connected || !verified || Boolean(host?.auto_tracking);
+  const fault = host?.pi_vision?.robot_fault;
+  const jogDisabled = !connected || !verified || Boolean(host?.auto_tracking) || Boolean(fault);
   const reportedSpeed = status.speed_percent;
   const [speed, setSpeed] = useState(reportedSpeed ?? 20);
   const speedRef = useRef(speed);
@@ -273,6 +280,7 @@ export function DebugRail({
           <Gauge size={16} /> Manual jog
         </h3>
         {host?.auto_tracking && <p className="muted">Turn off Auto-Track to jog manually.</p>}
+        {fault && <p role="alert" className="hint">Controller stopped: {fault}. Release controls, inspect the arm, then clear the fault and press jog again.</p>}
         <div className="jogpad" aria-label="Jog pad">
           {CORNER_JOGS.map((joint) => (
             <HoldButton
@@ -347,7 +355,7 @@ export function DebugRail({
         }
         <div className="axisgrid rail__ops">
           <button type="button" className="axisbtn" disabled={!connected || !verified || esp} onClick={onEnableControl}>
-            Enable control
+            {fault ? "Clear fault / enable control" : "Enable control"}
           </button>
           <button type="button" className="axisbtn" disabled={!connected} onClick={onStop}>
             Stop

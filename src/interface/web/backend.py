@@ -351,6 +351,13 @@ class CommanderWebBackend:
 
     # --- control ---------------------------------------------------------
 
+    def _require_manual_motion(self, host, *, native=False):
+        self._require_controller(host, native=native)
+        control = self._pi_vision.get(host)
+        fault = control.status().get("robot_fault") if control else None
+        if fault:
+            raise BackendError(f"Controller fault: {fault}. Release controls, inspect the arm, clear the fault, then press jog again.", 409)
+
     def _target(self, host: str | None) -> str:
         target = host or self.state.selected_host
         if target is None:
@@ -364,6 +371,8 @@ class CommanderWebBackend:
             target = self._target(host)
             self._require_controller(target, native=True)
             self._stop_pi_vision(target)
+            if target == self.state.selected_host:
+                self._stop_jog()
             self.app.connections[target].publisher.erv_enable_control()
             return target
 
@@ -449,7 +458,7 @@ class CommanderWebBackend:
                 raise BackendError(f"Unknown direction {direction!r}") from exc
             target = self._target(None)
             if active:
-                self._require_controller(target, native=direction in ("up", "down"))
+                self._require_manual_motion(target, native=direction in ("up", "down"))
             self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
             # Match the digital twin's real ER-V controls: a press is one
@@ -472,7 +481,7 @@ class CommanderWebBackend:
             self._require_debug()
             target = self._target(None)
             if active:
-                self._require_controller(target, native=True)
+                self._require_manual_motion(target, native=True)
             self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
             if active:
@@ -489,7 +498,7 @@ class CommanderWebBackend:
             self._require_debug()
             target = self._target(None)
             if active:
-                self._require_controller(target, native=True)
+                self._require_manual_motion(target, native=True)
             self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
             if active and vector != (0, 0, 0):
@@ -509,7 +518,10 @@ class CommanderWebBackend:
         """Ask the Operator to re-enable ER-V servo control (ACL CON)."""
         with self._lock:
             self._require_debug()
-            self._require_controller(self._target(None), native=True)
+            target = self._target(None)
+            self._require_controller(target, native=True)
+            self._stop_pi_vision(target)
+            self._stop_jog()
             publisher = self._operator_publisher()
             publisher.erv_enable_control()
 

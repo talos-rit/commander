@@ -79,7 +79,7 @@ export default function App() {
   const onMoveStart = useCallback((direction: Direction) => {
       if (selected?.controller && (selected.controller.state !== "verified" || (selected.controller.configured === "esp-one-axis" && (direction === "up" || direction === "down")))) return;
       void run(() => api.moveStart(direction));
-    }, [run]);
+    }, [run, selected?.controller?.state, selected?.controller?.configured]);
   const onMoveStop = useCallback((direction: Direction) => void run(() => api.moveStop(direction)), [run]);
   const onJointStart = useCallback(
     (axis: "shoulder" | "elbow", direction: -1 | 1) => {
