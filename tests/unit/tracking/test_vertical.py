@@ -52,11 +52,13 @@ def test_lease_tells_the_pi_which_axes_are_allowed():
         track_elbow=True,
         track_shoulder=False,
         track_polar_vertical=False,
+        acceptable_box_percent=0.2,
         elbow_count_min=-50,
         elbow_count_max=50,
     )
     control = PiVisionControl(object(), robot, request=request)
     assert control.set_enabled(True)
+    assert calls[0][1]["acceptable_ratio"] == 0.2
     axes = calls[0][1]["vertical_axes"]
     assert axes == {"elbow": True, "shoulder": False, "polar_vertical": False}
     assert calls[0][1]["elbow_limits"] == [-50, 50]
