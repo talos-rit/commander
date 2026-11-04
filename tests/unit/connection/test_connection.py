@@ -146,6 +146,32 @@ class _StreamingCap:
         self.released = True
 
 
+def test_rtsp_reconnects_with_tcp_fallback_when_open_yields_no_frames(
+    monkeypatch, mocker, no_termination_handlers
+):
+    failed = mocker.Mock()
+    failed.read.return_value = (False, None, None)
+    healthy = _StreamingCap()
+    options = []
+
+    def factory(source, **kwargs):
+        options.append(kwargs)
+        return failed if len(options) == 1 else healthy
+
+    monkeypatch.setattr(connection_module, "PyAVCapture", factory)
+    no_termination_handlers(connection_module)
+    vc = connection_module.VideoConnection(
+        src="rtsp://camera/live", background_capture=True,
+        first_frame_timeout=1, reconnect_delay=0.01,
+    )
+    try:
+        assert vc.shape == (4, 4, 3)
+        assert options == [connection_module.RTSP_OPEN_OPTIONS, connection_module.RTSP_FALLBACK_OPTIONS]
+        failed.release.assert_called_once()
+    finally:
+        vc.close()
+
+
 def test_background_capture_drains_and_capture_packet_does_not_advance(
     monkeypatch, no_termination_handlers
 ):

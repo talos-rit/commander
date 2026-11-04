@@ -6,6 +6,12 @@ Python desktop application that tracks subjects using video feeds from the robot
 
 ## Two arms on one Pi
 
+**Current two-Pi setup:** use [the two-Pi robot config](docs/examples/two-pi-robots.yaml).
+Bluey connects to `bluey.local`; Bingo connects to `bingo.local`. Each host runs
+only its matching three-container profile. The
+[Operator setup guide](https://github.com/talos-rit/operator/blob/feat/dual-arm-containers/deploy/dual-arm/README.md)
+includes startup commands for either arrangement. Desktop installation is the same.
+
 Use branch `feat/dual-arm-containers` in both Commander and Operator.
 For a new desktop checkout (Python 3.12, uv, and Node/npm installed):
 

@@ -143,6 +143,7 @@ class VideoConnection:
     _is_prerecorded: bool = field(init=False, default=False)
     _stop_event: threading.Event = field(init=False, default_factory=threading.Event)
     _thread: threading.Thread | None = field(init=False, default=None)
+    _rtsp_fallback: bool = field(init=False, default=False)
 
     def __post_init__(self):
         source = self._resolve_source()
@@ -177,9 +178,12 @@ class VideoConnection:
 
     def _open_capture(self, source: str | int) -> cv2.VideoCapture | PyAVCapture:
         if isinstance(source, str) and source.startswith("rtsp://"):
+            if self._rtsp_fallback:
+                return PyAVCapture(source, **RTSP_FALLBACK_OPTIONS)
             try:
                 return PyAVCapture(source, **RTSP_OPEN_OPTIONS)
             except Exception as exc:
+                self._rtsp_fallback = True
                 logger.warning(
                     "Failed to open RTSP stream with low-latency options ({}). Retrying with TCP only.",
                     exc,
@@ -198,6 +202,12 @@ class VideoConnection:
                 return None
             ret, frame, *rest = cap.read()
         if not ret or frame is None:
+            if (self._frame_sequence < 0 and isinstance(self.src, str)
+                    and self.src.startswith("rtsp://") and not self._rtsp_fallback):
+                # Some publishers open successfully but never yield a frame with
+                # nobuffer enabled. Reconnect with the existing TCP fallback.
+                self._rtsp_fallback = True
+                logger.warning("RTSP stream yielded no initial frame; retrying with TCP-only options")
             return None
         timestamp = self._capture_timestamp(rest, cap)
         with self._read_lock:
