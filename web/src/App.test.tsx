@@ -393,6 +393,10 @@ describe("Controller", () => {
   }
 
   beforeEach(() => {
+    // Held jogs are re-sent every 150 ms. On a slow runner that real interval
+    // fires mid-test and skews the exact call counts these tests assert, so it
+    // only runs when a test advances it. The refresh has its own tests.
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     pads = [null, null, null, null];
     frames.length = 0;
     Object.defineProperty(navigator, "getGamepads", { configurable: true, value: () => pads });
