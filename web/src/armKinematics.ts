@@ -33,9 +33,18 @@ export function armPoints(positions: Record<string, number>): Record<string, Vec
   return points;
 }
 
+// Near-side view across the shoulder/elbow plane, with a little elevation
+// and yaw so link thickness remains visible without foreshortening the arm.
+const yaw = 20 * Math.PI / 180;
+const elevation = 18 * Math.PI / 180;
+const right: Vec = [Math.sin(yaw), -Math.cos(yaw), 0];
+const toward: Vec = [Math.cos(yaw) * Math.cos(elevation), Math.sin(yaw) * Math.cos(elevation), Math.sin(elevation)];
+const up: Vec = [-Math.cos(yaw) * Math.sin(elevation), -Math.sin(yaw) * Math.sin(elevation), Math.cos(elevation)];
+const dot = (a: Vec, b: Vec) => a.reduce((sum, v, i) => sum + v * b[i], 0);
+
 /** Fixed orthographic camera, with enough room for the entire arm envelope. */
 export function project([x, y, z]: Vec): [number, number] {
   x -= 0.13222; y += 0.16175;
-  return [160 + 225 * (0.82*x - 0.57*y), 255 - 225 * (z + 0.26*x + 0.37*y)];
+  return [160 + 250 * dot([x, y, z], right), 247 - 250 * dot([x, y, z], up)];
 }
-export const depth = ([x, y, z]: Vec) => 0.57*x + 0.82*y - 0.4*z;
+export const depth = (point: Vec) => dot(point, toward);

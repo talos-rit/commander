@@ -52,6 +52,5 @@ export function ArmTwin({ host }: { host?: HostStatus }) {
       {!p && <text x="160" y="140" textAnchor="middle" fill="#99aab6" fontSize="12">No measured pose</text>}
       <text x="12" y="275" fill="#99aab6" fontSize="10">100 mm grid · fixed camera</text>
     </svg>
-    <p className="hint">Measured arm pose. {positions?.base_joint == null ? "Base yaw unavailable. " : "Base yaw reference unverified. "}Roll and gripper shown in a fixed pose.</p>
   </div>;
 }
