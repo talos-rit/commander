@@ -59,6 +59,17 @@ def test_pose_overlay_scales_coordinates_without_changing_capture_frame():
     assert not control.annotate_frame(frame).any()  # do not show an old skeleton as current
 
 
+def test_commander_overlay_places_tracking_region_in_upper_third():
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"), clock=lambda: 10)
+    control.ingest(observation(), 10)
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+
+    annotated = control.annotate_frame(frame)
+
+    assert tuple(annotated[50, 160]) == (255, 180, 0)
+    assert not annotated[90, 160].any()
+
+
 class OnePoll:
     def __init__(self):
         self.done = False

@@ -281,8 +281,10 @@ class PiVisionControl:
         if not fresh:
             return canvas
         height, width = canvas.shape[:2]
-        cv2.rectangle(canvas, (round(width * (1 - ratio) / 2), round(height * (1 - ratio) / 2)),
-                      (round(width * (1 + ratio) / 2), round(height * (1 + ratio) / 2)), (255, 180, 0), 2)
+        center_x, center_y = width // 2, height // 3
+        box_width, box_height = int(width * ratio), int(height * ratio)
+        cv2.rectangle(canvas, (center_x - box_width // 2, center_y - box_height // 2),
+                      (center_x + box_width // 2, center_y + box_height // 2), (255, 180, 0), 2)
         sx, sy = width / sample["width"], height / sample["height"]
         def point(x, y):
             return (max(0, min(width - 1, round(x * sx))), max(0, min(height - 1, round(y * sy))))
@@ -313,5 +315,4 @@ class PiVisionControl:
             self._thread.join(timeout=1)
         if self._observation_thread is not None:
             self._observation_thread.join(timeout=1)
-
 
