@@ -707,6 +707,147 @@ def test_list_robots(web_config):
     assert list(backend.list_robots()) == ["a", "b"]
 
 
+# --- zoom -----------------------------------------------------------------------
+
+
+def _person(track_id, box, confidence=0.9):
+    from src.observations.types import PersonObservation
+
+    return PersonObservation("a", 0, 0.0, box, confidence, track_id)
+
+
+def test_status_lists_subjects_sorted_by_subject_id(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].set_observations(
+        [_person(7, (1, 2, 3, 4), 0.81234), _person(2, (500, 6, 507, 8))]
+    )
+    app.connections["a"].set_observations(
+        [_person(2, (500, 6, 507, 8)), _person(7, (1, 2, 3, 4), 0.81234)]
+    )
+
+    host = backend.status()["connections"]["a"]
+
+    assert [s["id"] for s in host["subject_list"]] == [1, 2]
+    assert host["subject_list"][0] == {"id": 1, "confidence": 0.812, "box": [1, 2, 3, 4]}
+    assert host["zoom"]["target"] is None
+    assert host["zoom"]["fill"] == pytest.approx(0.6)
+
+
+def test_zoom_target_sets_focus_on_selected_robot(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].set_observations([_person(3, (1, 2, 3, 4))])
+
+    assert backend.set_zoom_target(1) == 1
+    assert app.connections["a"].focus_subject_id == 1
+    assert backend.status()["connections"]["a"]["zoom"]["target"] == 1
+
+    assert backend.set_zoom_target(None) is None
+    assert app.connections["a"].focus_subject_id is None
+
+
+def test_zoom_target_may_be_out_of_view_but_must_be_known(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].set_observations([_person(3, (1, 2, 3, 4))])
+    app.connections["a"].set_observations([])
+
+    assert backend.set_zoom_target(1) == 1
+    with pytest.raises(BackendError) as err:
+        backend.set_zoom_target(9)
+
+    assert err.value.status == 404
+    assert app.connections["a"].focus_subject_id == 1
+
+
+def test_zoom_fill_is_validated(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+
+    assert backend.set_zoom_fill(0.8) == pytest.approx(0.8)
+    assert app.streamer.zoom("a").fill == pytest.approx(0.8)
+    with pytest.raises(BackendError) as err:
+        backend.set_zoom_fill(1.5)
+    assert err.value.status == 422
+
+
+# --- recognition ----------------------------------------------------------------
+
+
+def test_status_reports_recognition_and_the_targets_last_match(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].set_observations([_person(3, (1, 2, 3, 4))])
+    backend.set_zoom_target(1)
+
+    status = backend.status()
+
+    assert status["recognition"] == {"known": 1, "appearance": False, "faces": False, "leniency": 0.5}
+    assert status["connections"]["a"]["zoom"]["match"] is None
+    app.identity._subjects[1].match = ("face", 0.912)
+    assert backend.status()["connections"]["a"]["zoom"]["match"] == {"by": "face", "score": 0.91}
+
+
+def test_saved_leniency_is_applied_at_startup(web_config):
+    import src.config as config_module
+
+    config_module.APP_SETTINGS.recognition_leniency = 0.8  # web_config isolates APP_SETTINGS
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+
+    assert app.identity.leniency == 0.8
+
+
+def test_set_recognition_leniency_applies_validates_and_persists(web_config):
+    backend, app, persisted = make_backend(camera_1="a")
+    backend.startup()
+
+    assert backend.set_recognition_leniency(0.25) == 0.25
+
+    assert app.identity.leniency == 0.25
+    assert app.identity.match_threshold == pytest.approx(0.9)
+    assert {"recognition_leniency": 0.25} in persisted
+    with pytest.raises(BackendError) as err:
+        backend.set_recognition_leniency(1.5)
+    assert err.value.status == 422
+
+
+def test_forget_subjects_clears_everyone_and_zooms_out(web_config):
+    backend, app, _ = make_backend(camera_1="a")
+    backend.startup()
+    app.connections["a"].set_observations([_person(3, (1, 2, 3, 4))])
+    backend.set_zoom_target(1)
+
+    assert backend.forget_subjects()["known"] == 0
+
+    assert app.connections["a"].focus_subject_id is None
+    with pytest.raises(BackendError):
+        backend.set_zoom_target(1)
+
+
+def test_recognition_controls_are_debug_only(web_config):
+    backend, _, _ = make_backend(camera_1="a", ui_mode="simple")
+    backend.startup()
+
+    for call in (lambda: backend.set_recognition_leniency(0.5), backend.forget_subjects):
+        with pytest.raises(BackendError) as err:
+            call()
+        assert err.value.status == 403
+
+
+def test_leniency_saved_through_settings_applies_now(web_config):
+    backend, app, persisted = make_backend(camera_1="a")
+    backend.startup()
+
+    backend.update_settings({"recognition_leniency": 0.9})
+
+    assert app.identity.leniency == 0.9
+    assert any(update.get("recognition_leniency") == 0.9 for update in persisted)
+    with pytest.raises(BackendError):
+        backend.update_settings({"recognition_leniency": 3})
+
+
 def test_web_twin_reuses_measured_calibration(web_config):
     from src.simulation.erv_calibration import BASE_CALIBRATION, map_arm_controller_coordinates
     import time

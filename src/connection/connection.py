@@ -1,5 +1,6 @@
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -15,6 +16,7 @@ from loguru import logger
 import src.config as config
 from src.connection.publisher import Publisher
 from src.observations.types import BBox, FramePacket, PersonObservation
+from src.tracking.identity import IdentityResolver
 from src.utils import (
     add_termination_handler,
     remove_termination_handler,
@@ -32,6 +34,8 @@ RTSP_OPEN_OPTIONS = {
 }
 RTSP_FALLBACK_OPTIONS = {"rtsp_transport": "tcp"}
 RTSP_OPEN_TIMEOUT = (2.0, 1.0)
+RECENT_PACKETS = 16
+"""Packets kept so detections, which lag capture, can be matched to their frame."""
 
 
 def is_live_source(src: str | int) -> bool:
@@ -141,6 +145,9 @@ class VideoConnection:
     _cap_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
     _frame_sequence: int = field(init=False, default=-1)
     _latest_packet: FramePacket | None = field(init=False, default=None)
+    _recent_packets: deque[FramePacket] = field(
+        init=False, default_factory=lambda: deque(maxlen=RECENT_PACKETS)
+    )
     _is_prerecorded: bool = field(init=False, default=False)
     _stop_event: threading.Event = field(init=False, default_factory=threading.Event)
     _thread: threading.Thread | None = field(init=False, default=None)
@@ -220,6 +227,7 @@ class VideoConnection:
                 image=frame,
             )
             self._latest_packet = packet
+            self._recent_packets.append(packet)
             if self.shape is None:
                 self.shape = frame.shape
                 self.dtype = frame.dtype
@@ -284,6 +292,15 @@ class VideoConnection:
 
         with self._read_lock:
             return self._latest_packet
+
+    def get_packet(self, frame_sequence: int) -> FramePacket | None:
+        """Return a recent packet by sequence, or None once it has aged out."""
+
+        with self._read_lock:
+            return next(
+                (p for p in reversed(self._recent_packets) if p.frame_sequence == frame_sequence),
+                None,
+            )
 
     def get_latest_frame(self) -> np.ndarray | None:
         packet = self.get_latest_packet()
@@ -355,6 +372,12 @@ class Connection:
     _bboxes: list[BBox] | None = field(init=False, default=None)
     _observations: list[PersonObservation] | None = field(init=False, default=None)
     _bboxes_lock: threading.Lock = field(init=False, default_factory=threading.Lock)
+    identity: IdentityResolver = field(
+        default_factory=IdentityResolver, repr=False, compare=False
+    )
+    """Gives observations persistent subject IDs. Share one across connections."""
+    focus_subject_id: int | None = field(init=False, default=None)
+    """Subject ID to zoom on and follow. None follows anyone."""
 
     def __post_init__(self):
         self.publisher = self.publisher_factory(self.host, self.port)
@@ -380,11 +403,42 @@ class Connection:
         with self._bboxes_lock:
             return self._observations
 
+    def get_tracking_bboxes(self) -> list[BBox] | None:
+        """Boxes a director should follow.
+
+        While a focus subject is set, only that subject's box, so the arm does
+        not chase someone else when the subject is briefly lost.
+        """
+        with self._bboxes_lock:
+            focus = self.focus_subject_id
+            if focus is None:
+                return self._bboxes
+            return [
+                observation.bounding_box
+                for observation in self._observations or []
+                if observation.subject_id == focus
+            ]
+
+    def _source_image(self, observations: list[PersonObservation]) -> np.ndarray | None:
+        """The exact frame these observations were detected on, if still buffered."""
+        get_packet = getattr(self.video_connection, "get_packet", None)
+        if not observations or get_packet is None:
+            return None
+        packet = get_packet(observations[0].frame_sequence)
+        return packet.image if packet is not None else None
+
     def set_observations(
         self, observations: list[PersonObservation] | None
     ) -> None:
-        """Store rich observations and maintain the legacy bounding-box view."""
+        """Store rich observations, with subject IDs, and maintain the legacy bounding-box view."""
 
+        if observations is not None:
+            observations = self.identity.resolve(
+                self.host, observations, self._source_image(observations)
+            )
+            if self.focus_subject_id is not None:
+                # A provisional subject may have just been recognized as a known one.
+                self.focus_subject_id = self.identity.canonical(self.focus_subject_id)
         with self._bboxes_lock:
             self._observations = observations
             self._bboxes = (
