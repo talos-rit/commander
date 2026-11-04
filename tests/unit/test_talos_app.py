@@ -86,7 +86,7 @@ def test_open_connection_missing_config_logs_error(monkeypatch, app_under_test, 
 
 def test_open_connection_uses_config_and_creates_connection(monkeypatch, app_under_test, mocker):
     app = app_under_test
-    config = mocker.Mock(socket_port=123, camera_index=0)
+    config = mocker.Mock(socket_host="host", socket_port=123, camera_index=0)
     monkeypatch.setitem(talos_app.config.ROBOT_CONFIGS, "host", config)
 
     # VideoConnection should be created; patch so it doesn't do real IO
@@ -150,7 +150,7 @@ def test_open_connection_keeps_operator_when_pi_vision_is_off(monkeypatch, app_u
 
 def test_open_connection_falls_back_when_video_fails(monkeypatch, app_under_test, mocker):
     app = app_under_test
-    config = mocker.Mock(socket_port=123, camera_index=0)
+    config = mocker.Mock(socket_host="host", socket_port=123, camera_index=0)
     monkeypatch.setitem(talos_app.config.ROBOT_CONFIGS, "host", config)
 
     # VideoConnection raising should be handled gracefully
@@ -216,6 +216,63 @@ def test_stop_move_continuous_and_stop_all(monkeypatch, app_under_test, mocker):
     # stop all should call stop even when none are active
     app.stop_all_movement()
     assert publisher.polar_pan_continuous_stop.call_count >= 1
+
+
+def test_selection_stop_preserves_idle_tracking_but_stops_held_jog(app_under_test, mocker):
+    app = app_under_test
+    app.discrete_move_task = {}
+    app.current_continuous_directions = set()
+    publisher = mocker.Mock()
+    app.connections["h"] = mocker.Mock(is_manual=True, publisher=publisher)
+    app.connections.set_active("h")
+    app.control_mode = talos_app.ControlMode.CONTINUOUS
+    app.stop_all_movement(held_only=True)
+    publisher.polar_pan_continuous_stop.assert_not_called()
+    app.start_move(talos_app.Direction.LEFT)
+    app.stop_all_movement(held_only=True)
+    publisher.polar_pan_continuous_stop.assert_called_once()
+
+
+def test_continuous_direction_release_updates_the_remaining_vector(
+    app_under_test, mocker
+):
+    app = app_under_test
+    publisher = mocker.Mock()
+    conn = mocker.Mock(is_manual=True, publisher=publisher)
+    app.connections["h"] = conn
+    app.connections.set_active("h")
+    app.continuous_move(talos_app.Direction.UP)
+    publisher.polar_pan_continuous_direction_start.assert_called_once_with(
+        talos_app.Direction.UP
+    )
+    app.continuous_move(talos_app.Direction.RIGHT)
+    publisher.polar_pan_continuous_direction_start.assert_called_with(
+        talos_app.Direction.UP + talos_app.Direction.RIGHT
+    )
+
+    app.stop_continuous_move(talos_app.Direction.UP)
+    publisher.polar_pan_continuous_direction_start.assert_called_with(
+        talos_app.Direction.RIGHT
+    )
+    publisher.polar_pan_continuous_stop.assert_not_called()
+
+    app.stop_continuous_move(talos_app.Direction.RIGHT)
+    publisher.polar_pan_continuous_stop.assert_called_once()
+
+
+def test_browser_polar_repeats_renew_without_a_backend_timer(app_under_test, mocker):
+    app = app_under_test
+    app.current_continuous_directions = set()
+    publisher = mocker.Mock()
+    app.connections["h"] = mocker.Mock(is_manual=True, publisher=publisher, host="h")
+    app.connections.set_active("h")
+    app.continuous_move(talos_app.Direction.LEFT)
+    app.continuous_move(talos_app.Direction.LEFT)
+    assert publisher.polar_pan_continuous_direction_start.call_count == 2
+    app.scheduler.set_interval.assert_not_called()
+    app.stop_continuous_move(talos_app.Direction.LEFT)
+    publisher.polar_pan_continuous_stop.assert_called_once()
+    assert not app.current_continuous_directions
 
 
 def test_joint_jog_refreshes_until_stopped(app_under_test, mocker):
@@ -381,3 +438,18 @@ def test_active_hostname_and_connection_methods(app_under_test, mocker):
 
 def test_change_model(monkeypatch, app_under_test, mocker):
    pass
+
+
+def test_named_robot_uses_the_configured_transport_host(monkeypatch, app_under_test, mocker):
+    from src.config.schema.robot import ConnectionConfig
+    robot = ConnectionConfig(robot_id="bluey", socket_host="shared.local", socket_port=61617, camera_index=0)
+    monkeypatch.setitem(talos_app.config.ROBOT_CONFIGS, "bluey", robot)
+    monkeypatch.setattr(talos_app, "VideoConnection", lambda **kwargs: None)
+    publisher = mocker.Mock()
+    monkeypatch.setattr(talos_app, "Publisher", publisher)
+    connection = mocker.Mock()
+    monkeypatch.setattr(talos_app, "Connection", connection)
+    app_under_test.open_connection("bluey")
+    factory = connection.call_args.kwargs["publisher_factory"]
+    factory("bluey", 61617)
+    publisher.assert_called_once_with("shared.local", 61617)

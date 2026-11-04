@@ -316,3 +316,15 @@ def test_erv_joint_jog_rejects_invalid_axis_or_direction(
 
     with pytest.raises(AssertionError):
         publisher.erv_joint_jog_start(axis, direction)
+
+
+def test_controller_profile_report_is_validated_and_expires(mockOperatorConnection, monkeypatch):
+    import time
+    publisher = Publisher("localhost", 12345, True)
+    publisher.operator_connection.is_connected.return_value = True
+    publisher._on_operator_message("PROFILE esp-one-axis")
+    assert publisher.get_controller_profile() == "esp-one-axis"
+    publisher._on_operator_message("PROFILE made-up")
+    assert publisher.get_controller_profile() == "esp-one-axis"
+    monkeypatch.setattr(time, "monotonic", lambda: publisher._controller_profile_received + 4)
+    assert publisher.get_controller_profile() is None

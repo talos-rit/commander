@@ -54,6 +54,7 @@ export default function App() {
 
   const selectedHost = status?.view.selected_host ?? undefined;
   const selected = selectedHost ? status?.connections[selectedHost] : undefined;
+  const controllerFault = selected?.pi_vision?.robot_fault ?? null;
 
   const onOneScreenMode = (one_screen_mode: OneScreenMode) => applyStatus(() => api.setView({ one_screen_mode }));
   const onUIMode = (ui_mode: UIMode) => applyStatus(() => api.setView({ ui_mode }));
@@ -76,11 +77,17 @@ export default function App() {
     (ratio: number) => run(() => api.setPiVisionTolerance(ratio, selectedHost)),
     [run, selectedHost],
   );
-  const onMoveStart = useCallback((direction: Direction) => void run(() => api.moveStart(direction)), [run]);
+  const onMoveStart = useCallback((direction: Direction) => {
+      if (selected?.controller && (selected.controller.state !== "verified" || (selected.controller.configured === "esp-one-axis" && (direction === "up" || direction === "down")))) return;
+      void run(() => api.moveStart(direction));
+    }, [run, selected?.controller?.state, selected?.controller?.configured]);
   const onMoveStop = useCallback((direction: Direction) => void run(() => api.moveStop(direction)), [run]);
   const onJointStart = useCallback(
-    (axis: "shoulder" | "elbow", direction: -1 | 1) => void run(() => api.jointStart(axis, direction)),
-    [run],
+    (axis: "shoulder" | "elbow", direction: -1 | 1) => {
+      if (selected?.controller && (selected.controller.state !== "verified" || selected.controller.configured === "esp-one-axis")) return;
+      void run(() => api.jointStart(axis, direction));
+    },
+    [run, selected],
   );
   const onJointStop = useCallback(() => void run(() => api.jointStop()), [run]);
   const onCartesianStart = useCallback(
@@ -106,10 +113,15 @@ export default function App() {
   );
   const keyHeld = useRef(new Set<Direction>());
   const padHeld = useRef(new Set<Direction>());
+  const armHeld = useRef(new Set<Direction>());
   const jogged = useRef(new Set<Direction>());
   // Keys and the controller share one jog. Releasing one does not stop a direction the other still holds.
   const syncJog = useCallback(() => {
-    const next = new Set<Direction>([...keyHeld.current, ...padHeld.current]);
+    if (controllerFault) {
+      jogged.current.clear();
+      return;
+    }
+    const next = new Set<Direction>([...keyHeld.current, ...padHeld.current, ...armHeld.current]);
     for (const direction of DIRECTION_ORDER) {
       if (jogged.current.has(direction) && !next.has(direction)) onMoveStop(direction);
     }
@@ -117,9 +129,28 @@ export default function App() {
       if (!jogged.current.has(direction) && next.has(direction)) onMoveStart(direction);
     }
     jogged.current = next;
-  }, [onMoveStart, onMoveStop]);
+  }, [onMoveStart, onMoveStop, controllerFault]);
+  // Refresh only while the browser still owns a held input. If it closes or
+  // freezes, repeats cease and Operator's unchanged 500 ms watchdog stops it.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (jogEnabled && !controllerFault && !document.hidden) jogged.current.forEach(onMoveStart);
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [jogEnabled, onMoveStart, controllerFault]);
+  useEffect(() => {
+    if (controllerFault) {
+      keyHeld.current.clear();
+      jogged.current.clear();
+    }
+  }, [controllerFault]);
+  useEffect(() => {
+    keyHeld.current.clear();
+    padHeld.current.clear();
+    armHeld.current.clear();
+    jogged.current.clear();
+  }, [selectedHost]);
   const jointSent = useRef<ArmCommand["joint"]>(null);
-  const extensionSent = useRef<ArmCommand["y"]>(0);
   const syncArm = useCallback(
     (arm: ArmCommand) => {
       const previous = jointSent.current;
@@ -129,13 +160,18 @@ export default function App() {
         else onJointStop();
         jointSent.current = next;
       }
-      if (extensionSent.current !== arm.y) {
-        if (arm.y === 0) onCartesianStop();
-        else onCartesianStart(0, arm.y, 0);
-        extensionSent.current = arm.y;
+      // The ER-V has no implemented Cartesian command.  Route the triggers to
+      // its supported wrist-pitch polar axis, exactly like the digital twin's
+      // Up/Down hold controls, and merge them with keyboard/stick holds so one
+      // input cannot stop another that is still active.
+      const pitch = arm.y < 0 ? "down" : arm.y > 0 ? "up" : null;
+      const previousPitch = armHeld.current.values().next().value as Direction | undefined;
+      if (previousPitch !== pitch) {
+        armHeld.current = pitch ? new Set<Direction>([pitch]) : new Set<Direction>();
+        syncJog();
       }
     },
-    [onCartesianStart, onCartesianStop, onJointStart, onJointStop],
+    [onJointStart, onJointStop, syncJog],
   );
   const slotRef = useRef<Slot>(1);
   const pendingSlot = useRef<Slot | null>(null);
@@ -230,7 +266,7 @@ export default function App() {
       if (!s || blocked || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
       const direction = ARROWS[event.key];
       if (direction) {
-        if (s.view.ui_mode !== "debug" || !host?.open || host.auto_tracking) return;
+        if (s.view.ui_mode !== "debug" || !host?.open || host.auto_tracking || host.pi_vision?.robot_fault) return;
         event.preventDefault();
         if (!event.repeat && !keyHeld.current.has(direction)) {
           keyHeld.current.add(direction);
@@ -259,10 +295,13 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", releaseAll);
+    const onVisibility = () => { if (document.hidden) releaseAll(); };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", releaseAll);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [onHome, onAutoTrack, onVirtualCamera, onSelectSlot, syncJog]);
 

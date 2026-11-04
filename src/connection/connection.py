@@ -32,7 +32,7 @@ RTSP_OPEN_OPTIONS = {
     "reorder_queue_size": "0",
     "use_wallclock_as_timestamps": "1",
 }
-RTSP_FALLBACK_OPTIONS = {"rtsp_transport": "tcp", "use_wallclock_as_timestamps": "1"}
+RTSP_FALLBACK_OPTIONS = {"rtsp_transport": "tcp"}
 RTSP_OPEN_TIMEOUT = (2.0, 1.0)
 RECENT_PACKETS = 16
 """Packets kept so detections, which lag capture, can be matched to their frame."""
@@ -92,10 +92,11 @@ class PyAVCapture:
                 frame.pts * self.video_stream.time_base
                 if self.video_stream is not None
                 and self.video_stream.time_base is not None
+                and frame.pts is not None
                 else None
             )
             absolute_time = None
-            if raw_time is not None:
+            if raw_time is not None and self.container.start_time is not None:
                 absolute_time = (
                     time.time() - (self.container.start_time / av.time_base) + raw_time
                 )
@@ -150,6 +151,7 @@ class VideoConnection:
     _is_prerecorded: bool = field(init=False, default=False)
     _stop_event: threading.Event = field(init=False, default_factory=threading.Event)
     _thread: threading.Thread | None = field(init=False, default=None)
+    _rtsp_fallback: bool = field(init=False, default=False)
 
     def __post_init__(self):
         source = self._resolve_source()
@@ -184,9 +186,12 @@ class VideoConnection:
 
     def _open_capture(self, source: str | int) -> cv2.VideoCapture | PyAVCapture:
         if isinstance(source, str) and source.startswith("rtsp://"):
+            if self._rtsp_fallback:
+                return PyAVCapture(source, **RTSP_FALLBACK_OPTIONS)
             try:
                 return PyAVCapture(source, **RTSP_OPEN_OPTIONS)
             except Exception as exc:
+                self._rtsp_fallback = True
                 logger.warning(
                     "Failed to open RTSP stream with low-latency options ({}). Retrying with TCP only.",
                     exc,
@@ -205,6 +210,12 @@ class VideoConnection:
                 return None
             ret, frame, *rest = cap.read()
         if not ret or frame is None:
+            if (isinstance(self.src, str)
+                    and self.src.startswith("rtsp://") and not self._rtsp_fallback):
+                # Some publishers open successfully but fail to keep yielding
+                # frames with nobuffer enabled. Reconnect with the TCP fallback.
+                self._rtsp_fallback = True
+                logger.warning("RTSP frame read failed; retrying with TCP-only options")
             return None
         timestamp = self._capture_timestamp(rest, cap)
         with self._read_lock:

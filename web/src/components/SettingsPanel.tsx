@@ -13,6 +13,8 @@ interface Props {
 }
 
 type RobotDraft = {
+  robot_id: string;
+  controller_profile: "native" | "esp-one-axis";
   socket_host: string;
   socket_port: string;
   camera_index: string;
@@ -28,6 +30,8 @@ type RobotDraft = {
 const PI_VISION_PORT = 5050;
 
 const EMPTY_DRAFT: RobotDraft = {
+  robot_id: "",
+  controller_profile: "native",
   socket_host: "",
   socket_port: "61616",
   camera_index: "",
@@ -59,6 +63,8 @@ function followsHost(value: string, host: string, suggest: (host: string) => str
 
 function toDraft(robot: RobotConfig): RobotDraft {
   return {
+    robot_id: robot.robot_id ?? "",
+    controller_profile: robot.controller_profile ?? "native",
     socket_host: robot.socket_host,
     socket_port: String(robot.socket_port),
     camera_index: String(robot.camera_index),
@@ -85,6 +91,8 @@ const asInt = (value: string) => (/^\d+$/.test(value.trim()) ? Number(value.trim
 
 function fromDraft(draft: RobotDraft): RobotInput {
   return {
+    ...(draft.robot_id.trim() ? { robot_id: draft.robot_id.trim() } : {}),
+    controller_profile: draft.controller_profile,
     socket_host: draft.socket_host.trim(),
     socket_port: asInt(draft.socket_port),
     camera_index: asInt(draft.camera_index),
@@ -124,6 +132,7 @@ function RobotForm({
 }) {
   const cameraHintId = useId();
   const piVisionHintId = useId();
+  const identityHintId = useId();
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof RobotDraft>(key: K, value: RobotDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
@@ -187,7 +196,7 @@ function RobotForm({
         <span>Operator host</span>
         <input
           required
-          disabled={editing || busy}
+          disabled={(editing && !draft.robot_id) || busy}
           placeholder="bluey.local"
           spellCheck={false}
           value={draft.socket_host}
@@ -223,6 +232,40 @@ function RobotForm({
       </div>
       <div className="robotform__secondary">
         <p className="robotform__kicker">Rarely needs changing</p>
+        <div className="robotform__pair">
+          <label className="field">
+            <span>Robot name</span>
+            <input
+              placeholder="bluey or bingo"
+              spellCheck={false}
+              disabled={editing || busy}
+              aria-describedby={identityHintId}
+              value={draft.robot_id}
+              onChange={(e) => set("robot_id", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Robot controller</span>
+            <select
+              disabled={busy}
+              aria-describedby={identityHintId}
+              value={draft.controller_profile}
+              onChange={(e) => set("controller_profile", e.target.value as RobotDraft["controller_profile"])}
+            >
+              <option value="native">Bingo — native</option>
+              <option value="esp-one-axis">Bluey — ESP one-axis demo</option>
+            </select>
+          </label>
+        </div>
+        <p id={identityHintId} className="robotform__hint">
+          Name is optional; give each robot its own when both share a Pi. Saving doesn&apos;t restart Operator. On the
+          Pi, run{" "}
+          <code>
+            {draft.controller_profile === "native" ? "tools/start-native.sh --confirm-home" : "tools/start-esp-one-axis.sh"}
+          </code>
+          {draft.controller_profile === "native" ? " (moves the arm through HOME)" : ""}. Controls unlock once Operator
+          reports this controller.
+        </p>
         <label className={`field${derived ? " field--derived" : ""}`}>
           <span>Stream</span>
           <input
@@ -272,7 +315,7 @@ function RobotForm({
             <span>Manual only (no auto-tracking)</span>
           </label>
         </div>
-        <fieldset className="robotform__axes" disabled={busy}>
+        <fieldset className="robotform__axes" disabled={busy || draft.controller_profile === "esp-one-axis"}>
           <legend>Vertical tracking</legend>
           <label className="check">
             <input
@@ -408,7 +451,7 @@ export function SettingsPanel({ open, modelOptions, onClose, onChanged }: Props)
   const updateRobot = async (host: string, robotDraft: RobotDraft) => {
     try {
       const { socket_host: _ignored, ...rest } = fromDraft(robotDraft);
-      await api.updateRobot(host, rest);
+      await api.updateRobot(host, robotDraft.robot_id ? { ...rest, socket_host: fromDraft(robotDraft).socket_host } : rest);
       setEditing(null);
       await load();
       onChanged();

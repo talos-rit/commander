@@ -98,7 +98,7 @@ export const api = {
 
   robots: () => request<Record<string, RobotConfig>>("GET", "/robots"),
   addRobot: (robot: RobotInput) => request<RobotConfig>("POST", "/robots", robot),
-  updateRobot: (host: string, robot: Partial<Omit<RobotInput, "socket_host">>) =>
+  updateRobot: (host: string, robot: Partial<RobotInput>) =>
     request<RobotConfig>("PUT", `/robots/${encodeURIComponent(host)}`, robot),
   deleteRobot: (host: string) => request<void>("DELETE", `/robots/${encodeURIComponent(host)}`),
 };

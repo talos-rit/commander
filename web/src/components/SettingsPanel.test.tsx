@@ -76,6 +76,17 @@ describe("SettingsPanel", () => {
     expect(screen.queryByRole("form", { name: "Add robot" })).not.toBeInTheDocument();
   });
 
+  it("saves the robot controller independently of the Pi hostname", async () => {
+    const { user, callsTo } = setup();
+    await user.click(await screen.findByRole("button", { name: /edit bluey.local/i }));
+    const form = screen.getByRole("form", { name: "Edit bluey.local" });
+    await user.selectOptions(within(form).getByRole("combobox", { name: "Robot controller" }), "esp-one-axis");
+    expect(within(form).getByRole("checkbox", { name: "Polar up/down" })).toBeDisabled();
+    await user.click(within(form).getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(callsTo("PUT", "/robots/bluey.local")).toHaveLength(1));
+    expect(callsTo("PUT", "/robots/bluey.local")[0].body).toMatchObject({ controller_profile: "esp-one-axis" });
+  });
+
   it("adds a robot with a numeric device index", async () => {
     const { user, callsTo, onChanged } = setup();
     await user.click(await screen.findByRole("button", { name: /add robot/i }));
@@ -88,6 +99,7 @@ describe("SettingsPanel", () => {
     await user.click(within(form).getByRole("button", { name: /add robot/i }));
     await waitFor(() => expect(callsTo("POST", "/robots")).toHaveLength(1));
     expect(callsTo("POST", "/robots")[0].body).toEqual({
+      controller_profile: "native",
       socket_host: "raspberrypi.local",
       socket_port: 61616,
       camera_index: 0,

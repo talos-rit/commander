@@ -94,7 +94,7 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
   const [pendingCamera, setPendingCamera] = useState(false);
   const [clearingError, setClearingError] = useState(false);
 
-  const ready = Boolean(host?.open);
+  const ready = Boolean(host?.open) && (!host?.controller || host.controller.state === "verified");
   const tracking = host?.auto_tracking ?? false;
   const trackDisabled = !ready || host?.manual_only || pendingTrack;
   const trackTitle = host?.manual_only
@@ -158,6 +158,9 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
               off={<><Link2Off size={14} /> Robot offline</>}
               label="Connection to the robot's Operator"
             />}
+            {host?.controller && <span role="status" className={`chip ${host.controller.state === "verified" ? "chip--ok" : "chip--warn"}`}>
+              {host.controller.configured === "native" ? "Bingo native" : "Bluey ESP"} ? {host.controller.state === "verified" ? "verified" : host.controller.state === "mismatch" ? `mismatch: Operator is ${host.controller.reported}` : "waiting for Operator profile"}
+            </span>}
             <StatusChip
               ok={host?.has_video ?? false}
               on={<><Video size={14} /> Video</>}
@@ -194,7 +197,7 @@ export function ActionBar({ status, onHome, onClearError, onAutoTrack, onPiVisio
         <CenteringTolerance key={selected} ratio={host.pi_vision.acceptable_ratio ?? .25} onChange={onPiTolerance} />
       )}
       <div className="actionbar__actions">
-        {host?.pi_vision && onClearError && (
+        {host?.pi_vision && onClearError && host.controller?.configured !== "esp-one-axis" && (
           <button type="button" className="btn" disabled={!ready || clearingError}
             onClick={async () => {
               setClearingError(true);

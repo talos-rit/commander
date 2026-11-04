@@ -6,6 +6,7 @@ import shoulderMinus from "../assets/shoulder_-.svg";
 import shoulderPlus from "../assets/shoulder_+.svg";
 import type { Direction, JogMode, Status, Telemetry } from "../types";
 import { CommandReceipt } from "./ActionBar";
+import { ArmTwin } from "./ArmTwin";
 import { ModelSlider } from "./ModelSlider";
 import { RecognitionPanel } from "./RecognitionPanel";
 import { Rocker, type RockerOption } from "./Rocker";
@@ -117,6 +118,12 @@ function HoldButton({
   const down = useRef(false);
   const stopRef = useRef(onStop);
   stopRef.current = onStop;
+  useEffect(() => {
+    if (disabled && down.current) {
+      down.current = false;
+      stopRef.current();
+    }
+  }, [disabled]);
   useEffect(
     () => () => {
       if (!down.current) return;
@@ -243,7 +250,30 @@ export function DebugRail({
   const host = selected ? status.connections[selected] : undefined;
   const held = useRef(new Set<Direction>());
   const connected = Boolean(host?.open);
-  const jogDisabled = !connected || Boolean(host?.auto_tracking);
+  const esp = host?.controller?.configured === "esp-one-axis";
+  const verified = !host?.controller || host.controller.state === "verified";
+  const fault = host?.pi_vision?.robot_fault;
+  const jogDisabled = !connected || !verified || Boolean(host?.auto_tracking) || Boolean(fault);
+  const startRef = useRef(onMoveStart);
+  startRef.current = onMoveStart;
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!jogDisabled) held.current.forEach(direction => startRef.current(direction));
+    }, 150);
+    const releaseAll = () => {
+      held.current.forEach(onMoveStop);
+      held.current.clear();
+    };
+    window.addEventListener("blur", releaseAll);
+    const onVisibility = () => { if (document.hidden) releaseAll(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("blur", releaseAll);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [jogDisabled, onMoveStop]);
+  useEffect(() => { held.current.clear(); }, [selected, jogDisabled]);
   const reportedSpeed = status.speed_percent;
   const [speed, setSpeed] = useState(reportedSpeed ?? 20);
   const speedRef = useRef(speed);
@@ -254,7 +284,7 @@ export function DebugRail({
   const commitSpeed = () => onSpeed(speedRef.current);
 
   const press = (direction: Direction) => {
-    if (jogDisabled || held.current.has(direction)) return;
+    if (jogDisabled || (esp && (direction === "up" || direction === "down")) || held.current.has(direction)) return;
     held.current.add(direction);
     onMoveStart(direction);
   };
@@ -280,6 +310,7 @@ export function DebugRail({
           <Gauge size={16} /> Manual jog
         </h3>
         {host?.auto_tracking && <p className="muted">Turn off Auto-Track to jog manually.</p>}
+        {fault && <p role="alert" className="hint">Controller stopped: {fault}. Release controls, inspect the arm, then clear the fault and press jog again.</p>}
         <div className="jogpad" aria-label="Jog pad">
           {CORNER_JOGS.map((joint) => (
             <HoldButton
@@ -289,7 +320,7 @@ export function DebugRail({
               icon={<ArmMark axis={joint.axis} direction={joint.direction} />}
               className="jogpad__btn"
               style={{ gridArea: joint.area }}
-              disabled={jogDisabled}
+              disabled={jogDisabled || esp}
               onStart={() => onJointStart(joint.axis, joint.direction)}
               onStop={onJointStop}
             />
@@ -302,7 +333,7 @@ export function DebugRail({
               style={{ gridArea: area }}
               aria-label={`Jog ${direction}`}
               aria-pressed={heldDirections.includes(direction) || undefined}
-              disabled={jogDisabled}
+              disabled={jogDisabled || (esp && (direction === "up" || direction === "down"))}
               onPointerDown={(event) => {
                 event.currentTarget.setPointerCapture?.(event.pointerId);
                 press(direction);
@@ -321,21 +352,21 @@ export function DebugRail({
             className="jogpad__btn jogpad__home"
             style={{ gridArea: "home" }}
             aria-label="Home"
-            disabled={!host?.open}
+            disabled={!host?.open || !verified}
             onClick={onHome}
           >
             <House size={20} />
           </button>
         </div>
-        <Rocker<JogMode>
+        {!esp && <Rocker<JogMode>
           label="Jog style"
           value={status.jog_mode}
           onChange={onJogMode}
           size="sm"
           options={JOG_OPTIONS}
-        />
+        />}
 
-        <div className="axisblock">
+        {!esp && <div className="axisblock">
           <h4>Cartesian</h4>
           <div className="axisgrid">
             {CARTESIAN.map(({ axis, sign, label }) => (
@@ -351,16 +382,17 @@ export function DebugRail({
           <p className="hint">Y − extends the arm. Y + retracts it.</p>
         </div>
 
+        }
         <div className="axisgrid rail__ops">
-          <button type="button" className="axisbtn" disabled={!connected} onClick={onEnableControl}>
-            Enable control
+          <button type="button" className="axisbtn" disabled={!connected || !verified || esp} onClick={onEnableControl}>
+            {fault ? "Clear fault / enable control" : "Enable control"}
           </button>
           <button type="button" className="axisbtn" disabled={!connected} onClick={onStop}>
             Stop
           </button>
         </div>
 
-        <div className="slider rail__speed">
+        {!esp && <div className="slider rail__speed">
           <div className="slider__head">
             <span>Speed</span>
             <span className="slider__value">
@@ -392,9 +424,10 @@ export function DebugRail({
           <p className="hint">Operator speed for manual moves. Home keeps its own speed.</p>
         </div>
 
+        }
         <p className="hint">
-          {controllerConnected
-            ? "Left stick aims. Right stick moves the shoulder and elbow. Triggers extend and retract. LB and RB switch feeds. Hold B for the button map."
+          {esp ? "Bluey ESP: left/right base jog only. Speed is fixed by firmware." : controllerConnected
+            ? "Left stick aims. Right stick moves the shoulder and elbow. LT/RT pitch the wrist. LB and RB switch cameras. Hold B for the button map."
             : "Hold a button or an arrow key."}
         </p>
       </section>
@@ -460,9 +493,9 @@ export function DebugRail({
         onForget={onForgetSubjects}
       />
 
-      <section className="rail__section rail__section--placeholder">
+      <section className="rail__section">
         <h3>Digital twin</h3>
-        <p className="muted">3D twin view will live here.</p>
+        {esp ? <p className="hint">ESP pose telemetry is unavailable in the demo firmware.</p> : <ArmTwin key={selected} host={verified ? host : undefined} />}
       </section>
     </aside>
     <CommandReceipt status={status} />

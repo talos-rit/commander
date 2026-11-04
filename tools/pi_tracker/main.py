@@ -5,6 +5,7 @@ and starts the diagnostic Web UI.
 """
 
 import argparse
+import socket
 import os
 import threading
 import time
@@ -25,6 +26,7 @@ try:
     from .perception import PerceptionStore, PerceptionOnlyOperator
     from .capture import FFmpegCapture
     from .control_api import ControlLease
+    from .inference_rate import InferenceRate
     from .motion_compensation import compensate
 except ImportError:
     from config import CONFIG
@@ -36,6 +38,7 @@ except ImportError:
     from perception import PerceptionStore, PerceptionOnlyOperator
     from capture import FFmpegCapture
     from control_api import ControlLease
+    from inference_rate import InferenceRate
     from motion_compensation import compensate
 
 
@@ -49,9 +52,10 @@ class FrameSample:
 class CameraStream:
     """Threaded camera capture to ensure zero frame-buffering lag with RTSP or V4L2."""
 
-    def __init__(self, src: str, backend: str = "opencv"):
+    def __init__(self, src: str, backend: str = "opencv", processing_width: int = 0):
         self.src = src
         self.backend = backend
+        self.processing_width = processing_width
         self.active_backend = backend
         self.cap: Optional[cv2.VideoCapture] = None
         self.latest_frame: Optional[np.ndarray] = None
@@ -125,10 +129,14 @@ class CameraStream:
 
                 ret, frame = self.cap.retrieve()
                 if ret and frame is not None:
+                    captured = time.monotonic()
+                    if self.processing_width and frame.shape[1] > self.processing_width:
+                        height = max(1, round(frame.shape[0] * self.processing_width / frame.shape[1]))
+                        frame = cv2.resize(frame, (self.processing_width, height), interpolation=cv2.INTER_AREA)
                     with self._lock:
                         self.latest_frame = frame
                         self.latest_sequence += 1
-                        self.latest_captured_monotonic = time.monotonic()
+                        self.latest_captured_monotonic = captured
 
             if self.cap:
                 self.cap.release()
@@ -164,6 +172,10 @@ def main():
     parser.add_argument("--operator-host", default=CONFIG.operator_host, help="Operator TCP IP")
     parser.add_argument("--operator-port", type=int, default=CONFIG.operator_port, help="Operator TCP Port")
     parser.add_argument("--model", default=CONFIG.model_weights, help="Path to YOLO .pt/.onnx model")
+    parser.add_argument("--inference-fps", type=float, default=CONFIG.inference_fps,
+                        help="Maximum inference FPS; 0 is unlimited. Camera video is unaffected.")
+    parser.add_argument("--processing-width", type=int, default=0,
+                        help="Downscale PiVision working frames, preserving aspect ratio; RTSP publication is unchanged.")
     parser.add_argument("--port", type=int, default=CONFIG.web_port, help="Web UI port")
     parser.add_argument("--host", default=CONFIG.web_host, help="Web UI host")
     parser.add_argument("--auto-start", action="store_true", help="Start tracking automatically on launch")
@@ -171,6 +183,12 @@ def main():
     parser.add_argument("--edge-control", action="store_true", help="Pi-local tracking with an expiring Commander control lease")
     parser.add_argument("--capture-backend", choices=("opencv", "ffmpeg-hardware"), default=os.getenv("CAMERA_BACKEND", "opencv"))
     args = parser.parse_args()
+    if args.processing_width != 0 and args.processing_width < 64:
+        parser.error("processing width must be 0 or at least 64")
+    try:
+        inference_rate = InferenceRate(args.inference_fps)
+    except ValueError as error:
+        parser.error(str(error))
     if args.edge_control and args.standalone_control:
         parser.error("choose edge control or standalone control")
     cv2.setNumThreads(1)  # Reserve cores for ONNX; OpenCV preprocessing is small.
@@ -186,7 +204,7 @@ def main():
     pose_tuning = PoseTuning()
     pose_lock = threading.Lock()
 
-    camera = CameraStream(args.camera, backend=args.capture_backend)
+    camera = CameraStream(args.camera, backend=args.capture_backend, processing_width=args.processing_width)
     camera.start()
     operator = (OperatorClient(host=args.operator_host, port=args.operator_port, auto_connect=True)
                 if args.standalone_control or args.edge_control else PerceptionOnlyOperator())
@@ -251,8 +269,14 @@ def main():
             if not perception.enabled:
                 time.sleep(0.02)
                 continue
+            delay = inference_rate.delay()
+            if delay > 0:
+                time.sleep(min(delay, 0.02))
+                continue
+            # Fetch after pacing, so inference always sees the newest frame.
             sample = camera.get_latest_sample(after_sequence=last_sequence)
             if sample is not None:
+                inference_rate.started()
                 last_sequence = sample.sequence
                 h, w = sample.frame.shape[:2]
                 with pose_lock:
@@ -337,7 +361,15 @@ def main():
 
     logger.info(f"[WebUI] Starting Web UI on http://{args.host}:{args.port}")
     try:
-        uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+        if args.host == "::":
+            # asyncio's host binding otherwise makes IPv6-only listeners.
+            # Supply an explicit dual-stack socket for local IPv4 and mDNS IPv6.
+            with socket.create_server(("::", args.port), family=socket.AF_INET6,
+                                      dualstack_ipv6=True) as listener:
+                server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port, log_level="warning"))
+                server.run(sockets=[listener])
+        else:
+            uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     finally:
         controller.set_enabled(False)
         camera.stop()

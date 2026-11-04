@@ -13,7 +13,7 @@ from .connection.connection import (
     VideoConnection,
     is_live_source,
 )
-from .connection.publisher import Direction
+from .connection.publisher import Direction, Publisher
 from .directors import BaseDirector, ContinuousDirector
 from .observations.replay import ObservationRecorder
 from .scheduler import IterativeTask, Scheduler
@@ -126,8 +126,12 @@ class App:
         if pi_url:
             from .connection.edge_publisher import EdgePublisher
             conn = Connection(hostname, conf.socket_port, video_connection,
-            publisher_factory=lambda _host, _port:EdgePublisher(pi_url),
-            identity=self.identity)
+                              publisher_factory=lambda _host, _port: EdgePublisher(pi_url),
+                              identity=self.identity)
+        elif conf.socket_host != hostname:
+            conn = Connection(hostname, conf.socket_port, video_connection,
+                              publisher_factory=lambda _host, port: Publisher(conf.socket_host, port),
+                              identity=self.identity)
         else:
             conn = Connection(hostname, conf.socket_port, video_connection, identity=self.identity)
         self.connections[hostname] = conn
@@ -165,9 +169,14 @@ class App:
         This will merge with any existing continuous movements.
         """
         if direction in self.current_continuous_directions:
+            # Browser-held repeats renew Operator's deadman timer. Do not
+            # generate these in the backend: closing the browser must stop them.
+            if (publisher := self._manual_publisher()) is not None:
+                publisher.polar_pan_continuous_direction_start(sum(self.current_continuous_directions))
             return
         if (connection := self.get_active_connection()) is None:
             return logger.error("No connection found")
+        self.stop_joint_jog()
         self.current_continuous_directions.add(direction)
         publisher = connection.publisher
         publisher.polar_pan_continuous_direction_start(
@@ -177,16 +186,21 @@ class App:
     def stop_move(self, direction: Direction) -> None:
         """Stops continuous movement if in continuous mode and no keys are pressed."""
         if self.control_mode == ControlMode.CONTINUOUS:
-            logger.debug(f"{self.control_mode} {self.current_continuous_directions}")
-            if direction in self.current_continuous_directions:
-                self.current_continuous_directions.remove(direction)
-            if len(self.current_continuous_directions) != 0:
-                return
-            if (connection := self.get_active_connection()) is None:
-                return logger.error("No connection found")
-            return connection.publisher.polar_pan_continuous_stop()
+            return self.stop_continuous_move(direction)
         if self.discrete_move_task.get(direction) is not None:
             return self.discrete_move_task.pop(direction).cancel()
+
+    def stop_continuous_move(self, direction: Direction) -> None:
+        """Release one held polar direction and update the remaining vector."""
+        logger.debug(f"continuous {self.current_continuous_directions}")
+        self.current_continuous_directions.discard(direction)
+        if (connection := self.get_active_connection()) is None:
+            return logger.error("No connection found")
+        if self.current_continuous_directions:
+            return connection.publisher.polar_pan_continuous_direction_start(
+                sum(self.current_continuous_directions)
+            )
+        return connection.publisher.polar_pan_continuous_stop()
 
     def start_joint_jog(self, axis: int, direction: int) -> None:
         """Hold an ER-V shoulder (axis 2) or elbow (axis 3) jog. One joint at a time."""
@@ -196,6 +210,9 @@ class App:
             return
         if self._joint_jog == (axis, direction):
             return
+        if self.current_continuous_directions:
+            self.current_continuous_directions.clear()
+            publisher.polar_pan_continuous_stop()
         self._cancel_joint_jog_task()
         if self._joint_jog is not None:
             publisher.erv_joint_jog_stop()
@@ -299,13 +316,19 @@ class App:
             return None
         return connection.publisher
 
-    def stop_all_movement(self) -> None:
+    def stop_all_movement(self, *, held_only: bool = False) -> None:
         """Stops all continuous and discrete movements."""
+        if held_only and not (
+            self._joint_jog or self._cartesian or self.current_continuous_directions
+            or self.discrete_move_task
+        ):
+            # An unsolicited stop would revoke a Pi-local tracking lease.
+            return
         self.stop_joint_jog()
         self.stop_cartesian()
         if (connection := self.get_active_connection()) is None:
             return logger.error("No connection found")
-        if self.control_mode == ControlMode.CONTINUOUS:
+        if self.control_mode == ControlMode.CONTINUOUS or self.current_continuous_directions:
             publisher = connection.publisher
             self.current_continuous_directions.clear()
             return publisher.polar_pan_continuous_stop()

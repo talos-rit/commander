@@ -26,7 +26,7 @@ export interface GamepadHandlers {
   actions: boolean;
   /** Directions the pad currently wants. Empty when it is idle, blocked, or gone. */
   onDirections: (directions: readonly Direction[]) => void;
-  /** Shoulder, elbow, and extend/retract. Idle when jog is blocked or the pad is gone. */
+  /** Shoulder, elbow, and wrist pitch. Idle when jog is blocked or the pad is gone. */
   onArm: (arm: ArmCommand) => void;
   onBumper: (side: "left" | "right") => void;
   onAction: (action: PadAction) => void;

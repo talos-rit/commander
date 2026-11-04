@@ -67,6 +67,8 @@ class OperatorClient:
         self.socket: Optional[socket.socket] = None
         self.is_running = False
         self.is_connected = False
+        self.controller_profile = None
+        self._profile_received = 0.0
         self.command_counter = 0
         self._send_lock = threading.RLock()
         self._telemetry_lock = threading.Lock()
@@ -114,6 +116,7 @@ class OperatorClient:
 
     def _disconnect(self):
         self.is_connected = False
+        self.controller_profile = None
         with self._send_lock:
             if self.socket:
                 try:
@@ -197,7 +200,10 @@ class OperatorClient:
         if not parts:
             return
 
-        if parts[0] in ("TELP", "TEL") and len(parts) >= 6:
+        if len(parts) == 2 and parts[0] == "PROFILE" and parts[1] in ("native", "esp-one-axis"):
+            self.controller_profile = parts[1]
+            self._profile_received = time.monotonic()
+        elif parts[0] in ("TELP", "TEL") and len(parts) >= 6:
             try:
                 base, shoulder, elbow, wrist_pitch, wrist_roll = (int(p) for p in parts[1:6])
                 with self._telemetry_lock:
@@ -222,6 +228,11 @@ class OperatorClient:
                 listener(line)
             except Exception as e:
                 logger.error(f"[OperatorClient] Listener error: {e}")
+
+    def get_controller_profile(self):
+        if not self.is_connected or time.monotonic() - self._profile_received > 3:
+            return None
+        return self.controller_profile
 
     def get_telemetry(self) -> RobotTelemetry:
         """Thread-safe snapshot of latest telemetry."""

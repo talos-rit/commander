@@ -17,6 +17,7 @@ class TrackerConfig:
     # Target frame dimensions for inference (320x320 square for YOLO)
     inference_width: int = int(os.getenv("INFERENCE_WIDTH", "320"))
     inference_height: int = int(os.getenv("INFERENCE_HEIGHT", "320"))
+    inference_fps: float = float(os.getenv("INFERENCE_FPS", "0"))
     
     # Model configuration
     model_weights: str = os.getenv("POSE_MODEL", "yolo11n-pose-320.onnx")

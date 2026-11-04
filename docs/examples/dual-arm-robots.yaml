@@ -1,0 +1,22 @@
+# Example entries for config/robot_configs.local.yaml.
+# Back up/merge existing local configuration; do not overwrite it blindly.
+# Alternatively enter these values in Commander Settings.
+bluey:
+  robot_id: bluey
+  socket_host: bingo.local
+  socket_port: 61616
+  controller_profile: esp-one-axis
+  camera_index: rtsp://bingo.local:8554/camera
+  pi_vision_enabled: true
+  pi_vision_url: http://bingo.local:5051
+  track_elbow: false
+  track_shoulder: false
+  track_polar_vertical: false
+bingo:
+  robot_id: bingo
+  socket_host: bingo.local
+  socket_port: 61617
+  controller_profile: native
+  camera_index: rtsp://bingo.local:8554/bingo
+  pi_vision_enabled: true
+  pi_vision_url: http://bingo.local:5052

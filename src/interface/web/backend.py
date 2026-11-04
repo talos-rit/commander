@@ -13,6 +13,7 @@ from src.config.schema.robot import ConnectionConfig, active_pi_vision_url
 from src.connection.publisher import Direction
 from src.observations.types import PersonObservation
 from src.talos_app import ControlMode
+from src.simulation.erv_calibration import BASE_CALIBRATION, map_arm_controller_coordinates
 from src.tracking.pi_vision import PiVisionControl
 
 from .state import ViewStateError, WebOperatorState
@@ -139,9 +140,10 @@ class CommanderWebBackend:
         robot = config.ROBOT_CONFIGS.get(host)
         if robot and active_pi_vision_url(robot) and host in self.app.connections and host not in self._pi_vision:
             self.app.set_manual_control(True, hostname=host)
+            effective = robot.model_copy(update={"track_elbow": False, "track_shoulder": False, "track_polar_vertical": False}) if robot.controller_profile == "esp-one-axis" else robot
             control = PiVisionControl(
                 self.app.connections[host].publisher,
-                robot,
+                effective,
                 on_observations=lambda detections, size, h=host: self._on_pi_observations(h, detections, size),
             )
             self._pi_vision[host] = control
@@ -249,6 +251,7 @@ class CommanderWebBackend:
         robot_config = config.ROBOT_CONFIGS.get(host)
         base = {
             "host": host,
+            "controller": self._controller_status(host),
             "slot": self.state.slot_of(host),
             "configured": robot_config is not None,
             "open": conn is not None,
@@ -318,6 +321,15 @@ class CommanderWebBackend:
         if not callable(getter):
             return None
         snapshot = getter()
+        # Share the measured twin's calibration, including shoulder/elbow coupling.
+        # Raw encoders cannot supply a calibrated arm pose.
+        positions = None
+        counts = snapshot.joint_counts
+        if counts is not None and len(counts) in (4, 5) and snapshot.joint_received_monotonic is not None:
+            shoulder, elbow, pitch, _roll = counts[-4:]
+            positions = map_arm_controller_coordinates(shoulder, elbow, pitch)
+            if len(counts) == 5:
+                positions["base_joint"] = BASE_CALIBRATION.to_urdf(counts[0])
         return {
             "encoder_counts": list(snapshot.encoder_counts)
             if snapshot.encoder_counts is not None
@@ -327,6 +339,7 @@ class CommanderWebBackend:
             if snapshot.joint_counts is not None
             else None,
             "joint_age_s": _seconds_since(snapshot.joint_received_monotonic),
+            "joint_positions": positions,
         }
 
     # --- view ------------------------------------------------------------
@@ -371,7 +384,6 @@ class CommanderWebBackend:
 
     def select(self, host: str | None = None, slot: int | None = None) -> None:
         with self._lock:
-            previous = self.state.selected_host
             try:
                 if slot is not None:
                     self.state.select_slot(slot)
@@ -381,12 +393,35 @@ class CommanderWebBackend:
                     raise BackendError("Provide a host or slot to select")
             except ViewStateError as exc:
                 raise BackendError(str(exc), 409) from exc
-            if previous != self.state.selected_host:
-                self._stop_pi_vision(previous)
+            # Each PiVision instance owns an independent, expiring control lease.
+            # Selection changes the manual-control target, not autonomous tracking.
             self._stop_jog()
             self._sync_active()
 
+    def _controller_status(self, host):
+        robot = config.ROBOT_CONFIGS.get(host)
+        expected = robot.controller_profile if robot else "native"
+        connection = self.app.connections.get(host)
+        getter = getattr(getattr(connection, "publisher", None), "get_controller_profile", None)
+        reported = getter() if callable(getter) else None
+        state = "unverified" if reported is None else "verified" if reported == expected else "mismatch"
+        return {"configured": expected, "reported": reported, "state": state}
+
+    def _require_controller(self, host, *, native=False):
+        controller = self._controller_status(host)
+        if controller["state"] != "verified":
+            raise BackendError("Controller profile is unverified or does not match Settings. Check the running Operator profile before moving.", 409)
+        if native and controller["configured"] != "native":
+            raise BackendError("This control is unavailable with Bluey's ESP one-axis profile", 409)
+
     # --- control ---------------------------------------------------------
+
+    def _require_manual_motion(self, host, *, native=False):
+        self._require_controller(host, native=native)
+        control = self._pi_vision.get(host)
+        fault = control.status().get("robot_fault") if control else None
+        if fault:
+            raise BackendError(f"Controller fault: {fault}. Release controls, inspect the arm, clear the fault, then press jog again.", 409)
 
     def _target(self, host: str | None) -> str:
         target = host or self.state.selected_host
@@ -399,13 +434,17 @@ class CommanderWebBackend:
     def clear_robot_error(self, host: str | None = None) -> str:
         with self._lock:
             target = self._target(host)
+            self._require_controller(target, native=True)
             self._stop_pi_vision(target)
+            if target == self.state.selected_host:
+                self._stop_jog()
             self.app.connections[target].publisher.erv_enable_control()
             return target
 
     def home(self, host: str | None = None) -> str:
         with self._lock:
             target = self._target(host)
+            self._require_controller(target)
             self._stop_pi_vision(target)
             # A tracking director would immediately steer away from home.
             self.app.set_manual_control(True, hostname=target)
@@ -415,13 +454,13 @@ class CommanderWebBackend:
     def set_auto_track(self, enabled: bool, host: str | None = None) -> bool:
         with self._lock:
             target = self._target(host)
+            if enabled:
+                self._require_controller(target)
             robot_config = config.ROBOT_CONFIGS.get(target)
             if enabled and robot_config is not None and robot_config.manual_only:
                 raise BackendError(f"{target!r} is configured as manual only", 409)
             if target in self._pi_vision:
                 if enabled:
-                    if target != self.state.selected_host:
-                        raise BackendError("Select this robot before enabling PiVision tracking", 409)
                     self._stop_jog()
                     self._pi_vision[target].manual_handoff()
                 self.app.set_manual_control(True, hostname=target)
@@ -528,13 +567,19 @@ class CommanderWebBackend:
                 parsed = Direction[direction.upper()]
             except KeyError as exc:
                 raise BackendError(f"Unknown direction {direction!r}") from exc
-            self._target(None)
+            target = self._target(None)
+            if active:
+                self._require_manual_motion(target, native=direction in ("up", "down"))
             self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
+            # Match the digital twin's real ER-V controls: a press is one
+            # continuous polar hold and release is its paired stop/update.
+            # Do not use the legacy repeated-discrete scheduler here; it can
+            # flood the controller queue and race telemetry.
             if active:
-                self.app.start_move(parsed)
+                self.app.continuous_move(parsed)
             else:
-                self.app.stop_move(parsed)
+                self.app.stop_continuous_move(parsed)
 
     def joint_jog(self, axis: str, direction: int, active: bool) -> None:
         """Hold or release an ER-V shoulder or elbow jog. Wrist roll is not exposed."""
@@ -545,7 +590,9 @@ class CommanderWebBackend:
             raise BackendError(f"Joint direction must be -1 or 1, got {direction!r}")
         with self._lock:
             self._require_debug()
-            self._target(None)
+            target = self._target(None)
+            if active:
+                self._require_manual_motion(target, native=True)
             self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
             if active:
@@ -560,7 +607,9 @@ class CommanderWebBackend:
             raise BackendError(f"Cartesian components must be -1, 0, or 1, got {vector!r}")
         with self._lock:
             self._require_debug()
-            self._target(None)
+            target = self._target(None)
+            if active:
+                self._require_manual_motion(target, native=True)
             self._stop_pi_vision(self.state.selected_host)
             self._sync_active()
             if active and vector != (0, 0, 0):
@@ -580,6 +629,10 @@ class CommanderWebBackend:
         """Ask the Operator to re-enable ER-V servo control (ACL CON)."""
         with self._lock:
             self._require_debug()
+            target = self._target(None)
+            self._require_controller(target, native=True)
+            self._stop_pi_vision(target)
+            self._stop_jog()
             publisher = self._operator_publisher()
             publisher.erv_enable_control()
 
@@ -589,6 +642,7 @@ class CommanderWebBackend:
             raise BackendError("Speed must be from 1 to 100", 422)
         with self._lock:
             self._require_debug()
+            self._require_controller(self._target(None), native=True)
             publisher = self._operator_publisher()
             try:
                 publisher.erv_set_speed_percent(percent)
@@ -613,7 +667,7 @@ class CommanderWebBackend:
 
     def _stop_jog(self) -> None:
         if self.app.get_active_connection() is not None:
-            self.app.stop_all_movement()
+            self.app.stop_all_movement(held_only=True)
 
     def set_jog_mode(self, mode: str) -> str:
         with self._lock:
@@ -726,9 +780,10 @@ class CommanderWebBackend:
             )
             if not valid or robot_config is None:
                 raise BackendError("; ".join(errors), 422)
-            update_config(robot_config.socket_host, robot_config)
+            key = robot_config.robot_id or robot_config.socket_host
+            update_config(key, robot_config)
             if self.state.camera_1 is None:
-                self.assign_slots(robot_config.socket_host, None)
+                self.assign_slots(key, None)
             return robot_config.model_dump()
 
     def update_robot(self, host: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -736,7 +791,9 @@ class CommanderWebBackend:
             existing = config.ROBOT_CONFIGS.get(host)
             if existing is None:
                 raise BackendError(f"No robot config named {host!r}", 404)
-            merged = {**existing.model_dump(), **data, "socket_host": host}
+            merged = {**existing.model_dump(), **data, "robot_id": existing.robot_id}
+            if existing.robot_id is None:
+                merged["socket_host"] = host
             try:
                 robot_config = ConnectionConfig(**merged)
             except Exception as exc:

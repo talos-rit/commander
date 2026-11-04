@@ -19,6 +19,8 @@ export interface ViewState {
 }
 
 export interface Telemetry {
+  /** URDF radians from the same calibration as the desktop twin. */
+  joint_positions?: Record<string, number> | null;
   encoder_counts: number[] | null;
   encoder_age_s: number | null;
   joint_counts: number[] | null;
@@ -78,7 +80,14 @@ export interface RecognitionStatus {
   leniency: number;
 }
 
+export type ControllerProfile = "native" | "esp-one-axis";
+export interface ControllerStatus {
+  configured: ControllerProfile;
+  reported: ControllerProfile | null;
+  state: "verified" | "unverified" | "mismatch";
+}
 export interface HostStatus {
+  controller?: ControllerStatus;
   host: string;
   slot: Slot | null;
   configured: boolean;
@@ -138,6 +147,8 @@ export interface AppSettings {
 }
 
 export interface RobotConfig {
+  robot_id?: string | null;
+  controller_profile?: ControllerProfile;
   socket_host: string;
   socket_port: number;
   camera_index: number | string;

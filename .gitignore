@@ -166,6 +166,8 @@ cython_debug/
 
 # Yolo models
 *.pt
+# Model export scratch files; shipped models live in assets/yolo.
+/test/pi_tracker/
 
 # Config
 config/**/*.local.yaml
@@ -173,6 +175,7 @@ config/**/*.backup*
 
 # VSCODE
 .vscode/mcp.json
+artifacts/*
 
 # Web UI
 web/node_modules/

@@ -22,6 +22,9 @@ class FakePublisher:
     def is_connected(self):
         return self.connected
 
+    def get_controller_profile(self):
+        return "native" if self.connected else None
+
     def get_erv_telemetry_snapshot(self):
         return self.telemetry
 
@@ -149,7 +152,13 @@ class FakeApp:
     def stop_move(self, direction):
         self.calls.append(("stop_move", direction.name, self.active))
 
-    def stop_all_movement(self):
+    def continuous_move(self, direction):
+        self.calls.append(("continuous_move", direction.name, self.active))
+
+    def stop_continuous_move(self, direction):
+        self.calls.append(("stop_continuous_move", direction.name, self.active))
+
+    def stop_all_movement(self, *, held_only=False):
         self.calls.append(("stop_all", self.active))
 
     def start_joint_jog(self, axis, direction):

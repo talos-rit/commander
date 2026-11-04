@@ -3,7 +3,7 @@ Pydantic-based configuration schema for Talos application.
 Provides type validation, range checking, and default values for all configuration fields.
 """
 
-from typing import Optional
+from typing import Optional, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -29,6 +29,9 @@ class ConnectionConfig(BaseModel):
         ...,
         description="Camera device index (0, 1, ...) or URL (RTSP/HTTP stream)",
     )
+
+    robot_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+    controller_profile: Literal["native", "esp-one-axis"] = "native"
 
     # Tracking parameters.
     # pi_vision_enabled is separate from the URL so turning PiVision off keeps a custom address.
