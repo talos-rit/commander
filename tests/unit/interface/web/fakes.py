@@ -141,7 +141,7 @@ class FakeApp:
     def stop_continuous_move(self, direction):
         self.calls.append(("stop_continuous_move", direction.name, self.active))
 
-    def stop_all_movement(self):
+    def stop_all_movement(self, *, held_only=False):
         self.calls.append(("stop_all", self.active))
 
     def start_joint_jog(self, axis, direction):

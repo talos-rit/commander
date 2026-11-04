@@ -64,7 +64,7 @@ def test_clear_error_dispatches_con_to_selected_robot_and_releases_tracking(web_
     assert not control.enabled
 
 
-def test_home_and_selection_disable_pi_tracking(web_config):
+def test_home_disables_tracking_and_selection_preserves_it(web_config):
     backend, app, _ = make_backend(camera_1="a", camera_2="b")
     backend.startup()
     control = Control()
@@ -74,9 +74,8 @@ def test_home_and_selection_disable_pi_tracking(web_config):
     assert not control.enabled
     backend.set_auto_track(True)
     backend.select(host="b")
-    assert not control.enabled
-    with pytest.raises(BackendError):
-        backend.set_auto_track(True, "a")
+    assert control.enabled
+    assert backend.set_auto_track(True, "a")
 
 
 def test_pi_connection_shutdown_closes_workers(web_config, monkeypatch):

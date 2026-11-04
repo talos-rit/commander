@@ -215,6 +215,21 @@ def test_stop_move_continuous_and_stop_all(monkeypatch, app_under_test, mocker):
     assert publisher.polar_pan_continuous_stop.call_count >= 1
 
 
+def test_selection_stop_preserves_idle_tracking_but_stops_held_jog(app_under_test, mocker):
+    app = app_under_test
+    app.discrete_move_task = {}
+    app.current_continuous_directions = set()
+    publisher = mocker.Mock()
+    app.connections["h"] = mocker.Mock(is_manual=True, publisher=publisher)
+    app.connections.set_active("h")
+    app.control_mode = talos_app.ControlMode.CONTINUOUS
+    app.stop_all_movement(held_only=True)
+    publisher.polar_pan_continuous_stop.assert_not_called()
+    app.start_move(talos_app.Direction.LEFT)
+    app.stop_all_movement(held_only=True)
+    publisher.polar_pan_continuous_stop.assert_called_once()
+
+
 def test_continuous_direction_release_updates_the_remaining_vector(
     app_under_test, mocker
 ):

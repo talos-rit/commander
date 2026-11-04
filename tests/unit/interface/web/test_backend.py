@@ -162,6 +162,32 @@ def test_select_requires_host_or_slot(web_config):
         backend.select()
 
 
+def test_independent_tracking_survives_selection_and_manual_handoff(web_config):
+    class Control:
+        def __init__(self):
+            self.enabled = False
+
+        def set_enabled(self, enabled):
+            self.enabled = enabled
+            return enabled
+
+        def manual_handoff(self):
+            pass
+
+    backend, _, _ = make_backend(camera_1="a", camera_2="b", ui_mode="debug")
+    backend.startup()
+    controls = {host: Control() for host in ("a", "b")}
+    backend._pi_vision.update(controls)
+    assert backend.set_auto_track(True, host="a")
+    # Explicitly addressed tracking can arm the other robot too.
+    assert backend.set_auto_track(True, host="b")
+    backend.select(host="b")
+    assert all(control.enabled for control in controls.values())
+    backend.move("left", True)
+    assert controls["a"].enabled
+    assert not controls["b"].enabled
+
+
 def test_select_unassigned_slot_is_conflict(web_config):
     backend, _, _ = make_backend(camera_1="a")
     with pytest.raises(BackendError) as err:

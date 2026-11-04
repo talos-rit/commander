@@ -319,7 +319,6 @@ class CommanderWebBackend:
 
     def select(self, host: str | None = None, slot: int | None = None) -> None:
         with self._lock:
-            previous = self.state.selected_host
             try:
                 if slot is not None:
                     self.state.select_slot(slot)
@@ -329,8 +328,8 @@ class CommanderWebBackend:
                     raise BackendError("Provide a host or slot to select")
             except ViewStateError as exc:
                 raise BackendError(str(exc), 409) from exc
-            if previous != self.state.selected_host:
-                self._stop_pi_vision(previous)
+            # Each PiVision instance owns an independent, expiring control lease.
+            # Selection changes the manual-control target, not autonomous tracking.
             self._stop_jog()
             self._sync_active()
 
@@ -388,8 +387,6 @@ class CommanderWebBackend:
                 raise BackendError(f"{target!r} is configured as manual only", 409)
             if target in self._pi_vision:
                 if enabled:
-                    if target != self.state.selected_host:
-                        raise BackendError("Select this robot before enabling PiVision tracking", 409)
                     self._stop_jog()
                     self._pi_vision[target].manual_handoff()
                 self.app.set_manual_control(True, hostname=target)
@@ -547,7 +544,7 @@ class CommanderWebBackend:
 
     def _stop_jog(self) -> None:
         if self.app.get_active_connection() is not None:
-            self.app.stop_all_movement()
+            self.app.stop_all_movement(held_only=True)
 
     def set_jog_mode(self, mode: str) -> str:
         with self._lock:

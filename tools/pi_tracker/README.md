@@ -14,7 +14,17 @@ running. Current observation/target freshness deadlines remain unchanged; at low
 FPS the arm may stop between observations. Measure tracking smoothness and stop
 latency rather than increasing those deadlines to hide the gaps.
 
-This option is staged locally; the active demo Pi service has not been changed.
+The dual-arm container deployment uses this cap. `--processing-width 640`
+also reduces PiVision working frames (preserving aspect ratio) independently
+of the camera publisher's 720p RTSP stream; the model still uses its fixed
+192x192 input with one ONNX inference thread per arm. The smaller model measured
+about 200 ms inference with both workers running; it may miss distant people.
+Capture timestamps are taken before resizing.
+
+Commander gives each robot an independent expiring tracking lease. Enable tracking
+on the first robot, select the second, and enable tracking there too. Changing
+selection preserves tracking; a manual jog or HOME disarms only its target robot.
+Disable tracking separately for each robot. Neither worker auto-arms on restart.
 A future shared model worker can alternate the newest frame from each camera,
 but must preserve independent camera IDs/timestamps, targets, control leases,
 and Operators. It shares model memory and scheduling, not the cost of evaluating

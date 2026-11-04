@@ -52,9 +52,10 @@ class FrameSample:
 class CameraStream:
     """Threaded camera capture to ensure zero frame-buffering lag with RTSP or V4L2."""
 
-    def __init__(self, src: str, backend: str = "opencv"):
+    def __init__(self, src: str, backend: str = "opencv", processing_width: int = 0):
         self.src = src
         self.backend = backend
+        self.processing_width = processing_width
         self.active_backend = backend
         self.cap: Optional[cv2.VideoCapture] = None
         self.latest_frame: Optional[np.ndarray] = None
@@ -128,10 +129,14 @@ class CameraStream:
 
                 ret, frame = self.cap.retrieve()
                 if ret and frame is not None:
+                    captured = time.monotonic()
+                    if self.processing_width and frame.shape[1] > self.processing_width:
+                        height = max(1, round(frame.shape[0] * self.processing_width / frame.shape[1]))
+                        frame = cv2.resize(frame, (self.processing_width, height), interpolation=cv2.INTER_AREA)
                     with self._lock:
                         self.latest_frame = frame
                         self.latest_sequence += 1
-                        self.latest_captured_monotonic = time.monotonic()
+                        self.latest_captured_monotonic = captured
 
             if self.cap:
                 self.cap.release()
@@ -169,6 +174,8 @@ def main():
     parser.add_argument("--model", default=CONFIG.model_weights, help="Path to YOLO .pt/.onnx model")
     parser.add_argument("--inference-fps", type=float, default=CONFIG.inference_fps,
                         help="Maximum inference FPS; 0 is unlimited. Camera video is unaffected.")
+    parser.add_argument("--processing-width", type=int, default=0,
+                        help="Downscale PiVision working frames, preserving aspect ratio; RTSP publication is unchanged.")
     parser.add_argument("--port", type=int, default=CONFIG.web_port, help="Web UI port")
     parser.add_argument("--host", default=CONFIG.web_host, help="Web UI host")
     parser.add_argument("--auto-start", action="store_true", help="Start tracking automatically on launch")
@@ -176,6 +183,8 @@ def main():
     parser.add_argument("--edge-control", action="store_true", help="Pi-local tracking with an expiring Commander control lease")
     parser.add_argument("--capture-backend", choices=("opencv", "ffmpeg-hardware"), default=os.getenv("CAMERA_BACKEND", "opencv"))
     args = parser.parse_args()
+    if args.processing_width != 0 and args.processing_width < 64:
+        parser.error("processing width must be 0 or at least 64")
     try:
         inference_rate = InferenceRate(args.inference_fps)
     except ValueError as error:
@@ -195,7 +204,7 @@ def main():
     pose_tuning = PoseTuning()
     pose_lock = threading.Lock()
 
-    camera = CameraStream(args.camera, backend=args.capture_backend)
+    camera = CameraStream(args.camera, backend=args.capture_backend, processing_width=args.processing_width)
     camera.start()
     operator = (OperatorClient(host=args.operator_host, port=args.operator_port, auto_connect=True)
                 if args.standalone_control or args.edge_control else PerceptionOnlyOperator())

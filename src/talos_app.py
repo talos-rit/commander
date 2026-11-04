@@ -300,8 +300,14 @@ class App:
             return None
         return connection.publisher
 
-    def stop_all_movement(self) -> None:
+    def stop_all_movement(self, *, held_only: bool = False) -> None:
         """Stops all continuous and discrete movements."""
+        if held_only and not (
+            self._joint_jog or self._cartesian or self.current_continuous_directions
+            or self.discrete_move_task
+        ):
+            # An unsolicited stop would revoke a Pi-local tracking lease.
+            return
         self.stop_joint_jog()
         self.stop_cartesian()
         if (connection := self.get_active_connection()) is None:
