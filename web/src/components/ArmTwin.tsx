@@ -51,10 +51,7 @@ export function ArmTwin({ host }: { host?: HostStatus }) {
     [p.pad2_joint, p.pad2_joint_tip, 0.009, "#b8c6cf"],
   ] : [];
   const pedestal: { a: Vec; b: Vec; radius: number; color: string; yaw?: number }[] = p ? [
-    { a: [p.base_joint[0], p.base_joint[1], 0.015], b: [p.base_joint[0], p.base_joint[1], 0.04], radius: 0.08, color: "#465864" },
-    { a: [p.base_joint[0], p.base_joint[1], 0.04], b: p.base_joint, radius: 0.065, color: "#627b8b" },
-    { a: p.base_joint, b: [p.base_joint[0], p.base_joint[1], p.base_joint[2] + 0.012], radius: 0.068, color: "#263c4a", yaw: positions?.base_joint },
-    { a: [p.base_joint[0], p.base_joint[1], p.base_joint[2] + 0.012], b: [p.base_joint[0], p.base_joint[1], p.shoulder_joint[2]], radius: 0.052, color: "#7892a2", yaw: positions?.base_joint },
+    { a: [p.base_joint[0], p.base_joint[1], 0.015], b: [p.base_joint[0], p.base_joint[1], p.shoulder_joint[2]], radius: 0.065, color: "#627b8b", yaw: positions?.base_joint },
   ] : [];
   const shapes = [
     ...pedestal.map(({ a, b, radius, color, yaw }) => ({ order: depth(add(a, b)), render: () => cylinder(a, b, radius, color, yaw) })),
