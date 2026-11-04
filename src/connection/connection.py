@@ -30,7 +30,7 @@ RTSP_OPEN_OPTIONS = {
     "reorder_queue_size": "0",
     "use_wallclock_as_timestamps": "1",
 }
-RTSP_FALLBACK_OPTIONS = {"rtsp_transport": "tcp", "use_wallclock_as_timestamps": "1"}
+RTSP_FALLBACK_OPTIONS = {"rtsp_transport": "tcp"}
 RTSP_OPEN_TIMEOUT = (2.0, 1.0)
 
 
@@ -88,10 +88,11 @@ class PyAVCapture:
                 frame.pts * self.video_stream.time_base
                 if self.video_stream is not None
                 and self.video_stream.time_base is not None
+                and frame.pts is not None
                 else None
             )
             absolute_time = None
-            if raw_time is not None:
+            if raw_time is not None and self.container.start_time is not None:
                 absolute_time = (
                     time.time() - (self.container.start_time / av.time_base) + raw_time
                 )
@@ -202,12 +203,12 @@ class VideoConnection:
                 return None
             ret, frame, *rest = cap.read()
         if not ret or frame is None:
-            if (self._frame_sequence < 0 and isinstance(self.src, str)
+            if (isinstance(self.src, str)
                     and self.src.startswith("rtsp://") and not self._rtsp_fallback):
-                # Some publishers open successfully but never yield a frame with
-                # nobuffer enabled. Reconnect with the existing TCP fallback.
+                # Some publishers open successfully but fail to keep yielding
+                # frames with nobuffer enabled. Reconnect with the TCP fallback.
                 self._rtsp_fallback = True
-                logger.warning("RTSP stream yielded no initial frame; retrying with TCP-only options")
+                logger.warning("RTSP frame read failed; retrying with TCP-only options")
             return None
         timestamp = self._capture_timestamp(rest, cap)
         with self._read_lock:

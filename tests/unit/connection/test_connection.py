@@ -17,8 +17,9 @@ class DummyVideoFrame:
         return np.zeros(self.shape, dtype=self.dtype)
 
 
-def test_pyavcapture_read_returns_frame_and_time(monkeypatch, mocker):
-    frame = DummyVideoFrame(pts=10, time_base=0.5)
+@pytest.mark.parametrize("pts,start_time", [(10, 2.0), (None, 2.0), (10, None)])
+def test_pyavcapture_read_returns_frame_and_time(monkeypatch, mocker, pts, start_time):
+    frame = DummyVideoFrame(pts=pts, time_base=0.5)
 
     packet = mocker.Mock()
     packet.decode.return_value = [frame]
@@ -26,7 +27,7 @@ def test_pyavcapture_read_returns_frame_and_time(monkeypatch, mocker):
     container = mocker.Mock()
     container.streams = [mocker.Mock(type="video", time_base=0.5)]
     container.demux.return_value = [packet]
-    container.start_time = 2.0
+    container.start_time = start_time
     container.closed = False
     container.close.side_effect = lambda: setattr(container, "closed", True)
 
@@ -45,9 +46,12 @@ def test_pyavcapture_read_returns_frame_and_time(monkeypatch, mocker):
 
     assert ok is True
     assert isinstance(img, np.ndarray)
-    assert abs_time == pytest.approx(
-        now - (container.start_time / connection_module.av.time_base) + frame.pts * frame.time_base
-    )
+    if pts is None or start_time is None:
+        assert abs_time is None
+    else:
+        assert abs_time == pytest.approx(
+            now - (container.start_time / connection_module.av.time_base) + frame.pts * frame.time_base
+        )
 
     ok2, img2, abs2 = cap.read()
     assert ok2 is False and img2 is None and abs2 is None
@@ -146,11 +150,14 @@ class _StreamingCap:
         self.released = True
 
 
-def test_rtsp_reconnects_with_tcp_fallback_when_open_yields_no_frames(
-    monkeypatch, mocker, no_termination_handlers
+@pytest.mark.parametrize("initial_frame", [False, True])
+def test_rtsp_reconnects_with_tcp_fallback_when_frame_reads_fail(
+    monkeypatch, mocker, no_termination_handlers, initial_frame
 ):
     failed = mocker.Mock()
-    failed.read.return_value = (False, None, None)
+    failed.read.side_effect = (
+        [(True, np.zeros((4, 4, 3), dtype=np.uint8), None)] if initial_frame else []
+    ) + [(False, None, None)]
     healthy = _StreamingCap()
     options = []
 
@@ -165,6 +172,9 @@ def test_rtsp_reconnects_with_tcp_fallback_when_open_yields_no_frames(
         first_frame_timeout=1, reconnect_delay=0.01,
     )
     try:
+        deadline = time.monotonic() + 1
+        while len(options) < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
         assert vc.shape == (4, 4, 3)
         assert options == [connection_module.RTSP_OPEN_OPTIONS, connection_module.RTSP_FALLBACK_OPTIONS]
         failed.release.assert_called_once()

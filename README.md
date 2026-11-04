@@ -10,7 +10,8 @@ Python desktop application that tracks subjects using video feeds from the robot
 Bluey connects to `bluey.local`; Bingo connects to `bingo.local`. Each host runs
 only its matching three-container profile. The
 [Operator setup guide](https://github.com/talos-rit/operator/blob/feat/dual-arm-containers/deploy/dual-arm/README.md)
-includes startup commands for either arrangement. Desktop installation is the same.
+includes startup commands for either arrangement. Desktop installation is the same. The one-arm-per-Pi helper uses a 4 FPS inference cap;
+the shared-Pi default remains 2 FPS. Both camera streams remain 720p/10 FPS.
 
 Use branch `feat/dual-arm-containers` in both Commander and Operator.
 For a new desktop checkout (Python 3.12, uv, and Node/npm installed):
