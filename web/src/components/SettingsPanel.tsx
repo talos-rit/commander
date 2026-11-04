@@ -132,6 +132,7 @@ function RobotForm({
 }) {
   const cameraHintId = useId();
   const piVisionHintId = useId();
+  const identityHintId = useId();
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof RobotDraft>(key: K, value: RobotDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
@@ -192,12 +193,6 @@ function RobotForm({
   return (
     <form className="robotform" onSubmit={submit} aria-label={editing ? `Edit ${initial.socket_host}` : "Add robot"}>
       <label className="field">
-        <span>Robot name</span>
-        <input aria-label="Robot name" placeholder="bluey or bingo" value={draft.robot_id} disabled={editing || busy}
-          onChange={(e) => set("robot_id", e.target.value)} />
-        <span className="hint">Optional stable name. Use different names when both robots share a Pi.</span>
-      </label>
-      <label className="field">
         <span>Operator host</span>
         <input
           required
@@ -207,16 +202,6 @@ function RobotForm({
           value={draft.socket_host}
           onChange={(e) => setHost(e.target.value)}
         />
-      </label>
-      <label className="field">
-        <span>Robot controller</span>
-        <select aria-label="Robot controller" disabled={busy} value={draft.controller_profile}
-          onChange={(e) => set("controller_profile", e.target.value as RobotDraft["controller_profile"])}>
-          <option value="native">Bingo ? native controller</option>
-          <option value="esp-one-axis">Bluey ? ESP one-axis demo</option>
-        </select>
-        <span className="hint">The robot is independent of the Pi hostname. Save sets the expected profile; it does not restart Operator.</span>
-        <span className="hint">On the Pi, use {draft.controller_profile === "native" ? "tools/start-native.sh --confirm-home (moves the arm through HOME)" : "tools/start-esp-one-axis.sh"}. Controls unlock when Operator reports the matching profile.</span>
       </label>
       <label className="field field--narrow">
         <span>Port</span>
@@ -247,6 +232,40 @@ function RobotForm({
       </div>
       <div className="robotform__secondary">
         <p className="robotform__kicker">Rarely needs changing</p>
+        <div className="robotform__pair">
+          <label className="field">
+            <span>Robot name</span>
+            <input
+              placeholder="bluey or bingo"
+              spellCheck={false}
+              disabled={editing || busy}
+              aria-describedby={identityHintId}
+              value={draft.robot_id}
+              onChange={(e) => set("robot_id", e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Robot controller</span>
+            <select
+              disabled={busy}
+              aria-describedby={identityHintId}
+              value={draft.controller_profile}
+              onChange={(e) => set("controller_profile", e.target.value as RobotDraft["controller_profile"])}
+            >
+              <option value="native">Bingo — native</option>
+              <option value="esp-one-axis">Bluey — ESP one-axis demo</option>
+            </select>
+          </label>
+        </div>
+        <p id={identityHintId} className="robotform__hint">
+          Name is optional; give each robot its own when both share a Pi. Saving doesn&apos;t restart Operator. On the
+          Pi, run{" "}
+          <code>
+            {draft.controller_profile === "native" ? "tools/start-native.sh --confirm-home" : "tools/start-esp-one-axis.sh"}
+          </code>
+          {draft.controller_profile === "native" ? " (moves the arm through HOME)" : ""}. Controls unlock once Operator
+          reports this controller.
+        </p>
         <label className={`field${derived ? " field--derived" : ""}`}>
           <span>Stream</span>
           <input
