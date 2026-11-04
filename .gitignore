@@ -166,6 +166,8 @@ cython_debug/
 
 # Yolo models
 *.pt
+# Model export scratch files; shipped models live in assets/yolo.
+/test/pi_tracker/
 
 # Config
 config/**/*.local.yaml

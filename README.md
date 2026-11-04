@@ -4,6 +4,40 @@
 
 Python desktop application that tracks subjects using video feeds from the robot and move the arm to keep subject in field of view.
 
+## Two arms on one Pi
+
+Use branch `feat/dual-arm-containers` in both Commander and Operator.
+For a new desktop checkout (Python 3.12, uv, and Node/npm installed):
+
+```sh
+git clone -b feat/dual-arm-containers https://github.com/talos-rit/commander.git
+cd commander
+uv sync --locked
+npm --prefix web install
+npm --prefix web run build
+uv run commander-web
+```
+
+Open <http://127.0.0.1:8000>. In Settings add **bluey** and **bingo** using
+[the example config](docs/examples/dual-arm-robots.yaml), then assign them to Feed 1
+and Feed 2. Both use the Pi hostname `bingo.local` but different Operator and
+PiVision ports. Replace that hostname if your Pi differs. Existing users should
+switch/pull this branch without overwriting their ignored local configuration,
+then rerun dependency installation and the web build.
+
+The [Pi setup and startup guide](https://github.com/talos-rit/operator/blob/feat/dual-arm-containers/deploy/dual-arm/README.md)
+covers containers, USB assignments, camera/kernel requirements, logs, and shutdown.
+Configure/start the Pi before enabling control in Commander. Native Bingo startup
+physically HOMEs the arm. Bluey's current ESP firmware supports horizontal
+tracking only. Each arm has its own tracking switch: enable one, select the other,
+and enable it too. Selecting another arm preserves tracking; manual motion or
+HOME disarms the targeted arm. Tracking starts off after a restart.
+
+The arm visualization uses measured joint feedback; Bluey's ESP profile currently
+has no full-arm pose telemetry. Both cameras publish 720p/10 FPS with hardware
+encoding, while each vision worker uses a 192px pose model capped at 2 FPS.
+Simultaneous physical following still requires supervised verification.
+
 ## Installation
 
 Create virtual environment and install required packages.
