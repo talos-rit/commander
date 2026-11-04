@@ -59,6 +59,7 @@ export function makeStatus({
     jog_mode: "discrete",
     speed_percent: null,
     virtual_camera: false,
+    recognition: { known: 0, appearance: true, faces: true, leniency: 0.5 },
     robots: hosts,
     ...rest,
   };
@@ -79,6 +80,7 @@ export function makeSettings(overrides: Partial<AppSettings> = {}): AppSettings 
     camera_2_host: null,
     default_model: null,
     jog_mode: "discrete",
+    recognition_leniency: 0.5,
     ...overrides,
   };
 }

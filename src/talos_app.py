@@ -20,6 +20,8 @@ from .scheduler import IterativeTask, Scheduler
 from .streaming.streamer import Streamer
 from .thread_scheduler import ThreadScheduler
 from .tracking import USABLE_MODELS
+from .tracking.embedding import default_embedder, default_face_embedder
+from .tracking.identity import IdentityResolver
 from .tracking.tracker import Tracker
 
 
@@ -65,6 +67,10 @@ class App:
     ) -> None:
         self.scheduler = scheduler
         self.connections = ConnectionCollection()
+        # Shared by every connection so subject IDs are unique across cameras.
+        self.identity = IdentityResolver(
+            embedder=default_embedder(), face_embedder=default_face_embedder()
+        )
         tracker_options = (
             {"observation_recorder": observation_recorder}
             if observation_recorder is not None
@@ -120,12 +126,14 @@ class App:
         if pi_url:
             from .connection.edge_publisher import EdgePublisher
             conn = Connection(hostname, conf.socket_port, video_connection,
-                              publisher_factory=lambda _host, _port: EdgePublisher(pi_url))
+                              publisher_factory=lambda _host, _port: EdgePublisher(pi_url),
+                              identity=self.identity)
         elif conf.socket_host != hostname:
             conn = Connection(hostname, conf.socket_port, video_connection,
-                              publisher_factory=lambda _host, port: Publisher(conf.socket_host, port))
+                              publisher_factory=lambda _host, port: Publisher(conf.socket_host, port),
+                              identity=self.identity)
         else:
-            conn = Connection(hostname, conf.socket_port, video_connection)
+            conn = Connection(hostname, conf.socket_port, video_connection, identity=self.identity)
         self.connections[hostname] = conn
 
     def start_move(self, direction: Direction) -> None:

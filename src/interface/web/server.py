@@ -80,6 +80,20 @@ class VirtualCameraRequest(BaseModel):
     enabled: bool
 
 
+class ZoomTargetRequest(BaseModel):
+    subject_id: int | None = None
+    host: str | None = None
+
+
+class RecognitionLeniencyRequest(BaseModel):
+    leniency: float = Field(ge=0.0, le=1.0)
+
+
+class ZoomFillRequest(BaseModel):
+    fill: float = Field(ge=0.2, le=0.9)
+    host: str | None = None
+
+
 def encode_jpeg(frame: np.ndarray, max_width: int | None = None) -> bytes | None:
     if max_width is not None and frame.shape[1] > max_width:
         height = int(frame.shape[0] * max_width / frame.shape[1])
@@ -226,6 +240,22 @@ def create_web_app(
     @api.post("/control/virtual-camera")
     def virtual_camera(req: VirtualCameraRequest):
         return {"enabled": backend.set_virtual_camera(req.enabled)}
+
+    @api.post("/control/zoom/target")
+    def zoom_target(req: ZoomTargetRequest):
+        return {"subject_id": backend.set_zoom_target(req.subject_id, req.host)}
+
+    @api.post("/control/zoom/fill")
+    def zoom_fill(req: ZoomFillRequest):
+        return {"fill": backend.set_zoom_fill(req.fill, req.host)}
+
+    @api.post("/control/recognition/leniency")
+    def recognition_leniency(req: RecognitionLeniencyRequest):
+        return {"leniency": backend.set_recognition_leniency(req.leniency)}
+
+    @api.post("/control/recognition/forget")
+    def recognition_forget():
+        return backend.forget_subjects()
 
     @api.get("/cameras/{host}/snapshot")
     def snapshot(host: str, width: int | None = None):
