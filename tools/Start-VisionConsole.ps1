@@ -1,8 +1,14 @@
 param([switch]$Restart, [switch]$Background)
 $ErrorActionPreference = 'Stop'
 $consoleRoot = Split-Path $PSScriptRoot -Parent
-$consolePython = Join-Path (Split-Path $consoleRoot -Parent) 'commander/.venv/Scripts/python.exe'
+$consolePython = Join-Path $consoleRoot '.venv/Scripts/python.exe'
 $runner = Join-Path $PSScriptRoot 'run_vision_console.py'
+if (-not (Test-Path -LiteralPath $consolePython)) {
+    throw 'Run uv sync in this Commander checkout before starting the console.'
+}
+if (-not (Test-Path -LiteralPath (Join-Path $consoleRoot 'web/dist/index.html'))) {
+    throw 'Build the frontend first: cd web, npm install, npm run build.'
+}
 if ($Restart) {
     $listeners = @(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue)
     foreach ($listener in $listeners) {
@@ -14,7 +20,6 @@ if ($Restart) {
     }
 }
 if ($Background) {
-    if (-not (Test-Path -LiteralPath $consolePython)) { throw 'Commander Python environment is missing' }
     $logPrefix = Join-Path $env:TEMP ('talos-vision-console-' + [guid]::NewGuid().ToString('N'))
     Start-Process -FilePath $consolePython -ArgumentList ('"' + $runner + '"') -WorkingDirectory $consoleRoot -WindowStyle Hidden -RedirectStandardOutput "$logPrefix.out" -RedirectStandardError "$logPrefix.err" | Out-Null
     $started = $false
@@ -31,11 +36,8 @@ if ($Background) {
 }
 Push-Location $consoleRoot
 try {
-    if (Test-Path -LiteralPath $consolePython) {
-        & $consolePython $runner
-    } else {
-        uv run commander-web
-    }
+    & $consolePython $runner
+    if ($LASTEXITCODE -ne 0) { throw "Commander exited with code $LASTEXITCODE" }
 } finally {
     Pop-Location
 }

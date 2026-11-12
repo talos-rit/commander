@@ -47,6 +47,8 @@ Simultaneous physical following still requires supervised verification.
 
 ## Installation
 
+For a standalone checkout and the Windows launcher, follow the [vision quick start](docs/vision-quickstart.md).
+
 Create virtual environment and install required packages.
 Using python package manager: [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
@@ -59,7 +61,7 @@ or alternatively
 ```bash
 mkdir -p .venv/py3.12
 python3.12 -m venv .venv/py3.12
-pip install -r requirements.txt
+pip install -e .
 ```
 
 **Optional Installation**
@@ -81,7 +83,7 @@ You can also opt in to install several other object detection models.
    If pybullet build fails set a flag during installation:
 
 ```bash
-CFLAGS="-Dfdopen=fdopen" pip install -r requirements.txt
+CFLAGS="-Dfdopen=fdopen" pip install -e .
 ```
 
 or with uv
