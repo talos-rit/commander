@@ -61,9 +61,9 @@ class CommanderWebBackend:
         self._cancel_startup = threading.Event()
         self._startup_thread: threading.Thread | None = None
         self._pi_vision: dict[str, PiVisionControl] = {}
-        # Last Operator speed this UI sent. None until the operator sets it.
-        # Home does not use this value.
-        self._speed_percent: int | None = None
+        # Last Operator speed this UI sent, per robot. Unset until the operator
+        # sets it. Manual jogs and auto-track use it; Home does not.
+        self._speed_percent: dict[str, int] = {}
 
     # --- lifecycle -------------------------------------------------------
 
@@ -240,7 +240,7 @@ class CommanderWebBackend:
                     "output_fps": round(edge_status.get("fps", 0), 1) if edge else round(self.app.get_tracker_output_fps(), 1),
                 },
                 "jog_mode": str(self.app.get_control_mode()),
-                "speed_percent": self._speed_percent,
+                "speed_percent": self._speed_percent.get(self.state.selected_host),
                 "virtual_camera": self.app.is_streaming(),
                 "recognition": self.app.identity.status(),
                 "robots": sorted(config.ROBOT_CONFIGS.keys()),
@@ -465,7 +465,7 @@ class CommanderWebBackend:
                     self._pi_vision[target].manual_handoff()
                 self.app.set_manual_control(True, hostname=target)
                 try:
-                    return self._pi_vision[target].set_enabled(enabled)
+                    return self._pi_vision[target].set_enabled(enabled, self._tracking_speed(target))
                 except ValueError as exc:
                     raise BackendError(str(exc), getattr(exc, "status", 409)) from exc
             if enabled and self.app.get_selected_model() is None:
@@ -636,19 +636,36 @@ class CommanderWebBackend:
             publisher = self._operator_publisher()
             publisher.erv_enable_control()
 
+    def _tracking_speed(self, host: str) -> int | None:
+        """The slider speed, else the configured one, read now so config edits apply."""
+        if host in self._speed_percent:
+            return self._speed_percent[host]
+        robot = config.ROBOT_CONFIGS.get(host)
+        return getattr(robot, "pi_vision_speed_percent", None)
+
     def set_speed_percent(self, percent: int) -> int:
-        """Set the Operator speed used by manual moves. Home is unaffected."""
+        """Set the Operator speed used by manual moves and auto-track. Home is unaffected."""
         if not isinstance(percent, int) or not 1 <= percent <= 100:
             raise BackendError("Speed must be from 1 to 100", 422)
         with self._lock:
             self._require_debug()
-            self._require_controller(self._target(None), native=True)
-            publisher = self._operator_publisher()
-            try:
-                publisher.erv_set_speed_percent(percent)
-            except ValueError as exc:
-                raise BackendError(str(exc), 422) from exc
-            self._speed_percent = percent
+            target = self._target(None)
+            self._require_controller(target, native=True)
+            control = self._pi_vision.get(target)
+            if control is not None and control.status()["enabled"]:
+                # The Pi rejects manual commands while it holds the tracking
+                # lease, so the speed goes through the lease instead.
+                try:
+                    control.set_speed(percent)
+                except ValueError as exc:
+                    raise BackendError(str(exc), getattr(exc, "status", 409)) from exc
+            else:
+                publisher = self._operator_publisher()
+                try:
+                    publisher.erv_set_speed_percent(percent)
+                except ValueError as exc:
+                    raise BackendError(str(exc), 422) from exc
+            self._speed_percent[target] = percent
             return percent
 
     def _operator_publisher(self):

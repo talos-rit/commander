@@ -22,6 +22,21 @@ def test_supervisor_never_sends_per_frame_motion():
     control.close()
     assert calls[-1][2]["enabled"] is False
 
+def test_arming_speed_overrides_the_configured_tracking_speed():
+    bodies = []
+    def request(url, method="GET", body=None):
+        bodies.append(body)
+        return {"owner": control.owner, "enabled": body.get("enabled", True)}
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi", pi_vision_speed_percent=20), request=request)
+    control.set_enabled(True)
+    assert bodies[-1]["speed_percent"] == 20
+    control.set_enabled(False)
+    control.set_enabled(True, 55)
+    assert bodies[-1]["speed_percent"] == 55
+    assert control.set_speed(70) == 70  # Fake echoes no speed; falls back to the request.
+    assert bodies[-1] == {"owner": control.owner, "speed_percent": 70}
+    control.close()
+
 def test_restart_clears_local_arming():
     control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"))
     control.ingest(observation(), 10)
