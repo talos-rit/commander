@@ -167,7 +167,7 @@ def test_independent_tracking_survives_selection_and_manual_handoff(web_config):
         def __init__(self):
             self.enabled = False
 
-        def set_enabled(self, enabled):
+        def set_enabled(self, enabled, speed_percent=None):
             self.enabled = enabled
             return enabled
 

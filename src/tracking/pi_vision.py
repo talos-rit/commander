@@ -239,14 +239,17 @@ class PiVisionControl:
                     self.on_observations(None, None)
             self._quit.wait(0.1)
 
-    def set_enabled(self, enabled):
+    def set_enabled(self, enabled, speed_percent=None):
+        """Arm or release Pi-local tracking. ``speed_percent`` overrides the configured tracking speed."""
         with self._lock:
             if not enabled and not self._armed:
                 return False
             try:
                 payload = self._lease_body(enabled)
                 if enabled:
-                    payload.update(speed_percent=getattr(self.config, "pi_vision_speed_percent", 20),
+                    if speed_percent is None:
+                        speed_percent = getattr(self.config, "pi_vision_speed_percent", 20)
+                    payload.update(speed_percent=speed_percent,
                                    max_observation_age_s=getattr(self.config, "pi_vision_max_age_s", 0.35),
                                    acceptable_ratio=self._acceptable_ratio)
                 self._edge = self.request(self._url("/api/v1/control/lease"), "PUT",
@@ -311,6 +314,18 @@ class PiVisionControl:
                                       {"owner": self.owner, "acceptable_ratio": ratio})
             self._acceptable_ratio = ratio
             return {"acceptable_ratio": self._edge["acceptable_ratio"]}
+
+    def set_speed(self, percent):
+        """Change the speed of an armed Pi tracker without releasing its lease."""
+        with self._lock:
+            try:
+                self._edge = self.request(self._url("/api/v1/control/tuning"), "PUT",
+                                          {"owner": self.owner, "speed_percent": percent})
+            except HTTPError as error:
+                raise PiVisionRequestError(f"PiVision: {error.reason}", error.code) from error
+            except Exception as error:
+                raise PiVisionRequestError(f"PiVision unreachable: {error}", 502) from error
+            return self._edge.get("speed_percent", percent)
 
     def status(self):
         with self._lock:

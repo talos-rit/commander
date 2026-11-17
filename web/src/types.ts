@@ -121,7 +121,7 @@ export interface Status {
   connections: Record<string, HostStatus>;
   tracking: TrackingStatus;
   jog_mode: JogMode;
-  /** Last Operator speed sent from this UI, from 1 to 100. Null until set. Home ignores it. */
+  /** Last Operator speed sent from this UI for the selected robot, from 1 to 100. Null until set. Manual jogs and auto-track use it; Home ignores it. */
   speed_percent: number | null;
   /** True while the selected camera is being sent to a virtual webcam. */
   virtual_camera: boolean;

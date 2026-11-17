@@ -18,9 +18,17 @@ class Control:
         self.enabled = False
         self.closed = False
         self.handoffs = 0
+        self.arms = []
+        self.speeds = []
 
-    def set_enabled(self, enabled):
+    def set_speed(self, percent):
+        self.speeds.append(percent)
+        return percent
+
+    def set_enabled(self, enabled, speed_percent=None):
         self.enabled = enabled
+        if enabled:
+            self.arms.append(speed_percent)
         return enabled
 
     def manual_handoff(self):
@@ -46,6 +54,43 @@ def test_pi_auto_track_uses_existing_connection_without_loading_local_model(web_
     assert backend.status()["connections"]["a"]["auto_tracking"]
     backend.move("right", True)
     assert not control.enabled
+
+
+def test_auto_track_arms_at_the_manual_speed(web_config):
+    backend, app, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+    control = Control()
+    backend._pi_vision["a"] = control
+    backend.set_auto_track(True)
+    assert control.arms == [config.ROBOT_CONFIGS["a"].pi_vision_speed_percent]
+    backend.set_auto_track(False)
+
+    backend.set_speed_percent(45)
+    assert app.connections["a"].publisher.calls == [("speed", 45)]
+    backend.set_auto_track(True)
+    assert control.arms[-1] == 45
+
+
+def test_speed_change_while_tracking_goes_through_the_lease(web_config):
+    backend, app, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+    control = Control()
+    backend._pi_vision["a"] = control
+    backend.set_auto_track(True)
+    assert backend.set_speed_percent(60) == 60
+    assert control.enabled and len(control.arms) == 1 and control.speeds == [60]
+    assert app.connections["a"].publisher.calls == []
+    assert backend.status()["speed_percent"] == 60
+
+
+def test_auto_track_reads_config_edits_without_a_restart(web_config):
+    backend, _, _ = make_backend(camera_1="a", ui_mode="debug")
+    backend.startup()
+    control = Control()
+    backend._pi_vision["a"] = control
+    config.ROBOT_CONFIGS["a"] = config.ROBOT_CONFIGS["a"].model_copy(update={"pi_vision_speed_percent": 85})
+    backend.set_auto_track(True)
+    assert control.arms == [85]
 
 
 def test_clear_error_dispatches_con_to_selected_robot_and_releases_tracking(web_config):
