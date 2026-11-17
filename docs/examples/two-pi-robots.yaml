@@ -19,3 +19,11 @@ bingo:
   camera_index: rtsp://bingo.local:8554/bingo
   pi_vision_enabled: true
   pi_vision_url: http://bingo.local:5052
+  # Bingo's soft limits in joint counts, measured 2026-11-16 (base ±4500 is set in Pi-Vision).
+  # Elbow limits were measured with the shoulder near its minimum; its range may differ elsewhere.
+  elbow_count_min: -1300
+  elbow_count_max: 1000
+  shoulder_count_min: -150
+  shoulder_count_max: 2000
+  pitch_count_min: -50
+  pitch_count_max: 1000
