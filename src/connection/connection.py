@@ -25,9 +25,14 @@ from src.utils import (
 # FFmpeg's RTSP socket I/O timeout, in microseconds. Without it a read waits
 # forever once the server stops sending, which stalls shutdown and reconnects.
 RTSP_SOCKET_TIMEOUT_US = "1000000"
+# Probe briefly: the default probe (~2.3 s on a 10 fps stream) outlasts
+# RTSP_OPEN_TIMEOUT, and a probe cut short by the timeout leaves some sessions
+# yielding no frames. The SDP already carries the stream parameters.
+RTSP_PROBE_OPTIONS = {"analyzeduration": "300000", "probesize": "65536"}
 # Keep the RTSP demuxer from buffering a live stream. TCP is still used for
 # reliability; a dedicated capture thread drains packets so latency cannot grow.
 RTSP_OPEN_OPTIONS = {
+    **RTSP_PROBE_OPTIONS,
     "rtsp_transport": "tcp",
     "timeout": RTSP_SOCKET_TIMEOUT_US,
     "fflags": "nobuffer",
@@ -36,7 +41,12 @@ RTSP_OPEN_OPTIONS = {
     "reorder_queue_size": "0",
     "use_wallclock_as_timestamps": "1",
 }
-RTSP_FALLBACK_OPTIONS = {"rtsp_transport": "tcp", "timeout": RTSP_SOCKET_TIMEOUT_US}
+RTSP_FALLBACK_OPTIONS = {**RTSP_PROBE_OPTIONS, "rtsp_transport": "tcp", "timeout": RTSP_SOCKET_TIMEOUT_US}
+RTSP_FALLBACK_AFTER = 2
+"""Consecutive low-latency sessions that yield no frames before using the fallback.
+
+One failure is usually a transient hiccup; the fallback buffers, which adds latency
+for the rest of the session, so it is a last resort."""
 RTSP_OPEN_TIMEOUT = (2.0, 1.0)
 RECENT_PACKETS = 16
 """Packets kept so detections, which lag capture, can be matched to their frame."""
@@ -156,6 +166,9 @@ class VideoConnection:
     _stop_event: threading.Event = field(init=False, default_factory=threading.Event)
     _thread: threading.Thread | None = field(init=False, default=None)
     _rtsp_fallback: bool = field(init=False, default=False)
+    _rtsp_empty_sessions: int = field(init=False, default=0)
+    """Consecutive low-latency sessions that ended before yielding a frame."""
+    _session_frames: int = field(init=False, default=0)
 
     def __post_init__(self):
         source = self._resolve_source()
@@ -190,12 +203,16 @@ class VideoConnection:
 
     def _open_capture(self, source: str | int) -> cv2.VideoCapture | PyAVCapture:
         if isinstance(source, str) and source.startswith("rtsp://"):
+            self._session_frames = 0
             if self._rtsp_fallback:
+                logger.info("Opening {} in buffered TCP fallback mode", source)
                 return PyAVCapture(source, **RTSP_FALLBACK_OPTIONS)
             try:
-                return PyAVCapture(source, **RTSP_OPEN_OPTIONS)
+                cap = PyAVCapture(source, **RTSP_OPEN_OPTIONS)
+                logger.info("Opened {} in low-latency mode", source)
+                return cap
             except Exception as exc:
-                self._rtsp_fallback = True
+                # Only this attempt falls back; the next reconnect tries low latency again.
                 logger.warning(
                     "Failed to open RTSP stream with low-latency options ({}). Retrying with TCP only.",
                     exc,
@@ -216,11 +233,18 @@ class VideoConnection:
         if not ret or frame is None:
             if (isinstance(self.src, str)
                     and self.src.startswith("rtsp://") and not self._rtsp_fallback):
-                # Some publishers open successfully but fail to keep yielding
-                # frames with nobuffer enabled. Reconnect with the TCP fallback.
-                self._rtsp_fallback = True
-                logger.warning("RTSP frame read failed; retrying with TCP-only options")
+                # Some publishers open successfully but never yield frames with
+                # nobuffer enabled. Fall back only when that keeps happening.
+                self._rtsp_empty_sessions = 0 if self._session_frames else self._rtsp_empty_sessions + 1
+                if self._rtsp_empty_sessions >= RTSP_FALLBACK_AFTER:
+                    self._rtsp_fallback = True
+                    logger.warning(
+                        "RTSP stream yielded no frames {} times with low-latency options; "
+                        "using buffered TCP-only options", self._rtsp_empty_sessions)
+                else:
+                    logger.warning("RTSP frame read failed after {} frames; reconnecting", self._session_frames)
             return None
+        self._session_frames += 1
         timestamp = self._capture_timestamp(rest, cap)
         with self._read_lock:
             self._frame_sequence += 1

@@ -1,3 +1,4 @@
+import time
 from types import SimpleNamespace
 import numpy as np
 import pytest
@@ -217,3 +218,123 @@ def test_stale_observations_clear_subjects(monkeypatch):
     control._poll_observations()
 
     assert seen[-1] == (None, None)
+
+
+def test_stream_backlog_is_skipped_so_only_the_newest_sample_is_processed():
+    seen = []
+    events = [sample_with([[100, 50, 200, 400]], n) for n in (1, 2, 3)]
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"),
+                              stream=lambda url, **_: iter(events), on_observations=lambda d, s: seen.append(d))
+    control._quit = OnePoll()
+    control._watch_observations()  # Reads all three before the processor runs.
+    control._process_latest()
+    control._process_latest()  # Nothing new: a no-op, not a repeat.
+
+    assert len(seen) == 1
+    assert control.status()["sequence"] == 3 and control.status()["error"] is None
+
+
+def test_paused_sample_is_reported_without_stopping_the_stream():
+    paused = {**observation(), "enabled": False, "sample": None}
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"),
+                              stream=lambda url, **_: iter([paused]))
+    control._quit = OnePoll()
+    control._watch_observations()
+    control._process_latest()
+
+    assert "paused" in control.status()["error"]
+
+
+def test_older_pivision_without_stream_falls_back_to_polling():
+    from urllib.error import HTTPError
+    polled = []
+    def stream(url, **_):
+        raise HTTPError(url, 404, "Not Found", None, None)
+    def request(url, method="GET", body=None):
+        polled.append(url)
+        return observation()
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"), request=request, stream=stream)
+    control._quit = OnePoll()
+    control._watch_observations()
+    control._process_latest()
+
+    assert polled == ["http://pi/api/v1/observations"]
+    assert control.status()["sequence"] == 1
+
+
+def test_dropped_stream_reports_error_and_clears_stale_subjects():
+    seen = []
+    now = [10.0]
+    def stream(url, **_):
+        yield sample_with([[100, 50, 200, 400]], 1)
+        now[0] = 12.0
+        raise TimeoutError("stream read timed out")
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"), stream=stream,
+                              clock=lambda: now[0], on_observations=lambda d, s: seen.append(d))
+    control._quit = OnePoll()
+    control._watch_observations()
+
+    assert seen[-1] is None
+    assert "timed out" in control.status()["error"]
+
+
+def test_stream_json_events_parses_server_sent_events():
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from src.tracking.pi_vision import stream_json_events
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            self.wfile.write(b': comment\n\ndata: {"a": 1}\n\ndata: {"b":\ndata: 2}\n\n')
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        events = stream_json_events(f"http://127.0.0.1:{server.server_port}/s", read_timeout=2)
+        assert next(events) == {"a": 1}
+        assert next(events) == {"b": 2}
+        with pytest.raises(ConnectionError):
+            next(events)
+    finally:
+        server.shutdown()
+
+
+def test_request_stop_wakes_a_reader_blocked_on_the_stream():
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from src.tracking.pi_vision import stream_json_events
+
+    class Silent(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            self.wfile.flush()
+            time.sleep(3)  # Never sends an event, like a stream between heartbeats.
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Silent)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url=f"http://127.0.0.1:{server.server_port}"),
+                              stream=lambda url, **kw: stream_json_events(url, read_timeout=5, **kw))
+    reader = threading.Thread(target=control._watch_observations, daemon=True)
+    try:
+        reader.start()
+        deadline = time.monotonic() + 2
+        while control._stream_socket is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        time.sleep(0.1)  # Let it block in recv.
+        started = time.monotonic()
+        control.request_stop()
+        reader.join(timeout=2)
+        assert not reader.is_alive() and time.monotonic() - started < 0.5
+    finally:
+        server.shutdown()
