@@ -1,15 +1,18 @@
 # Web arm visualization
 
-The Debug rail's Digital twin section renders a fixed orthographic view of the
-selected robot. It has no pointer interaction or command path. Shaded boxes use
-the URDF joint centres, including the two 0.22 m arm links. Body thicknesses and
-finger tips are simplified visual geometry rather than CAD dimensions.
+The Debug rail's Digital twin section renders the same eight STL meshes as the
+desktop PyBullet viewer, using three.js. `ArmScene.tsx` imports them directly from
+`../digital_twin/sboter4u_model/meshes` (Vite copies them into `dist/assets`), and
+is lazy-loaded so three.js stays out of the main bundle. The view can be orbited
+and zoomed (double-click resets); it has no command path.
 
 `src/armGeometry.json` records the joint origin, RPY, axis, and limits from
 `../digital_twin/sboter4u_model/robots/sboter4u_model.URDF`. Keep it synchronized
 when changing that model. `armKinematics.ts` applies URDF origin transforms before
-joint rotations and clamps the displayed joint angles as the desktop viewer does.
-The simplified pedestal needs no CAD mesh leveling correction.
+joint rotations and clamps the displayed joint angles as the desktop viewer does;
+`linkPoses` gives each link frame, which is also its mesh frame. The scene applies
+the desktop viewer's `LEGACY_MODEL_LEVEL_RPY` correction to the tilted CAD base
+and sits the pedestal on the grid.
 
 The status API adds `telemetry.joint_positions` in URDF radians. Python reuses
 `BASE_CALIBRATION` and `map_arm_controller_coordinates` from the desktop twin.
