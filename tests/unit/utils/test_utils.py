@@ -64,3 +64,19 @@ def test_termination_handlers_lifecycle(monkeypatch):
 
     # After terminate, handlers list should be empty and removal should be safe
     remove_termination_handler(handler_id)
+
+
+def test_terminate_skips_handlers_removed_during_cleanup(monkeypatch):
+    monkeypatch.setattr("signal.signal", lambda *args, **kwargs: None)
+    called = []
+    start_termination_guard()
+    inner_id = add_termination_handler(lambda: called.append("inner"))
+
+    def outer():
+        called.append("outer")
+        remove_termination_handler(inner_id)
+
+    add_termination_handler(outer)
+    terminate(signum=0, frame=None)
+
+    assert called == ["outer"]

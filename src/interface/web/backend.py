@@ -86,6 +86,19 @@ class CommanderWebBackend:
         except Exception:
             logger.exception("Commander web startup failed")
 
+    def begin_shutdown(self) -> None:
+        """Signal every feed and PiVision poller to stop at once, without blocking.
+
+        Called as soon as Ctrl+C is pressed, so their threads wind down together
+        while uvicorn drains requests; the later close() calls then find them done.
+        """
+        self._cancel_startup.set()
+        for connection in list(self.app.connections.values()):
+            if connection.video_connection is not None:
+                connection.video_connection.request_stop()
+        for control in list(self._pi_vision.values()):
+            control.request_stop()
+
     def cancel_startup(self, timeout: float = 10.0) -> None:
         """Stop opening further connections and wait for the one in flight."""
         self._cancel_startup.set()

@@ -118,6 +118,7 @@ def terminate(signum, frame):
 
 
 def remove_termination_handler(id: int):
-    global TERMINATION_HANDLERS
+    # Edit in place: terminate() holds this list, and a handler that already ran
+    # as part of another (a connection closing its video) must not run again.
     handlers = _ensure_termination_handlers()
-    TERMINATION_HANDLERS = [h for h in handlers if h.id != id]
+    handlers[:] = [h for h in handlers if h.id != id]

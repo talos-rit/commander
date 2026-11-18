@@ -40,6 +40,10 @@ class FakeVideo:
         self.frame = frame
         self.shape = frame.shape if frame is not None else None
         self.sequence = sequence
+        self.stop_requested = False
+
+    def request_stop(self):
+        self.stop_requested = True
 
     def get_latest_packet(self):
         if self.frame is None:

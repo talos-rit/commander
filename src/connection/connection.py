@@ -22,17 +22,21 @@ from src.utils import (
     remove_termination_handler,
 )
 
+# FFmpeg's RTSP socket I/O timeout, in microseconds. Without it a read waits
+# forever once the server stops sending, which stalls shutdown and reconnects.
+RTSP_SOCKET_TIMEOUT_US = "1000000"
 # Keep the RTSP demuxer from buffering a live stream. TCP is still used for
 # reliability; a dedicated capture thread drains packets so latency cannot grow.
 RTSP_OPEN_OPTIONS = {
     "rtsp_transport": "tcp",
+    "timeout": RTSP_SOCKET_TIMEOUT_US,
     "fflags": "nobuffer",
     "flags": "low_delay",
     "max_delay": "0",
     "reorder_queue_size": "0",
     "use_wallclock_as_timestamps": "1",
 }
-RTSP_FALLBACK_OPTIONS = {"rtsp_transport": "tcp"}
+RTSP_FALLBACK_OPTIONS = {"rtsp_transport": "tcp", "timeout": RTSP_SOCKET_TIMEOUT_US}
 RTSP_OPEN_TIMEOUT = (2.0, 1.0)
 RECENT_PACKETS = 16
 """Packets kept so detections, which lag capture, can be matched to their frame."""
@@ -334,6 +338,10 @@ class VideoConnection:
             if isinstance(position_ms, (int, float)) and np.isfinite(position_ms):
                 return float(position_ms) / 1000.0
         return float(self.timestamp_provider())
+
+    def request_stop(self) -> None:
+        """Tell the capture thread to finish without waiting for it; close() still releases."""
+        self._stop_event.set()
 
     def close(self):
         self._stop_event.set()

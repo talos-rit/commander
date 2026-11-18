@@ -364,6 +364,10 @@ class PiVisionControl:
         cv2.putText(canvas, label, (12, 26), cv2.FONT_HERSHEY_SIMPLEX, .65, (0, 255, 255), 2)
         return canvas
 
+    def request_stop(self):
+        """Tell the polling threads to finish without waiting; close() still disarms and joins."""
+        self._quit.set()
+
     def close(self):
         self._quit.set()
         try:

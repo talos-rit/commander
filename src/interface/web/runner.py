@@ -45,10 +45,15 @@ def run_web(args=None) -> None:
             timeout_graceful_shutdown=2,
         ),
         on_started=lambda: _on_started(backend, url),
-        on_exit=web_app.state.streams_stopping.set,
+        on_exit=lambda: _begin_exit(web_app, backend),
         before_cleanup=backend.cancel_startup,
     )
     server.run()
+
+
+def _begin_exit(web_app, backend: CommanderWebBackend) -> None:
+    web_app.state.streams_stopping.set()
+    backend.begin_shutdown()
 
 
 def _on_started(backend: CommanderWebBackend, url: str) -> None:
