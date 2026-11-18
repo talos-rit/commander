@@ -150,20 +150,13 @@ class _StreamingCap:
         self.released = True
 
 
-@pytest.mark.parametrize("initial_frame", [False, True])
-def test_rtsp_reconnects_with_tcp_fallback_when_frame_reads_fail(
-    monkeypatch, mocker, no_termination_handlers, initial_frame
-):
-    failed = mocker.Mock()
-    failed.read.side_effect = (
-        [(True, np.zeros((4, 4, 3), dtype=np.uint8), None)] if initial_frame else []
-    ) + [(False, None, None)]
-    healthy = _StreamingCap()
+def _rtsp_sessions(monkeypatch, no_termination_handlers, caps):
+    """VideoConnection over successive fake RTSP sessions; returns (vc, options used)."""
     options = []
 
     def factory(source, **kwargs):
         options.append(kwargs)
-        return failed if len(options) == 1 else healthy
+        return caps[min(len(options), len(caps)) - 1]
 
     monkeypatch.setattr(connection_module, "PyAVCapture", factory)
     no_termination_handlers(connection_module)
@@ -171,13 +164,44 @@ def test_rtsp_reconnects_with_tcp_fallback_when_frame_reads_fail(
         src="rtsp://camera/live", background_capture=True,
         first_frame_timeout=1, reconnect_delay=0.01,
     )
+    return vc, options
+
+
+def _wait_for(predicate):
+    deadline = time.monotonic() + 1
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+
+def _failing_cap(mocker, frames):
+    cap = mocker.Mock()
+    cap.read.side_effect = [(True, np.zeros((4, 4, 3), dtype=np.uint8), None)] * frames + [(False, None, None)]
+    return cap
+
+
+def test_rtsp_falls_back_to_tcp_only_after_repeated_empty_sessions(
+    monkeypatch, mocker, no_termination_handlers
+):
+    empty = [_failing_cap(mocker, 0) for _ in range(connection_module.RTSP_FALLBACK_AFTER)]
+    vc, options = _rtsp_sessions(monkeypatch, no_termination_handlers, [*empty, _StreamingCap()])
     try:
-        deadline = time.monotonic() + 1
-        while len(options) < 2 and time.monotonic() < deadline:
-            time.sleep(0.01)
+        _wait_for(lambda: len(options) > len(empty))
         assert vc.shape == (4, 4, 3)
-        assert options == [connection_module.RTSP_OPEN_OPTIONS, connection_module.RTSP_FALLBACK_OPTIONS]
-        failed.release.assert_called_once()
+        assert options == [connection_module.RTSP_OPEN_OPTIONS] * len(empty) + [connection_module.RTSP_FALLBACK_OPTIONS]
+        for cap in empty:
+            cap.release.assert_called_once()
+    finally:
+        vc.close()
+
+
+def test_rtsp_session_that_yielded_frames_reconnects_in_low_latency_mode(
+    monkeypatch, mocker, no_termination_handlers
+):
+    caps = [_failing_cap(mocker, 1), _failing_cap(mocker, 0), _failing_cap(mocker, 1), _StreamingCap()]
+    vc, options = _rtsp_sessions(monkeypatch, no_termination_handlers, caps)
+    try:
+        _wait_for(lambda: len(options) >= 4)
+        assert options == [connection_module.RTSP_OPEN_OPTIONS] * 4
     finally:
         vc.close()
 
