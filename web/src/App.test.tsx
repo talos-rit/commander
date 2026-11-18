@@ -69,6 +69,9 @@ describe("App with one camera", () => {
     const { callsTo } = setup(makeStatus({ view: { ui_mode: "debug" } }));
     const rail = await screen.findByLabelText("Debug controls");
     const left = within(rail).getByRole("button", { name: "Jog left" });
+    // The rail can be in the DOM before its mount effects run; one of them
+    // resets held jogs, so pressing first would race it.
+    await act(async () => {});
     if (input === "pointer") fireEvent.pointerDown(left);
     else fireEvent.keyDown(window, { key: "ArrowLeft" });
     await act(async () => { await vi.advanceTimersByTimeAsync(350); });

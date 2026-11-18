@@ -2075,7 +2075,11 @@ button:disabled {
 }
 
 .arm-twin { background: #18232c; border: 1px solid #344552; border-radius: 8px; padding: 10px; }
-.arm-twin svg { display: block; width: 100%; height: auto; pointer-events: none; }
+.arm-twin__viewport { position: relative; aspect-ratio: 1 / 0.85; margin-top: 6px; border-radius: 6px; overflow: hidden; background: radial-gradient(ellipse at 50% 35%, #22313d 0%, #121c24 75%); }
+.arm-twin__scene, .arm-twin__scene canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.arm-twin__scene:active canvas { cursor: grabbing; }
+.arm-twin__overlay { position: absolute; inset: 0; display: grid; place-items: center; color: #99aab6; font-size: 12px; pointer-events: none; }
+.arm-twin__caption { position: absolute; left: 10px; bottom: 8px; color: #99aab6; font-size: 10px; pointer-events: none; }
 .arm-twin__status { display: flex; justify-content: space-between; font-size: 11px; }
 .arm-twin__live { color: #72cba4; }
 .arm-twin .hint { margin-bottom: 0; }
