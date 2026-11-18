@@ -77,6 +77,22 @@ def test_ctrl_c_ends_mjpeg_streams_before_uvicorn_exits(web_config, monkeypatch)
     assert server.should_exit is True
 
 
+def test_ctrl_c_stops_every_feed_at_once(web_config, monkeypatch):
+    created = _patch_app(monkeypatch)
+    monkeypatch.setattr(runner.config.APP_SETTINGS, "camera_1_host", "a", raising=False)
+    monkeypatch.setattr(runner.config.APP_SETTINGS, "camera_2_host", "b", raising=False)
+    servers = []
+    monkeypatch.setattr(runner._Server, "run", lambda self: servers.append(self))
+    runner.run_web(None)
+    app = created["app"]
+    app.open_connection("a")
+    app.open_connection("b")
+
+    servers[0].handle_exit(signal.SIGINT, None)
+
+    assert all(c.video_connection.stop_requested for c in app.connections.values())
+
+
 def test_connections_open_only_after_the_server_is_listening(web_config, monkeypatch):
     _patch_app(monkeypatch)
     servers = []

@@ -389,3 +389,26 @@ def test_connection_collection_clear_calls_remove_termination_handler(monkeypatc
     assert called.get("term") is True
     assert called.get("removed") == 999
     conn_mock.close.assert_called_once()
+
+
+def test_rtsp_reads_time_out_instead_of_blocking_forever():
+    # A stalled RTSP server otherwise leaves the capture thread inside FFmpeg,
+    # which held up Ctrl+C for 5 s per feed.
+    for options in (connection_module.RTSP_OPEN_OPTIONS, connection_module.RTSP_FALLBACK_OPTIONS):
+        assert int(options["timeout"]) > 0
+
+
+def test_request_stop_ends_capture_without_releasing(monkeypatch, no_termination_handlers):
+    cap = _StreamingCap()
+    monkeypatch.setattr(connection_module.cv2, "VideoCapture", lambda source: cap)
+    no_termination_handlers(connection_module)
+    vc = connection_module.VideoConnection(src="0", background_capture=True)
+    thread = vc._thread
+
+    vc.request_stop()
+    thread.join(1)
+
+    assert not thread.is_alive()
+    assert cap.released is False
+    vc.close()
+    assert cap.released is True
