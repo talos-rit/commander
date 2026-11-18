@@ -217,3 +217,75 @@ def test_stale_observations_clear_subjects(monkeypatch):
     control._poll_observations()
 
     assert seen[-1] == (None, None)
+
+
+def test_stream_feeds_each_event_and_survives_a_paused_sample():
+    seen = []
+    paused = {**observation(), "enabled": False, "sample": None}
+    events = [sample_with([[100, 50, 200, 400]], 1), paused, sample_with([[110, 50, 210, 400]], 2)]
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"),
+                              stream=lambda url: iter(events), on_observations=lambda d, s: seen.append(d))
+    control._quit = OnePoll()
+    control._watch_observations()
+
+    assert [d[0]["id"] for d in seen if d] == [1, 1]
+    assert control.status()["sequence"] == 2 and control.status()["error"] is None
+
+
+def test_older_pivision_without_stream_falls_back_to_polling():
+    from urllib.error import HTTPError
+    polled = []
+    def stream(url):
+        raise HTTPError(url, 404, "Not Found", None, None)
+    def request(url, method="GET", body=None):
+        polled.append(url)
+        return observation()
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"), request=request, stream=stream)
+    control._quit = OnePoll()
+    control._watch_observations()
+
+    assert polled == ["http://pi/api/v1/observations"]
+    assert control.status()["sequence"] == 1
+
+
+def test_dropped_stream_reports_error_and_clears_stale_subjects():
+    seen = []
+    now = [10.0]
+    def stream(url):
+        yield sample_with([[100, 50, 200, 400]], 1)
+        now[0] = 12.0
+        raise TimeoutError("stream read timed out")
+    control = PiVisionControl(object(), SimpleNamespace(pi_vision_url="http://pi"), stream=stream,
+                              clock=lambda: now[0], on_observations=lambda d, s: seen.append(d))
+    control._quit = OnePoll()
+    control._watch_observations()
+
+    assert seen[-1] is None
+    assert "timed out" in control.status()["error"]
+
+
+def test_stream_json_events_parses_server_sent_events():
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from src.tracking.pi_vision import stream_json_events
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            self.wfile.write(b': comment\n\ndata: {"a": 1}\n\ndata: {"b":\ndata: 2}\n\n')
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        events = stream_json_events(f"http://127.0.0.1:{server.server_port}/s", read_timeout=2)
+        assert next(events) == {"a": 1}
+        assert next(events) == {"b": 2}
+        with pytest.raises(ConnectionError):
+            next(events)
+    finally:
+        server.shutdown()

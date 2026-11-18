@@ -62,6 +62,38 @@ def request_json(url, method="GET", body=None):
         raise
 
 
+def stream_json_events(url, read_timeout=2.5, max_event_bytes=256_000):
+    """Yield each JSON `data:` payload of a server-sent event stream.
+
+    Uses its own connection: a stream holds a socket open indefinitely, so it can't
+    share `request_json`'s keep-alive cache. PiVision heartbeats every second, so a
+    read that times out means the stream is dead and the caller should reconnect.
+    """
+    parsed = urlsplit(url)
+    cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+    connection = cls(parsed.hostname, parsed.port, timeout=read_timeout)
+    try:
+        connection.request("GET", parsed.path or "/", headers={"Accept": "text/event-stream"})
+        response = connection.getresponse()
+        if response.status >= 400:
+            raise HTTPError(url, response.status, response.reason, response.headers, io.BytesIO(response.read(2000)))
+        data = []
+        while True:
+            line = response.readline(max_event_bytes + 2)
+            if not line:
+                raise ConnectionError("PiVision closed the observation stream")
+            if len(line) > max_event_bytes or sum(map(len, data)) > max_event_bytes:
+                raise ValueError("PiVision event exceeds observation limit")
+            line = line.rstrip(b"\r\n")
+            if line.startswith(b"data:"):
+                data.append(line[5:].lstrip(b" "))
+            elif not line and data:
+                yield json.loads(b"\n".join(data))
+                data = []
+    finally:
+        connection.close()
+
+
 def validate_observations(payload):
     if payload.get("schema_version") != 1 or not isinstance(payload.get("session_id"), str):
         raise ValueError("unsupported PiVision observation schema")
@@ -143,9 +175,11 @@ class SubjectIds:
 
 class PiVisionControl:
     """Commander supervision only. Every detection-to-motion step stays on Pi."""
+    STREAM_RETRY_S = 30.0  # How long to poll a PiVision without the stream before asking again.
+
     def __init__(self, publisher, robot_config, request=request_json, clock=time.monotonic,
-                 on_observations=None):
-        self.config, self.request, self.clock = robot_config, request, clock
+                 on_observations=None, stream=stream_json_events):
+        self.config, self.request, self.clock, self.stream = robot_config, request, clock, stream
         # Called with (detections with "id" added, (width, height)) per sample, or
         # (None, None) once observations stop. Runs on the polling thread.
         self.on_observations = on_observations
@@ -174,7 +208,7 @@ class PiVisionControl:
     def start(self):
         self._thread = threading.Thread(target=self._poll, name="pivision-supervisor", daemon=True)
         self._thread.start()
-        self._observation_thread = threading.Thread(target=self._poll_observations, name="pivision-observations", daemon=True)
+        self._observation_thread = threading.Thread(target=self._watch_observations, name="pivision-observations", daemon=True)
         self._observation_thread.start()
 
     def ingest(self, payload, request_started):
@@ -224,20 +258,47 @@ class PiVisionControl:
                         self._enabled = False
             self._quit.wait(0.2)
 
-    def _poll_observations(self):
+    def _watch_observations(self):
+        """Follow PiVision's observation stream, polling instead on a PiVision without one."""
         while not self._quit.is_set():
             try:
-                started = self.clock()
-                self.ingest(self.request(self._url("/api/v1/observations")), started)
-                with self._lock:
-                    self._observation_error = None
+                for payload in self.stream(self._url("/api/v1/observations/stream")):
+                    self._receive_observations(lambda: payload)
+                    if self._quit.is_set():
+                        return
+                self._quit.wait(0.5)  # Stream ended without an error; reconnect.
+            except HTTPError as error:
+                if error.code != 404:
+                    self._observation_failed(error)
+                    self._quit.wait(0.5)
+                    continue
+                deadline = self.clock() + self.STREAM_RETRY_S
+                while not self._quit.is_set() and self.clock() < deadline:
+                    self._poll_observations()
             except Exception as error:
-                with self._lock:
-                    self._observation_error = str(error)
-                    stale = self._sample is None or self.clock() - self._capture > 1.0
-                if stale and self.on_observations is not None:
-                    self.on_observations(None, None)
-            self._quit.wait(0.1)
+                self._observation_failed(error)
+                self._quit.wait(0.5)
+
+    def _poll_observations(self):
+        """One poll of the JSON endpoint, for a PiVision that predates the stream."""
+        self._receive_observations(lambda: self.request(self._url("/api/v1/observations")))
+        self._quit.wait(0.1)
+
+    def _receive_observations(self, fetch):
+        try:
+            started = self.clock()
+            self.ingest(fetch(), started)
+            with self._lock:
+                self._observation_error = None
+        except Exception as error:
+            self._observation_failed(error)
+
+    def _observation_failed(self, error):
+        with self._lock:
+            self._observation_error = str(error)
+            stale = self._sample is None or self.clock() - self._capture > 1.0
+        if stale and self.on_observations is not None:
+            self.on_observations(None, None)
 
     def set_enabled(self, enabled):
         with self._lock:
