@@ -7,6 +7,7 @@ import threading
 import time
 import uuid
 import http.client
+import socket
 import io
 import cv2
 from urllib.error import HTTPError
@@ -62,17 +63,22 @@ def request_json(url, method="GET", body=None):
         raise
 
 
-def stream_json_events(url, read_timeout=2.5, max_event_bytes=256_000):
+def stream_json_events(url, read_timeout=2.5, max_event_bytes=256_000, on_open=None):
     """Yield each JSON `data:` payload of a server-sent event stream.
 
     Uses its own connection: a stream holds a socket open indefinitely, so it can't
     share `request_json`'s keep-alive cache. PiVision heartbeats every second, so a
     read that times out means the stream is dead and the caller should reconnect.
+    `on_open(sock)` hands over the socket so another thread can shut it to stop at once.
     """
     parsed = urlsplit(url)
     cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
     connection = cls(parsed.hostname, parsed.port, timeout=read_timeout)
     try:
+        connection.connect()
+        if on_open is not None:
+            # The socket itself: http.client may detach it from `connection` mid-response.
+            on_open(connection.sock)
         connection.request("GET", parsed.path or "/", headers={"Accept": "text/event-stream"})
         response = connection.getresponse()
         if response.status >= 400:
@@ -201,6 +207,12 @@ class PiVisionControl:
         self._edge = {}
         self._thread = None
         self._observation_thread = None
+        self._process_thread = None
+        # Latest-only handoff from the reader to the processor: the stream delivers every
+        # sample, but processing one can take longer than the next takes to arrive.
+        self._latest = None  # (fetch, received_at)
+        self._latest_ready = threading.Event()
+        self._stream_socket = None
 
     def _url(self, path):
         return self.config.pi_vision_url.rstrip("/") + path
@@ -210,6 +222,8 @@ class PiVisionControl:
         self._thread.start()
         self._observation_thread = threading.Thread(target=self._watch_observations, name="pivision-observations", daemon=True)
         self._observation_thread.start()
+        self._process_thread = threading.Thread(target=self._process_observations, name="pivision-observation-processing", daemon=True)
+        self._process_thread.start()
 
     def ingest(self, payload, request_started):
         with self._lock:
@@ -259,11 +273,16 @@ class PiVisionControl:
             self._quit.wait(0.2)
 
     def _watch_observations(self):
-        """Follow PiVision's observation stream, polling instead on a PiVision without one."""
+        """Follow PiVision's observation stream, polling instead on a PiVision without one.
+
+        Only reads: each payload overwrites the latest-only slot that
+        `_process_observations` consumes, so a slow consumer skips samples rather
+        than falling behind a backlog of them.
+        """
         while not self._quit.is_set():
             try:
-                for payload in self.stream(self._url("/api/v1/observations/stream")):
-                    self._receive_observations(lambda: payload)
+                for payload in self.stream(self._url("/api/v1/observations/stream"), on_open=self._stream_opened):
+                    self._offer(lambda payload=payload: payload, self.clock())
                     if self._quit.is_set():
                         return
                 self._quit.wait(0.5)  # Stream ended without an error; reconnect.
@@ -279,15 +298,50 @@ class PiVisionControl:
                 self._observation_failed(error)
                 self._quit.wait(0.5)
 
+    def _stream_opened(self, sock):
+        self._stream_socket = sock
+        if self._quit.is_set():  # Stopped while connecting.
+            self._close_stream()
+
+    def _close_stream(self):
+        sock = self._stream_socket
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)  # Wakes a reader blocked in recv.
+            except OSError:
+                pass
+
     def _poll_observations(self):
         """One poll of the JSON endpoint, for a PiVision that predates the stream."""
-        self._receive_observations(lambda: self.request(self._url("/api/v1/observations")))
+        started = self.clock()
+        try:
+            payload = self.request(self._url("/api/v1/observations"))
+        except Exception as error:
+            self._observation_failed(error)
+        else:
+            self._offer(lambda: payload, started)
         self._quit.wait(0.1)
 
-    def _receive_observations(self, fetch):
+    def _offer(self, fetch, received_at):
+        with self._lock:
+            self._latest = (fetch, received_at)
+        self._latest_ready.set()
+
+    def _process_observations(self):
+        while not self._quit.is_set():
+            if self._latest_ready.wait(0.5):
+                self._process_latest()
+
+    def _process_latest(self):
+        """Ingest the newest offered payload, if any; older unprocessed ones are dropped."""
+        with self._lock:
+            latest, self._latest = self._latest, None
+            self._latest_ready.clear()
+        if latest is None:
+            return
+        fetch, received_at = latest
         try:
-            started = self.clock()
-            self.ingest(fetch(), started)
+            self.ingest(fetch(), received_at)
             with self._lock:
                 self._observation_error = None
         except Exception as error:
@@ -426,11 +480,17 @@ class PiVisionControl:
         return canvas
 
     def request_stop(self):
-        """Tell the polling threads to finish without waiting; close() still disarms and joins."""
+        """Tell the threads to finish without waiting; close() still disarms and joins.
+
+        Shuts the observation stream's socket so its reader wakes now instead of at
+        the next heartbeat, and wakes the processor.
+        """
         self._quit.set()
+        self._latest_ready.set()
+        self._close_stream()
 
     def close(self):
-        self._quit.set()
+        self.request_stop()
         try:
             self.set_enabled(False)
         except ValueError:
@@ -439,4 +499,6 @@ class PiVisionControl:
             self._thread.join(timeout=1)
         if self._observation_thread is not None:
             self._observation_thread.join(timeout=1)
+        if self._process_thread is not None:
+            self._process_thread.join(timeout=1)
 
